@@ -1,0 +1,71 @@
+Created At: 2026-06-03T12:42:42Z
+Completed At: 2026-06-03T12:42:42Z
+File Path: `file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx`
+Total Lines: 5316
+Total Bytes: 314009
+Showing lines 1601 to 2400
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1601:     const activeTheme = previewColorSets[canvasHighlightColorSet] || previewColorSets.classic;
+1602: 
+1603:     return lines.map((line, lineIdx) => {
+1604:       let content;
+1605:       if (!keywordsStr) {
+1606:         content = <span className="text-white">{line}</span>;
+1607:       } else {
+1608:         // Split keywords by comma or space
+1609:         const keywords = keywordsStr
+1610:           .split(',')
+1611:           .map(k => k.trim())
+1612:           .filter(Boolean);
+1613: 
+1614:         if (keywords.length === 0) {
+1615:           content = <span className="text-white">{line}</span>;
+1616:         } else {
+1617:           // Sort keywords by length descending so that longer phrases are matched first
+1618:           const sortedKeywords = [...keywords].sort((a, b) => b.length - a.length);
+1619:           const escapedKeywords = sortedKeywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+1620:           const regex = new RegExp(`(${escapedKeywords.join('|')})`, 'gi');
+1621:           
+1622:           const parts = line.split(regex);
+1623:           const colorConfig = activeTheme[lineIdx % activeTheme.length];
+1624: 
+1625:           content = parts.map((part, idx) => {
+1626:             const isMatch = keywords.some(
+1627:               kw => part.toLowerCase() === kw.toLowerCase()
+1628:             );
+1629:             if (isMatch) {
+1630:               return (
+1631:                 <span 
+1632:                   key={idx} 
+1633:                   className="live-highlight-box"
+1634:                   style={{
+1635:    
+<truncated 45282 bytes>
+                     >
+2257:                       {isCheckingCredits ? '⚙️ กำลังตรวจ...' : '💰 เช็คเครดิต API'}
+2258:                     </button>
+2259:                     <button
+2260:                       onClick={async () => {
+2261:                         try {
+2262:                           const openRouterKey = localStorage.getItem('openrouter_key')?.trim();
+2263:                           if (!openRouterKey) {
+2264:                             setCreditCheckResults([{label: 'ไม่พบ API Key', keyPreview: '-', valid: false, balance: '-', usage: '-', error: 'ไม่พบ Key'}]);
+2265:                             return;
+2266:                           }
+2267:                           const testModel = 'google/gemini-2.5-flash';
+2268:                           setCreditCheckResults([{label: `🧪 กำลังทดสอบ ${testModel}...`, keyPreview: String(openRouterKey || '').slice(0,8)+'...'+String(openRouterKey || '').slice(-4), valid: true, balance: 'กำลังทดสอบ...', usage: '-'}]);
+2269:                           const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+2270:                             method: 'POST',
+2271:                             headers: {
+2272:                               'Content-Type': 'application/json',
+2273:                               'Authorization': `Bearer ${openRouterKey}`,
+2274:                               'HTTP-Referer': window.location.origin,
+2275:                             },
+2276:                             body: JSON.stringify({ model: testModel, messages: [{role:'user',content:'ตอบแค่คำว่า "OK"'}], max_tokens: 5 })
+2277:                           });
+2278:                           const data = await res.json();
+2279:                           if (res.ok && !data.error) {
+22
+<truncated 8818 bytes>
+
+NOTE: The output was truncated because it was too long. Use a more targeted query or a smaller range to get the information you need.

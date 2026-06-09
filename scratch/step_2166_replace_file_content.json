@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Add OpenRouter error handling to fallback subtitle aligner fetch\"",
+  "EndLine": "1780",
+  "Instruction": "\"Check for error field in data and throw a clear exception with details if present, or if aiResponse is missing.\"",
+  "ReplacementContent": "\"        });\\n        const data = await response.json();\\n        if (data?.error) {\\n          throw new Error(`OpenRouter Error: ${data.error.message || JSON.stringify(data.error)}`);\\n        }\\n        const aiResponse = data?.choices?.[0]?.message?.content;\\n        if (!aiResponse) {\\n          throw new Error(`AI ส่งผลลัพธ์ว่างกลับมา (Response data: ${JSON.stringify(data)})`);\\n        }\"",
+  "StartLine": "1775",
+  "TargetContent": "\"        });\\n\\n        const data = await response.json();\\n        const aiResponse = data?.choices?.[0]?.message?.content;\\n        if (!aiResponse) throw new Error('AI ส่งผลลัพธ์ว่างกลับมา');\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Adding fallback subtitle aligner error handling\"",
+  "toolSummary": "\"Update VerticalVideoSuitePortal.tsx\""
+}

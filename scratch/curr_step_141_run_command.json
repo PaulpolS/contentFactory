@@ -1,0 +1,7 @@
+{
+  "CommandLine": "\"python3 scratch/check_clean_quote.py\"",
+  "Cwd": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory\"",
+  "WaitMsBeforeAsync": "3000",
+  "toolAction": "\"Running check_clean_quote.py to find a clean copy of QuoteVideoPortal.tsx\"",
+  "toolSummary": "\"Run python script\""
+}

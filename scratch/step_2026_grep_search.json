@@ -1,0 +1,9 @@
+{
+  "CaseInsensitive": "false",
+  "IsRegex": "false",
+  "MatchPerLine": "true",
+  "Query": "\"handleHeadlineDragStart\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Searching for drag handler in portal\"",
+  "toolSummary": "\"Search file content\""
+}

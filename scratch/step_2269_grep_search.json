@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"const apiKey = getActiveOpenRouterKey();\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Searching for apiKey declaration in aligner\"",
+  "toolSummary": "\"Grep search getActiveOpenRouterKey in aligner\""
+}

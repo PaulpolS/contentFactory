@@ -1,0 +1,10 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Declare stock folder React state hooks in App.tsx\"",
+  "EndLine": "254",
+  "Instruction": "\"Add stockFolder, stockFolderName, and stockFolderLog states alongside rememberLogo state hook in App.tsx\"",
+  "ReplacementContent": "\"  const [canvasShowPageLogo, setCanvasShowPageLogo] = useState(false);\\n  const [rememberLogo, setRememberLogo] = useState(false);\\n  const [stockFolder, setStockFolder] = useState<string>(() => localStorage.getItem('canvas_stock_folder') || '');\\n  const [stockFolderName, setStockFolderName] = useState<string>(() => {\\n    const saved = localStorage.getItem('canvas_stock_folder') || '';\\n    if (!saved) return '';\\n    const parts = saved.split('/').filter(Boolean);\\n    return parts[parts.length - 1] || saved;\\n  });\\n  const [stockFolderLog, setStockFolderLog] = useState<string>('');\"",
+  "StartLine": "252",
+  "TargetContent": "\"  const [canvasShowPageLogo, setCanvasShowPageLogo] = useState(false);\\n  const [rememberLogo, setRememberLogo] = useState(false);\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\""
+}

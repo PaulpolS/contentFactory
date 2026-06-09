@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Remove Silent Mode control panel UI\"",
+  "EndLine": "3103",
+  "Instruction": "\"Remove the silent mode checkbox container\"",
+  "ReplacementContent": "\"\"",
+  "StartLine": "3065",
+  "TargetContent": "\"          {/* 🤫 Silent Mode Control Panel */}\\n          <div className=\\\"p-5 rounded-2xl border border-indigo-500/20 bg-indigo-950/20 backdrop-blur-md shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4\\\">\\n            <div className=\\\"space-y-1\\\">\\n              <h3 className=\\\"text-md font-bold text-indigo-300 flex items-center gap-2\\\">\\n                🤫 โหมดคำคมคำบรรยายไร้เสียง (Silent Quote Mode)\\n              </h3>\\n              <p className=\\\"text-xs text-white/60\\\">\\n                เมื่อเปิดใช้งาน ระบบจะข้ามขั้นตอนลงเสียงพากย์และ STT ทั้งหมด ทำให้ผลิตวิดีโอได้เร็วขึ้นมหาศาลและไม่มีค่าใช้จ่ายคีย์เสียง!\\n              </p>\\n            </div>\\n            \\n            <div className=\\\"flex items-center gap-4 bg-black/30 p-2.5 rounded-xl border border-white/5 self-start md:self-auto\\\">\\n              <label className=\\\"flex items-center gap-2 text-xs font-bold text-white cursor-pointer select-none\\\">\\n                <input\\n                  type=\\\"checkbox\\\"\\n                  checked={silentMode}\\n                  onChange={(e) => setSilentMode(e.target.checked)}\\n                  className=\\\"w-4 h-4 rounded text-indigo-600 bg-black/40 border-white/20 focus:ring-indigo-500 focus:ring-2 cursor-pointer\\\"\\n                />\\n                เปิดใช้งาน Silent Mode\\n              </label>\\n\\n              {silentMode && (\\n                <div className=\\\"flex items-center gap-2 border-l border-white/10 pl-3\\\">\\n                  <label className=\\\"text-[11px] text-white/50 block\\\">ความยาววิดีโอ (วินาที):</label>\\n                  <input\\n                    type=\\\"number\\\"\\n                    min=\\\"3\\\"\\n                    max=\\\"60\\\"\\n          \n<truncated 411 bytes>",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Removing silent mode control panel\"",
+  "toolSummary": "\"Edit file content\""
+}

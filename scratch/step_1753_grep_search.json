@@ -1,0 +1,10 @@
+{
+  "CaseInsensitive": "false",
+  "Includes": "[\"VerticalVideoSuitePortal.tsx\"]",
+  "IsRegex": "false",
+  "MatchPerLine": "true",
+  "Query": "\"DEFAULT_STYLES\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components\"",
+  "toolAction": "\"Searching for DEFAULT_STYLES in VerticalVideoSuitePortal.tsx\"",
+  "toolSummary": "\"Search for DEFAULT_STYLES\""
+}

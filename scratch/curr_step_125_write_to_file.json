@@ -1,0 +1,9 @@
+{
+  "CodeContent": "\"import os\\n\\npath = \\\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/QuoteVideoPortal.tsx\\\"\\n\\ntry:\\n    with open(path, \\\"rb\\\") as f:\\n        content_bytes = f.read()\\n    \\n    print(\\\"QuoteVideoPortal.tsx size:\\\", len(content_bytes))\\n    \\n    # Try different decodings\\n    decodings = [\\\"utf-8\\\", \\\"windows-1252\\\", \\\"shift-jis\\\", \\\"cp932\\\", \\\"tis-620\\\", \\\"windows-874\\\", \\\"iso-8859-11\\\"]\\n    for d in decodings:\\n        try:\\n            text = content_bytes.decode(d)\\n            print(f\\\"Decoded successfully with {d}!\\\")\\n            # Count replacement characters or suspicious patterns\\n            ufffd_count = text.count('\\\\ufffd')\\n            # Check if there are Thai characters\\n            has_thai = any('\\\\u0e00' <= c <= '\\\\u0e7f' for c in text)\\n            print(f\\\"  Thai present: {has_thai}, U+FFFD count: {ufffd_count}\\\")\\n            # Print the first 500 chars of KIEAI_VOICES or similar if present\\n            if \\\"const\\\" in text:\\n                print(\\\"  Snippet of first 200 chars:\\\")\\n                print(text[:200].strip())\\n            break\\n        except Exception as e:\\n            print(f\\\"Failed with {d}: {e}\\\")\\n            \\nexcept Exception as e:\\n    print(\\\"Error:\\\", e)\\n\"",
+  "Description": "\"Inspect QuoteVideoPortal.tsx using python to check its byte encoding and whether it has garbled characters\"",
+  "IsArtifact": "false",
+  "Overwrite": "true",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/scratch/check_quote_portal.py\"",
+  "toolAction": "\"Creating check_quote_portal.py\"",
+  "toolSummary": "\"Write file\""
+}

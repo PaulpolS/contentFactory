@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"useEffect(\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Locating useEffect hooks\"",
+  "toolSummary": "\"Grep search useEffect\""
+}

@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Add OpenRouter error handling to headline generator\"",
+  "EndLine": "1440",
+  "Instruction": "\"Check for error in response data and throw an explicit error message with details if present.\"",
+  "ReplacementContent": "\"        })\\n      });\\n      const data = await response.json();\\n      if (data?.error) {\\n        throw new Error(`OpenRouter Error: ${data.error.message || JSON.stringify(data.error)}`);\\n      }\\n      const txt = data?.choices?.[0]?.message?.content?.replace(/[\\\"']/g, '')?.trim();\\n      if (txt) {\\n        setHeadline(txt);\\n        addLog(`สร้างพาดหัวใหม่สำเร็จ: ${txt}`, 'success');\\n      } else {\\n        throw new Error(`AI ส่งผลลัพธ์พาดหัวว่างกลับมา (Response data: ${JSON.stringify(data)})`);\\n      }\"",
+  "StartLine": "1433",
+  "TargetContent": "\"        })\\n      });\\n      const data = await response.json();\\n      const txt = data?.choices?.[0]?.message?.content?.replace(/[\\\"']/g, '')?.trim();\\n      if (txt) {\\n        setHeadline(txt);\\n        addLog(`สร้างพาดหัวใหม่สำเร็จ: ${txt}`, 'success');\\n      }\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Adding headline generator error handling\"",
+  "toolSummary": "\"Update VerticalVideoSuitePortal.tsx\""
+}

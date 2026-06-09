@@ -1,0 +1,9 @@
+# Repository Rules for AI Assistants
+
+## Critical Safety Guidelines
+1. **Never Make Large Spliced Replacements**: When modifying `frontend/src/App.tsx` or other files larger than 1,000 lines, do not attempt to write the entire file or large contiguous blocks unless using surgical replacement tools. Always prefer targeted replacements and avoid breaking JSX tags, curly braces, and function parenthesis.
+2. **Immediate Type Validation**: After EVERY edit on TypeScript/TSX files, you MUST run the following command in the `frontend` folder to ensure no type errors were introduced:
+   `npx tsc -p tsconfig.app.json --noEmit`
+3. **Verify Build Success**: Before declaring the task complete, verify that the production build compiles cleanly:
+   `npm run build`
+4. **Code Splitting Preference**: If adding new feature modules, create them as standalone components under `frontend/src/components/` and import them rather than expanding `frontend/src/App.tsx`.

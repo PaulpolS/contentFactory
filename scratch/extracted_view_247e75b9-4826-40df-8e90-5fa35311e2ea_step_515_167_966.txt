@@ -1,0 +1,92 @@
+Created At: 2026-05-27T06:15:00Z
+Completed At: 2026-05-27T06:15:00Z
+File Path: `file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx`
+Total Lines: 966
+Total Bytes: 50187
+Showing lines 167 to 966
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+167:     };
+168:   };
+169: 
+170:   // Disconnect active processes on unmount
+171:   useEffect(() => {
+172:     return () => {
+173:       Object.keys(sseConnections.current).forEach(key => {
+174:         if (sseConnections.current[key]) {
+175:           sseConnections.current[key]?.close();
+176:         }
+177:       });
+178:     };
+179:   }, []);
+180: 
+181:   // Fetch Vault list
+182:   const fetchVaultData = async () => {
+183:     setLoadingItems(true);
+184:     try {
+185:       const q = new URLSearchParams();
+186:       if (filterSource !== 'all') q.append('source_type', filterSource);
+187:       if (filterStatus !== 'all') q.append('status', filterStatus);
+188:       if (filterKeyword) q.append('keyword', filterKeyword);
+189:       if (filterMinRating > 0) q.append('min_rating', filterMinRating.toString());
+190:       q.append('sort_by', sortBy);
+191: 
+192:       const res = await fetch(`${API_BASE}/vault/contents?${q.toString()}`);
+193:       const data = await res.json();
+194:       if (data.success) {
+195:         setVaultItems(data.data);
+196:         // Sync selected item details if open
+197:         if (selectedItem) {
+198:           const updated = data.data.find((i: VaultContent) => i.id === selectedItem.id);
+199:           if (updated) setSelectedItem(updated);
+200:         }
+201:       }
+202:     } catch (err) {
+203:       console.error('Failed to load content vault:', err);
+204:     } finally {
+205:       setLoadingItems(false);
+206:     }
+207:   };
+208: 
+209:   // Fetch only approved items for Canvas tab
+210:   const fetchApprovedItems = 
+<truncated 45281 bytes>
+="Pillow Poster Output Preview"
+932:                         className="max-w-full max-h-full rounded-md object-contain border border-slate-700 shadow-xl"
+933:                       />
+934:                     </div>
+935:                   ) : (
+936:                     <div className="text-center p-8 text-slate-600">
+937:                       <ImageIcon className="w-16 h-16 mx-auto mb-4 text-slate-800" />
+938:                       <p className="text-xs font-semibold">ไม่มีปกที่สร้างขึ้นในระบบขณะนี้</p>
+939:                       <p className="text-[10px] mt-1 text-slate-700">กรุณาเลือกคอนเทนต์และสั่งเรนเดอร์วาดภาพด้วยปุ่มทางด้านซ้าย</p>
+940:                     </div>
+941:                   )}
+942:                 </div>
+943: 
+944:                 {latestGraphic && (
+945:                   <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400 text-xs text-center flex items-center justify-center gap-1.5">
+946:                     <CheckCircle className="w-4 h-4" />
+947:                     <span>ปกถูกสร้างเรียบร้อยและบันทึกลง SQLite แล้ว!</span>
+948:                   </div>
+949:                 )}
+950:               </div>
+951:             </div>
+952:           )}
+953: 
+954:           {/* TAB 4: SYSTEM SETTINGS PORTAL */}
+955:           {activeTab === 'settings' && (
+956:             <div className="glass-panel p-6">
+957:               <SettingsPortal appScale={appScale} setAppScale={setAppScale} />
+958:             </div>
+959:           )}
+960: 
+961:         </div>
+962:       </main>
+963:     </div>
+964:   );
+965: }
+966: 
+The above content does NOT show the entire file cont
+<truncated 134 bytes>
+
+NOTE: The output was truncated because it was too long. Use a more targeted query or a smaller range to get the information you need.

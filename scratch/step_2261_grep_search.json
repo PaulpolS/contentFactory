@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"const alignResponse = await fetch\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Searching for alignResponse declaration\"",
+  "toolSummary": "\"Grep search alignResponse\""
+}

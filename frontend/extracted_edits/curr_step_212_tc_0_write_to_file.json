@@ -1,0 +1,13 @@
+{
+  "name": "write_to_file",
+  "args": {
+    "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Python script to inspect non-ASCII characters in the extracted file to check if it contains correct Thai.\"}",
+    "CodeContent": "\"with open(\\\"SettingsPortal.tsx.extracted\\\", \\\"r\\\", encoding=\\\"utf-8\\\") as f:\\n    for idx, line in enumerate(f):\\n        non_ascii = [c for c in line if ord(c) > 127]\\n        if non_ascii:\\n            print(f\\\"Line {idx}: {''.join(non_ascii[:30])} (total {len(non_ascii)})\\\")\\n            print(f\\\"  Full line: {line.strip()[:100]}\\\")\\n            if idx > 30:\\n                break\\n\"",
+    "Description": "\"Write a script to check non-ASCII characters in the extracted file.\"",
+    "IsArtifact": "false",
+    "Overwrite": "true",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx.check_ascii.py\"",
+    "toolAction": "\"Writing python non-ASCII checker\"",
+    "toolSummary": "\"Create ASCII checker script\""
+  }
+}

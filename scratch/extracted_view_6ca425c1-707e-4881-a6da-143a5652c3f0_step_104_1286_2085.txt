@@ -1,0 +1,70 @@
+Created At: 2026-05-28T15:24:32Z
+Completed At: 2026-05-28T15:24:32Z
+File Path: `file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx`
+Total Lines: 5229
+Total Bytes: 309282
+Showing lines 1286 to 2085
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1286:     if (idx >= ids.length) {
+1287:       // Completed all items!
+1288:       setCanvasQueueIndex(null);
+1289:       setCanvasQueueIds([]);
+1290:       // Reload lists
+1291:       fetchVaultData();
+1292:       fetchApprovedItems();
+1293:       // Keep the newly populated batch session graphics active in contentGraphics, do not overwrite them!
+1294:       return;
+1295:     }
+1296: 
+1297:     const currentId = ids[idx];
+1298:     const item = (canvasShowAll ? canvasAllItems : canvasImportedItems).find(i => i.id === currentId);
+1299:     if (!item) {
+1300:       // Skip if not found
+1301:       setCanvasQueueIndex(idx + 1);
+1302:       return;
+1303:     }
+1304: 
+1305:     // Set as selected item to show active logs and preview
+1306:     setCanvasSelectedItem(item);
+1307: 
+1308:     const q = new URLSearchParams();
+1309:     q.append('content_id', item.id);
+1310:     q.append('ratio', canvasRatio);
+1311:     q.append('theme', canvasTheme);
+1312:     q.append('layout', canvasLayout);
+1313:     // Use manually typed headline if it is the currently selected active item, otherwise use item headline/title
+1314:     let activeHeadline = '';
+1315:     if (canvasSelectedItem && canvasSelectedItem.id === item.id) {
+1316:       if (canvasHeadlineMode === 'triple') {
+1317:         activeHeadline = [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3].filter(Boolean).join('\n');
+1318:       } else {
+1319:         activeHeadline = canvasHeadline;
+1320:       }
+1321:     } else {
+1322:       const h3 = item.metadata?.copywriting?.headline_3line;
+1323:
+<truncated 44572 bytes>
+                                `}>
+2064:                                       {item.status === 'scraped' && 'ดึงดิบ'}
+2065:                                       {item.status === 'ready_for_design' && 'รอดีไซน์'}
+2066:                                       {item.status === 'designed' && 'โพสรูปเสร็จแล้ว'}
+2067:                                       {item.status === 'posted' && 'เผยแพร่แล้ว'}
+2068:                                       {item.status === 'archived' && 'จัดเก็บ'}
+2069:                                     </span>
+2070:                                   </td>
+2071:                                   <td className="data-grid-td text-center" onClick={(e) => e.stopPropagation()}>
+2072:                                     <button
+2073:                                       onClick={() => handleSingleImport(item)}
+2074:                                       className="px-2.5 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/25 hover:bg-cyan-500/20 text-[10px] font-bold text-cyan-400 flex items-center gap-1 mx-auto transition-all"
+2075:                                     >
+2076:                                       <span>📥 นำเข้าทำรูป</span>
+2077:                                     </button>
+2078:                                   </td>
+2079:                                 </tr>
+2080: 
+2081:                                 {/* Expanded sub-row */}
+2082:                                 {(showImages || showScript) && (
+2083:                                   <tr className="bg-slate-950/80 border-b border-slate-900/60" onClick={(e) => e.stopPropagation()}>
+2084:                                     <td colSpan={6} className="p-4">
+2085:                                       <div className="space-y-4">
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

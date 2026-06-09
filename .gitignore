@@ -1,0 +1,52 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Node modules
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+dist-ssr/
+**/dist-ssr/
+build/
+**/build/
+
+# Local databases & logs
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+content_vault/databases/*.db
+content_vault/databases/*.log
+content_vault/databases/*.db-wal
+content_vault/databases/*.db-shm
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.project
+.classpath
+.settings/
+
+# Models and temporary renders
+public/models/
+public/temp_render/

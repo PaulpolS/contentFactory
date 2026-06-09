@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": "false",
+    "Description": "\"The fetchFacebookPages function was corrupted - its body was truncated mid-string and the JSX return started on the same line. Restored the proper function completion with closing braces, catch/finally blocks, and correct function termination.\"",
+    "EndLine": "398",
+    "Instruction": "\"Fix the truncated string on line 398 and close the fetchFacebookPages function properly before the return statement\"",
+    "ReplacementContent": "\"          setFetchError('ℹ️ ดึงข้อมูลสำเร็จ แต่ไม่พบเพจที่ Token นี้เป็นผู้ดูแล');\\n        }\\n      }\\n    } catch (err: any) {\\n      setFetchError(`❌ ไม่สามารถดึงข้อมูลเพจได้: ${err.message || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ'}`);\\n    } finally {\\n      setLoadingPages(false);\\n    }\\n  };\\n\\n  return (\"",
+    "StartLine": "398",
+    "TargetContent": "\"          setFetchError('ℹ️ ดึงข้อมูลสำเร�  return (\"",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx\"",
+    "toolAction": "\"Fixing truncated function\"",
+    "toolSummary": "\"Fix fetchFacebookPages function\""
+  }
+}

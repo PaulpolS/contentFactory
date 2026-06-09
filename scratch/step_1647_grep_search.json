@@ -1,0 +1,10 @@
+{
+  "CaseInsensitive": "false",
+  "Includes": "[\"VerticalVideoSuitePortal.tsx\"]",
+  "IsRegex": "false",
+  "MatchPerLine": "true",
+  "Query": "\"grid-cols-\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components\"",
+  "toolAction": "\"Searching for grid-cols patterns in VerticalVideoSuitePortal.tsx\"",
+  "toolSummary": "\"Search for grid-cols\""
+}

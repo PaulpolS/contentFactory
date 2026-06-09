@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Declare WritingStyle, HeadlinePack, and ImagePromptStyle interfaces along with their static preset arrays in App.tsx\"",
+  "EndLine": "175",
+  "Instruction": "\"Insert WritingStyle, HeadlinePack, ImagePromptStyle interfaces and PALETTE_WRITING_STYLES, PALETTE_HEADLINE_STYLES, PALETTE_IMAGE_PROMPT_STYLES arrays before export default function App()\"",
+  "ReplacementContent": "\"  {\\n    id: \\\"white_hot\\\",\\n    name: \\\"White Hot Flame\\\",\\n    gradient: [\\\"#18181b\\\", \\\"#09090b\\\"],\\n    primaryText: \\\"#ffffff\\\",\\n    highlight: \\\"#fb923c\\\",\\n    highlightText: \\\"#facc15\\\",\\n    secondaryHighlight: \\\"#f8fafc\\\",\\n    accent: \\\"#fb923c\\\"\\n  }\\n];\\n\\nexport interface WritingStyle {\\n  id: string;\\n  name: string;\\n  desc: string;\\n  content: string;\\n}\\n\\nexport interface HeadlinePack {\\n  id: string;\\n  name: string;\\n  headlines: string[];\\n}\\n\\nexport interface ImagePromptStyle {\\n  id: string;\\n  name: string;\\n  core_prompt: string;\\n  negative_prompt: string;\\n}\\n\\nexport const PALETTE_WRITING_STYLES: WritingStyle[] = [\\n  {\\n    id: \\\"ai_trendtech\\\",\\n    name: \\\"AI Trendtech (เล่าเทรนด์สุดล้ำ)\\\",\\n    desc: \\\"เน้นเล่าเรื่องเทคโนโลยี/เครื่องมือ AI เป็นขั้นตอน อารมณ์เป็นกันเอง แทรกความตื่นเต้น มีสติ๊กเกอร์ มีการแชร์วิธีสร้าง Sub-agents อย่างชัดเจน\\\",\\n    content: `สร้างกองทัพ AI 15 ตัวที่ทำงานพร้อมกันได้ ด้วยการใช้ Sub-agent ใน Claude Cowork ตั้งค่าไม่ยาก สามารถทำตามได้ทันที\\n.\\nกลับมาที่ Claude เพื่อรัก ฮ่าา\\nตอนนี้อินสุด ๆ มันจริง ๆ ครับ ฮ่าา\\nวันนี้มาในเรื่องของการสร้างกองทัพ AI ที่ทำงานพร้อมกันได้\\nทีละหลาย ๆ ตัว โดยใช้ Sub-agents และ สามารถบันทุกมาเป็น\\nplugins ไว้ใช้งานทีหลังได้ง่าย ๆ เลย\\n.\\nด้วยความที่เป็น Cl\n<truncated 9363 bytes>",
+  "StartLine": "163",
+  "TargetContent": "\"  {\\n    id: \\\"white_hot\\\",\\n    name: \\\"White Hot Flame\\\",\\n    gradient: [\\\"#18181b\\\", \\\"#09090b\\\"],\\n    primaryText: \\\"#ffffff\\\",\\n    highlight: \\\"#fb923c\\\",\\n    highlightText: \\\"#facc15\\\",\\n    secondaryHighlight: \\\"#f8fafc\\\",\\n    accent: \\\"#fb923c\\\"\\n  }\\n];\\n\\nexport default function App() {\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Insert writing styles types and constants in App.tsx\"",
+  "toolSummary": "\"Editing App.tsx constants\""
+}

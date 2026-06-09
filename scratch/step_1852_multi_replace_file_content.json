@@ -1,0 +1,8 @@
+{
+  "Description": "\"Fix warning level logging parameters in VerticalVideoSuitePortal.tsx\"",
+  "Instruction": "\"Change 'warning' log types to valid type parameters ('error' or 'info')\"",
+  "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":1691,\"ReplacementContent\":\"              addLog(`การจัดแนวด้วย Gemini ล้มเหลว: ${alignErr.message} -> สลับไปใช้ผลดิบจาก Whisper`, 'error');\",\"StartLine\":1688,\"TargetContent\":\"              addLog(`การจัดแนวด้วย Gemini ล้มเหลว: ${alignErr.message} -> สลับไปใช้ผลดิบจาก Whisper`, 'warning');\"},{\"AllowMultiple\":false,\"EndLine\":1713,\"ReplacementContent\":\"        addLog(`เครื่องมือ Whisper STT ขัดข้อง: ${whisperErr.message} -> สลับไปใช้ระบบทำซับดั้งเดิม`, 'error');\",\"StartLine\":1710,\"TargetContent\":\"        addLog(`เครื่องมือ Whisper STT ขัดข้อง: ${whisperErr.message} -> สลับไปใช้ระบบทำซับดั้งเดิม`, 'warning');\"}]",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Fixing warning level logging parameters\"",
+  "toolSummary": "\"Edit file content\""
+}

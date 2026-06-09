@@ -1,0 +1,10 @@
+{
+  "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Python script to search both transcripts for the exact deleted code chunks.\"}",
+  "CodeContent": "\"import json\\nimport os\\n\\nprev_log = \\\"/Users/paulpolsulintaboon/.gemini/antigravity/brain/59119761-b490-421b-b15d-46f12f5c4158/.system_generated/logs/transcript.jsonl\\\"\\ncurr_log = \\\"/Users/paulpolsulintaboon/.gemini/antigravity/brain/247e75b9-4826-40df-8e90-5fa35311e2ea/.system_generated/logs/transcript.jsonl\\\"\\n\\ndef search_log(log_path, label):\\n    if not os.path.exists(log_path):\\n        return\\n    print(f\\\"Searching {label} log for full App.tsx view outputs...\\\")\\n    with open(log_path, 'r', encoding='utf-8') as f:\\n        for idx, line in enumerate(f):\\n            if \\\"canvasSearchFiltered\\\" in line and \\\"checked={\\\" in line and \\\"Bulk AI Copywriting\\\" in line:\\n                print(f\\\"  Found matching log line {idx}!\\\")\\n                try:\\n                    data = json.loads(line)\\n                    # Let's save it to inspect\\n                    with open(f\\\"scratch/found_{label}_{idx}.txt\\\", \\\"w\\\", encoding=\\\"utf-8\\\") as out:\\n                        out.write(data.get(\\\"content\\\", \\\"\\\"))\\n                    print(f\\\"  Saved to scratch/found_{label}_{idx}.txt\\\")\\n                except Exception as e:\\n                    print(\\\"  Error parsing:\\\", e)\\n\\nsearch_log(prev_log, \\\"PREV\\\")\\nsearch_log(curr_log, \\\"CURR\\\")\\n\"",
+  "Description": "\"Write a python script to extract the original, complete code blocks from logs.\"",
+  "IsArtifact": "false",
+  "Overwrite": "true",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/scratch/extract_all_edits.py\"",
+  "toolAction": "\"Write python extract script\"",
+  "toolSummary": "\"Create transcript extract script\""
+}

@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": "false",
+    "Description": "\"Declare SettingsPortalProps and bind props (appScale, setAppScale) to SettingsPortal component alongside updating activeSubTab state type to support display tab\"",
+    "EndLine": "98",
+    "Instruction": "\"Add props and update activeSubTab state in SettingsPortal\"",
+    "ReplacementContent": "\"interface SettingsPortalProps {\\n  appScale: number;\\n  setAppScale: (scale: number) => void;\\n}\\n\\nexport default function SettingsPortal({ appScale, setAppScale }: SettingsPortalProps) {\\n  // Navigation tabs\\n  const [activeSubTab, setActiveSubTab] = useState<'api_keys' | 'facebook' | 'display'>('api_keys');\"",
+    "StartLine": "95",
+    "TargetContent": "\"export default function SettingsPortal() {\\n  // Navigation tabs\\n  const [activeSubTab, setActiveSubTab] = useState<'api_keys' | 'facebook'>('api_keys');\"",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx\"",
+    "toolAction": "\"Binding props and updating activeSubTab state in SettingsPortal\"",
+    "toolSummary": "\"Edit file\""
+  }
+}

@@ -1,0 +1,62 @@
+Created At: 2026-05-30T12:55:22Z
+Completed At: 2026-05-30T12:55:22Z
+File Path: `file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx`
+Total Lines: 5281
+Total Bytes: 312424
+Showing lines 4482 to 5281
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+4482:                         {latestGraphic && (
+4483:                           <div className="w-full mt-6 pt-6 border-t border-slate-800/80 animate-fade-in flex flex-col items-center">
+4484:                             <div className="flex items-center justify-between mb-3 text-left w-full">
+4485:                               <div className="flex items-center gap-2">
+4486:                                 <CheckCircle className="w-4 h-4 text-emerald-400" />
+4487:                                 <span className="text-xs font-black text-emerald-400 uppercase tracking-wider text-left">🎯 ผลลัพธ์ (Pillow Output)</span>
+4488:                               </div>
+4489:                               <div className="flex items-center gap-2">
+4490:                                 {contentGraphics.length > 0 && (
+4491:                                   <>
+4492:                                     <button
+4493:                                       type="button"
+4494:                                       onClick={() => {
+4495:                                         setContentGraphics([]);
+4496:                                         setLatestGraphic(null);
+4497:                                       }}
+4498:                                       className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-pink-400 bg-slate-900 hover:bg-pink-950/20 px-2.5 py-1 rounded border border-slate-800 hover:border-pink-900 transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+4499:                         
+<truncated 45282 bytes>
+65:                 }}>
+5166:                   {canvasSelectedItem?.metadata?.copywriting?.headline_3line?.length > 0 ? (
+5167:                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+5168:                       {canvasSelectedItem?.metadata?.copywriting?.headline_3line?.map((line: string, i: number) => (
+5169:                         <p key={i} style={{
+5170:                           fontSize: '14px',
+5171:                           fontWeight: 800,
+5172:                           color: '#f1f5f9',
+5173:                           margin: 0,
+5174:                           lineHeight: 1.4,
+5175:                         }}>
+5176:                           {line}
+5177:                         </p>
+5178:                       ))}
+5179:                     </div>
+5180:                   ) : (
+5181:                     <p style={{ fontSize: '14px', fontWeight: 700, color: '#e2e8f0', margin: 0, lineHeight: 1.4 }}>
+5182:                       {canvasSelectedItem?.selected_headline || canvasSelectedItem?.title || 'ไม่มีพาดหัว'}
+5183:                     </p>
+5184:                   )}
+5185:                 </div>
+5186:               </div>
+5187: 
+5188:               {/* Caption / Post Article */}
+5189:               <div style={{ flex: 1, minHeight: 0 }}>
+5190:                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+5191:                   <p style={{ fontSize: '9px', fontWeight: 700, color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>
+5192:                     📝 บทความโพส
+5193:                   </p>
+5194:                   {canvasSelectedItem?.metadata?.copywriting?.caption && (
+5195:                     <button
+5196:                       type="button"
+5197:                       onClic
+<truncated 4288 bytes>
+
+NOTE: The output was truncated because it was too long. Use a more targeted query or a smaller range to get the information you need.

@@ -1,0 +1,13 @@
+{
+  "name": "write_to_file",
+  "args": {
+    "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Python script to extract all raw code edits and replacements from the previous and current session logs. This allows restoring the exact uncorrupted code blocks.\"}",
+    "CodeContent": "\"import json\\nimport os\\n\\nprev_log = \\\"/Users/paulpolsulintaboon/.gemini/antigravity/brain/59119761-b490-421b-b15d-46f12f5c4158/.system_generated/logs/transcript.jsonl\\\"\\ncurr_log = \\\"/Users/paulpolsulintaboon/.gemini/antigravity/brain/247e75b9-4826-40df-8e90-5fa35311e2ea/.system_generated/logs/transcript.jsonl\\\"\\n\\nos.makedirs(\\\"extracted_edits\\\", exist_ok=True)\\n\\ndef process_log(log_path, label):\\n    if not os.path.exists(log_path):\\n        print(f\\\"Log {log_path} does not exist.\\\")\\n        return\\n    with open(log_path, 'r', encoding='utf-8') as f:\\n        for idx, line in enumerate(f):\\n            try:\\n                data = json.loads(line)\\n            except:\\n                continue\\n            if data.get('type') == 'PLANNER_RESPONSE':\\n                for tc_idx, tc in enumerate(data.get('tool_calls', [])):\\n                    name = tc.get('name')\\n                    args = tc.get('args', {})\\n                    is_settings = False\\n                    if name == 'replace_file_content':\\n                        is_settings = 'SettingsPortal.tsx' in args.get('TargetFile', '')\\n                    elif name == 'write_to_file':\\n                        is_settings = 'SettingsPortal.tsx' in args.get('TargetFile', '')\\n                    elif name == 'multi_replace_file_content':\\n                        is_settings = 'SettingsPortal.tsx' in args.get('TargetFile', '')\\n                    \\n                    if is_settings:\\n                        filename = f\\\"extracted_edits/{label}_step_{idx}_tc_{tc_idx}_{name}.json\\\"\\n                        with open(filename, 'w', encoding='utf-8') as out:\\n                            json.dump(tc, out, indent=2, ensure_ascii=False)\\n                        print(f\\\"Saved {name} at step {idx} to {filename}\\\")\\n\\nprocess_log(prev_log, \\\"prev\\\")\\nprocess_log(curr_log, \\\"curr\\\")\\nprint(\\\"Extraction complete!\\\")\\n\"",
+    "Description": "\"Write a script to extract all SettingsPortal edits from both previous and current transcripts.\"",
+    "IsArtifact": "false",
+    "Overwrite": "true",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx.dump_all_edits.py\"",
+    "toolAction": "\"Writing python edit-extractor script\"",
+    "toolSummary": "\"Create edit-extractor script\""
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Fix applyPreset SubtitleStyle type casting error\"",
+  "EndLine": "2688",
+  "Instruction": "\"Construct full SubtitleStyle with marginV in applyPreset\"",
+  "ReplacementContent": "\"  // --- Subtitle Presets Switcher ---\\n  const applyPreset = (preset: typeof SUBTITLE_PRESETS[0]) => {\\n    setSubStyle({\\n      ...preset,\\n      marginV: subStyle?.marginV || 120\\n    });\\n    addLog(`ปรับรูปแบบ Preset ซับไตเติ้ล: ${preset.name}`, 'info');\\n  };\"",
+  "StartLine": "2684",
+  "TargetContent": "\"  // --- Subtitle Presets Switcher ---\\n  const applyPreset = (preset: typeof SUBTITLE_PRESETS[0]) => {\\n    setSubStyle(preset);\\n    addLog(`ปรับรูปแบบ Preset ซับไตเติ้ล: ${preset.name}`, 'info');\\n  };\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Updating applyPreset to include marginV\"",
+  "toolSummary": "\"Edit file content\""
+}

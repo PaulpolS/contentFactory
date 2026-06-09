@@ -1,0 +1,13 @@
+{
+  "name": "write_to_file",
+  "args": {
+    "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Python script to search for the exact encoding conversion that produced the corrupted characters.\"}",
+    "CodeContent": "\"import pkgutil\\nimport encodings\\n\\n# Get all encoding names in Python\\nall_encs = []\\nfor m in pkgutil.iter_modules(encodings.__path__):\\n    all_encs.append(m.name)\\n# Add some common ones manually just in case\\nall_encs.extend(['utf-8', 'latin-1', 'cp1252', 'cp874', 'gbk', 'gb2312', 'utf-16', 'utf-32'])\\nall_encs = sorted(list(set(all_encs)))\\n\\n# Let's take the first corrupted word from line 392:\\n# 犹€犠≒ｸｴ\\n# Let's see if we can convert it to \\\"เกิด\\\"\\ntarget = \\\"เกิด\\\"\\ncorrupted = \\\"犹€犠≒ｸｴ\\\"\\n\\nprint(f\\\"Target: {target}\\\")\\nprint(f\\\"Corrupted: {corrupted}\\\")\\n\\nfound = False\\nfor enc1 in all_encs:\\n    for enc2 in all_encs:\\n        try:\\n            # Let's try different conversion paths\\n            # e.g., corrupted.encode(enc1).decode(enc2)\\n            # or corrupted.encode(enc1, errors='ignore').decode(enc2, errors='ignore')\\n            b = corrupted.encode(enc1)\\n            s = b.decode(enc2)\\n            if target in s or s in target or \\\"เกิด\\\" in s:\\n                print(f\\\"MATCH: corrupted.encode('{enc1}').decode('{enc2}') -> {s}\\\")\\n                found = True\\n        except:\\n            pass\\n\\nif not found:\\n    print(\\\"No direct single-conversion match found. Let's try more complex combinations.\\\")\\n\"",
+    "Description": "\"Write a script to search for the correct encoding conversion pair.\"",
+    "IsArtifact": "false",
+    "Overwrite": "true",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx.search_enc.py\"",
+    "toolAction": "\"Writing encoding searcher script\"",
+    "toolSummary": "\"Create encoding searcher script\""
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "CaseInsensitive": "false",
+  "IsRegex": "false",
+  "MatchPerLine": "true",
+  "Query": "\"HEADLINE_PRESETS\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Search for HEADLINE_PRESETS in the portal file\"",
+  "toolSummary": "\"Search file content\""
+}

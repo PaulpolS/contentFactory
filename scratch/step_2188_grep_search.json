@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"fetch('/api/\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Checking fetch endpoint base URLs\"",
+  "toolSummary": "\"Grep search fetch in component\""
+}

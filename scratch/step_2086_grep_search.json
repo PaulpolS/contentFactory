@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"handleContainerDragStart\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Locating drag handler in source\"",
+  "toolSummary": "\"Grep search drag handler\""
+}

@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"choices?.[0]\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Finding API response parsers\"",
+  "toolSummary": "\"Grep search choices?.[0]\""
+}

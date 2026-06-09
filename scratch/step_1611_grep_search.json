@@ -1,0 +1,10 @@
+{
+  "CaseInsensitive": "false",
+  "Includes": "[\"VerticalVideoSuitePortal.tsx\"]",
+  "IsRegex": "false",
+  "MatchPerLine": "true",
+  "Query": "\"silentMode\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components\"",
+  "toolAction": "\"Searching for silentMode in VerticalVideoSuitePortal.tsx\"",
+  "toolSummary": "\"Search for silentMode\""
+}

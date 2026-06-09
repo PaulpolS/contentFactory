@@ -1,0 +1,9 @@
+{
+  "CaseInsensitive": "false",
+  "IsRegex": "false",
+  "MatchPerLine": "true",
+  "Query": "\"containerRef\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Searching for containerRef references\"",
+  "toolSummary": "\"Search file content\""
+}

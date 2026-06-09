@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Add handleGenerateCopywriting method in App.tsx to send a request to the backend vault generation endpoint and update local states instantly.\"",
+  "EndLine": "509",
+  "Instruction": "\"Insert handleGenerateCopywriting method below handleAIRewriteHeadline.\"",
+  "ReplacementContent": "\"    } finally {\\n      setRewritingHeadline(false);\\n    }\\n  };\\n\\n  // One-click AI Copywriting Details Suite Generator (Post Caption, Selective Headlines, 3 comments, 3-line headline)\\n  const handleGenerateCopywriting = async () => {\\n    if (!canvasSelectedItem) {\\n      alert(\\\"⚠️ กรุณาเลือกหัวข้อวัตถุดิบลักษณะการ์ดด้านล่างสุดก่อนกดเขียนบทความครับ\\\");\\n      return;\\n    }\\n    \\n    setGeneratingCopywriting(true);\\n    try {\\n      const response = await fetch(`${API_BASE}/vault/contents/${canvasSelectedItem.id}/generate-copywriting`, {\\n        method: 'POST'\\n      });\\n      const resData = await response.json();\\n      if (resData.success) {\\n        // Update selected item's copywriting metadata locally immediately\\n        const updatedItem = {\\n          ...canvasSelectedItem,\\n          metadata: {\\n            ...canvasSelectedItem.metadata,\\n            copywriting: resData.data\\n          }\\n        };\\n        setCanvasSelectedItem(updatedItem);\\n        \\n        // Update the main state list too\\n        setCanvasImportedItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));\\n        setCanvasAllItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));\\n        \\n        // Reload from database to ensure everything is synchronized\\n        fetchVaultData();\\n        fetchApprovedItems();\\n        \\n        alert(\\\"✨ สร้างบทความและจำลองคำโฆษณาเรียบร้อยแล้ว!\\\");\\n      } else {\\n        alert(\\\"⚠️ \\\" + (resData.error || \\\"เกิดข้อผิดพลาดในการสร้างบทความ\\\"));\\n      }\\n    } catch (err) {\\n      console.error(\\\"Copywriting generation error:\\\", err);\\n      alert(\\\"⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เ\n<truncated 141 bytes>",
+  "StartLine": "504",
+  "TargetContent": "\"    } finally {\\n      setRewritingHeadline(false);\\n    }\\n  };\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Injecting handleGenerateCopywriting method\"",
+  "toolSummary": "\"handleGenerateCopywriting addition\""
+}

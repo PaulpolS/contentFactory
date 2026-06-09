@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Remove unused approveForDesign function in App.tsx\"",
+  "EndLine": "320",
+  "Instruction": "\"Remove approveForDesign function.\"",
+  "ReplacementContent": "\"\"",
+  "StartLine": "303",
+  "TargetContent": "\"  // Change status to ready_for_design (Approve)\\n  const approveForDesign = async (item: VaultContent) => {\\n    try {\\n      const res = await fetch(`${API_BASE}/vault/contents/${item.id}/status`, {\\n        method: 'POST',\\n        headers: { 'Content-Type': 'application/json' },\\n        body: JSON.stringify({ status: 'ready_for_design' })\\n      });\\n      const data = await res.json();\\n      if (data.success) {\\n        fetchVaultData();\\n        fetchApprovedItems();\\n      }\\n    } catch (err) {\\n      console.error('Approve failed:', err);\\n    }\\n  };\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Removing unused approveForDesign function from App.tsx\"",
+  "toolSummary": "\"Edit App.tsx\""
+}

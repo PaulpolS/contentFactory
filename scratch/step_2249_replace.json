@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Set canvasSearchFiltered to use canvasImportedItems by default instead of approvedItems.\"",
+  "EndLine": "343",
+  "Instruction": "\"Change approvedItems to canvasImportedItems in canvasSearchFiltered filter.\"",
+  "ReplacementContent": "\"  // Filter canvas items by search query and showAll toggle\\n  const canvasSearchFiltered = (canvasShowAll ? canvasAllItems : canvasImportedItems).filter(item => \"",
+  "StartLine": "339",
+  "TargetContent": "\"  // Filter canvas items by search query and showAll toggle\\n  const canvasSearchFiltered = (canvasShowAll ? canvasAllItems : approvedItems).filter(item => \"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Changing canvasSearchFiltered filter target\"",
+  "toolSummary": "\"Replace file content\""
+}

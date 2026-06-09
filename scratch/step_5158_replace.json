@@ -1,0 +1,10 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Pass font_scale to generate-copywriting for single item\"",
+  "EndLine": "630",
+  "Instruction": "\"Add font_scale state in handleGenerateCopywritingForItem POST request body\"",
+  "ReplacementContent": "\"        body: JSON.stringify({\\n          length: canvasArticleLength,\\n          font_scale: canvasFontScale\\n        })\"",
+  "StartLine": "626",
+  "TargetContent": "\"        body: JSON.stringify({\\n          length: canvasArticleLength\\n        })\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\""
+}

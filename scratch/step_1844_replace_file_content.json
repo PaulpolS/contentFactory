@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Add types to onLog parameters in handleGenerateVoice\"",
+  "EndLine": "1458",
+  "Instruction": "\"Add : string and : any to onLog parameter list\"",
+  "ReplacementContent": "\"        onLog: (msg: string, type: any) => addLog(`[Kie.ai] ${msg}`, type)\"",
+  "StartLine": "1457",
+  "TargetContent": "\"        onLog: (msg, type) => addLog(`[Kie.ai] ${msg}`, type)\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Adding types to onLog parameters\"",
+  "toolSummary": "\"Edit file content\""
+}

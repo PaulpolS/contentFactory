@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"เริ่มการทำงานของ Batch Pipeline\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Searching for batch pipeline start log\"",
+  "toolSummary": "\"Grep search batch start log\""
+}

@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Rename highlight query parameter to keywords in single-poster Draw Poster click handler.\"",
+  "EndLine": "2871",
+  "Instruction": "\"Change q.append('highlight', activeHighlight) to q.append('keywords', activeHighlight) to match Python's CLI parser argument name.\"",
+  "ReplacementContent": "\"                        const activeHighlight = (canvasSelectedItem?.id === item.id) ? canvasHighlight : '';\\n                        if (activeHighlight) q.append('keywords', activeHighlight);\"",
+  "StartLine": "2869",
+  "TargetContent": "\"                        const activeHighlight = (canvasSelectedItem?.id === item.id) ? canvasHighlight : '';\\n                        if (activeHighlight) q.append('highlight', activeHighlight);\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Renaming highlight query param to keywords in button handler\"",
+  "toolSummary": "\"App.tsx edit\""
+}

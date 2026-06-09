@@ -1,0 +1,9 @@
+{
+  "CodeContent": "\"path = \\\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/QuoteVideoPortal.tsx\\\"\\n\\n# Let's read the file as UTF-8\\nwith open(path, \\\"r\\\", encoding=\\\"utf-8\\\", errors=\\\"ignore\\\") as f:\\n    text = f.read()\\n\\n# Let's try to reverse the mojibake\\ntry:\\n    # Encode as CP1252 / latin1 and decode as UTF-8\\n    restored_bytes = text.encode(\\\"latin1\\\", errors=\\\"replace\\\")\\n    restored_text = restored_bytes.decode(\\\"utf-8\\\", errors=\\\"ignore\\\")\\n    \\n    print(\\\"Latin1 -> UTF-8 decoding result:\\\")\\n    # Print a small snippet containing the alert message\\n    idx = restored_text.find(\\\"alert(\\\")\\n    if idx != -1:\\n        print(restored_text[idx:idx+300])\\n    else:\\n        print(\\\"alert() not found\\\")\\n        print(restored_text[:500])\\n        \\nexcept Exception as e:\\n    print(\\\"Error reversing latin1:\\\", e)\\n\\ntry:\\n    # Encode as CP874 and decode as UTF-8\\n    restored_bytes = text.encode(\\\"cp874\\\", errors=\\\"replace\\\")\\n    restored_text = restored_bytes.decode(\\\"utf-8\\\", errors=\\\"ignore\\\")\\n    print(\\\"CP874 -> UTF-8 decoding result:\\\")\\n    idx = restored_text.find(\\\"alert(\\\")\\n    if idx != -1:\\n        print(restored_text[idx:idx+300])\\n    else:\\n        print(\\\"alert() not found\\\")\\n        print(restored_text[:500])\\nexcept Exception as e:\\n    print(\\\"Error reversing CP874:\\\", e)\\n\"",
+  "Description": "\"Test reversing Mojibake in QuoteVideoPortal.tsx by trying different encoding/decoding sequences in python\"",
+  "IsArtifact": "false",
+  "Overwrite": "true",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/scratch/test_decode.py\"",
+  "toolAction": "\"Creating test_decode.py\"",
+  "toolSummary": "\"Write file\""
+}

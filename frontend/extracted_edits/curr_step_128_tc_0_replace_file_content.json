@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": "false",
+    "Description": "\"Close the catch and finally block in fetchFacebookPages to fix the syntax error.\"",
+    "EndLine": "403",
+    "Instruction": "\"Close the try-catch block of fetchFacebookPages function correctly.\"",
+    "ReplacementContent": "\"    } catch (err: any) {\\n      setFetchError(`❌ ไม่สามารถดึงข้อมูลเพจได้: ${err.message || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ'}`);\\n    } finally {\\n      setLoadingPages(false);\\n    }\\n  };\\n\\n  // Helper to copy text to clipboard with feedback\"",
+    "StartLine": "398",
+    "TargetContent": "\"    } catch (err: any) {\\n      setFetchError(`❌ ไม่สามารถดึงข้อมูลเพจได้: ${err.message || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ'}`);\\n  // Helper to copy text to clipboard with feedback\"",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx\"",
+    "toolAction": "\"Fixing fetchFacebookPages completion\"",
+    "toolSummary": "\"Close fetchFacebookPages brackets\""
+  }
+}

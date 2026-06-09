@@ -1,0 +1,10 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Append headline_align and headline_margin to query parameters in App.tsx\"",
+  "EndLine": "892",
+  "Instruction": "\"Append headline_align and headline_margin states in appendCustomParams\"",
+  "ReplacementContent": "\"    q.append('credit_text', canvasCreditText);\\n    q.append('font_scale', String(canvasFontScale));\\n    q.append('image_split', String(canvasImageSplit));\\n    q.append('font-family', canvasFontFamily);\\n    q.append('headline_align', canvasHeadlineAlign);\\n    q.append('headline_margin', String(canvasHeadlineMargin));\\n  };\"",
+  "StartLine": "888",
+  "TargetContent": "\"    q.append('credit_text', canvasCreditText);\\n    q.append('font_scale', String(canvasFontScale));\\n    q.append('image_split', String(canvasImageSplit));\\n    q.append('font-family', canvasFontFamily);\\n  };\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\""
+}

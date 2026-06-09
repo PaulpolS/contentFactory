@@ -1,0 +1,7 @@
+{
+  "CommandLine": "\"cp /Users/paulpolsulintaboon/Documents/GitHub/BulkVideoCreatorApp-Clean/src/components/video/AutomatedVideoGeneratorTab.tsx frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "Cwd": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory\"",
+  "WaitMsBeforeAsync": "2000",
+  "toolAction": "\"Copying frontend React component\"",
+  "toolSummary": "\"Copy react portal component\""
+}

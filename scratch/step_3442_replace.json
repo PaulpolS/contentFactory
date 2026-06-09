@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Test replacement of a single line for line endings compatibility.\"",
+  "EndLine": "2590",
+  "Instruction": "\"Convert the logical AND check for copywriting to a ternary question mark.\"",
+  "ReplacementContent": "\"                                 {hasCopywriting ? (\"",
+  "StartLine": "2586",
+  "TargetContent": "\"                                 {hasCopywriting && (\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Refactoring line to test single line replace in App.tsx\"",
+  "toolSummary": "\"Replace file content\""
+}

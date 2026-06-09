@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Clean up duplicate interface definitions in top of VerticalVideoSuitePortal.tsx\"",
+  "EndLine": "7",
+  "Instruction": "\"Remove duplicate SubtitleStyle interface declaration.\"",
+  "ReplacementContent": "\"import React, { useState, useEffect, useRef } from 'react';\\n\\n// Draggable Subtitle Style Interface\\ninterface SubtitleStyle {\"",
+  "StartLine": "1",
+  "TargetContent": "\"import React, { useState, useEffect, useRef } from 'react';\\n\\n// Draggable Subtitle Style Interface\\ninterface SubtitleStyle {\\n\\n// Draggable Subtitle Style Interface\\ninterface SubtitleStyle {\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Cleaning up duplicate interface\"",
+  "toolSummary": "\"Edit top of file\""
+}

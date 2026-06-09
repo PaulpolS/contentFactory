@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Define ARTICLE_LENGTH_OPTIONS constants above PALETTE_WRITING_STYLES\"",
+  "EndLine": "196",
+  "Instruction": "\"Inject ARTICLE_LENGTH_OPTIONS constant before PALETTE_WRITING_STYLES\"",
+  "ReplacementContent": "\"export const ARTICLE_LENGTH_OPTIONS = [\\n  { id: 'short', label: 'สั้น', hint: 'ประมาณ 500-800 ตัวอักษร', range: '500-800' },\\n  { id: 'medium', label: 'กลาง', hint: 'ประมาณ 900-1,300 ตัวอักษร', range: '900-1300' },\\n  { id: 'long', label: 'ยาว', hint: 'ประมาณ 1,500-2,200 ตัวอักษร', range: '1500-2200' },\\n  { id: 'deep', label: 'ละเอียด', hint: 'ประมาณ 2,500-3,500 ตัวอักษร', range: '2500-3500' },\\n];\\n\\nexport const PALETTE_WRITING_STYLES: WritingStyle[] = [\"",
+  "StartLine": "194",
+  "TargetContent": "\"export const PALETTE_WRITING_STYLES: WritingStyle[] = [\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Defining ARTICLE_LENGTH_OPTIONS constant\"",
+  "toolSummary": "\"Define ARTICLE_LENGTH_OPTIONS constant\""
+}

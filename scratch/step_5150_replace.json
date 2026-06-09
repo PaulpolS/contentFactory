@@ -1,0 +1,10 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Add canvasHighlightColorSet state to App.tsx\"",
+  "EndLine": "458",
+  "Instruction": "\"Declare canvasHighlightColorSet state hook in App.tsx\"",
+  "ReplacementContent": "\"  const [canvasHeadlineMargin, setCanvasHeadlineMargin] = useState<number>(35);\\n  const [canvasHighlightColorSet, setCanvasHighlightColorSet] = useState<string>('classic');\"",
+  "StartLine": "456",
+  "TargetContent": "\"  const [canvasHeadlineMargin, setCanvasHeadlineMargin] = useState<number>(35);\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\""
+}

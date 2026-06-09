@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"generate-whisper-subtitles\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Finding shifted line numbers for subtitle generation\"",
+  "toolSummary": "\"Grep search whisper-subtitles\""
+}

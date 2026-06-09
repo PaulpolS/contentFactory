@@ -1,0 +1,10 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Pass font_scale to generate-copywriting for feedback loop\"",
+  "EndLine": "751",
+  "Instruction": "\"Add font_scale state in handleRewriteCopywritingWithFeedback POST request body\"",
+  "ReplacementContent": "\"        body: JSON.stringify({\\n          feedback: feedbackText,\\n          length: canvasArticleLength,\\n          font_scale: canvasFontScale\\n        })\"",
+  "StartLine": "747",
+  "TargetContent": "\"        body: JSON.stringify({\\n          feedback: feedbackText,\\n          length: canvasArticleLength\\n        })\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\""
+}

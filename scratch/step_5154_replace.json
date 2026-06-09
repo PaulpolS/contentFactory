@@ -1,0 +1,10 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Append highlight_color_set query parameter in App.tsx\"",
+  "EndLine": "895",
+  "Instruction": "\"Append highlight_color_set state to appendCustomParams\"",
+  "ReplacementContent": "\"    q.append('headline_align', canvasHeadlineAlign);\\n    q.append('headline_margin', String(canvasHeadlineMargin));\\n    q.append('highlight_color_set', canvasHighlightColorSet);\\n  };\"",
+  "StartLine": "893",
+  "TargetContent": "\"    q.append('headline_align', canvasHeadlineAlign);\\n    q.append('headline_margin', String(canvasHeadlineMargin));\\n  };\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\""
+}

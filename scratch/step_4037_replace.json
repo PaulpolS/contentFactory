@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Change layout to single-column vertical flow and stack configurations below preview using flexbox order\"",
+  "EndLine": "1952",
+  "Instruction": "\"Change grid to flex-col and remove xl:col-span-2, adding order: 2 style to configuration studio card\"",
+  "ReplacementContent": "\"              {/* Workspace Layout Flow - Stacked Vertically as requested */}\\n              <div className=\\\"flex flex-col gap-8\\\">\\n              \\n              {/* Workspace inputs: Stacked below Preview */}\\n              <div className=\\\"glass-panel p-6 flex flex-col justify-between\\\" style={{ order: 2 }}>\"",
+  "StartLine": "1948",
+  "TargetContent": "\"              {/* Workspace Layout Grid */}\\n              <div className=\\\"grid grid-cols-1 xl:grid-cols-3 gap-8\\\">\\n              \\n              {/* Workspace inputs: 2 columns */}\\n              <div className=\\\"xl:col-span-2 glass-panel p-6 flex flex-col justify-between\\\">\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Changing layout to vertical stack\"",
+  "toolSummary": "\"Edit file content\""
+}

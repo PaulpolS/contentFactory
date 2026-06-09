@@ -1,0 +1,10 @@
+{
+  "CaseInsensitive": "false",
+  "Includes": "[\"VerticalVideoSuitePortal.tsx\"]",
+  "IsRegex": "false",
+  "MatchPerLine": "true",
+  "Query": "\"🤫 โหมดคำคมคำบรรยายไร้เสียง\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components\"",
+  "toolAction": "\"Searching for silent mode header in VerticalVideoSuitePortal.tsx\"",
+  "toolSummary": "\"Search for silent mode header\""
+}

@@ -1,0 +1,117 @@
+Created At: 2026-05-27T14:35:36Z
+Completed At: 2026-05-27T14:35:36Z
+File Path: `file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx`
+Total Lines: 3548
+Total Bytes: 202409
+Showing lines 1 to 800
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: import { useState, useEffect, useRef } from 'react';
+2: import { 
+3:   Compass, 
+4:   Database, 
+5:   Image as ImageIcon, 
+6:   Play, 
+7:   CheckCircle, 
+8:   Sliders, 
+9:   Search, 
+10:   Info, 
+11:   Cpu,
+12:   RefreshCw,
+13:   Eye,
+14:   Upload,
+15:   Trash2,
+16:   Sparkles,
+17:   X
+18: } from 'lucide-react';
+19: import DiscoveryPortal from './components/DiscoveryPortal';
+20: import SettingsPortal from './components/SettingsPortal';
+21: 
+22: const API_BASE = 'http://localhost:5005/api';
+23: 
+24: interface VaultContent {
+25:   id: string;
+26:   source_type: 'radar' | 'rss' | 'youtube' | 'github';
+27:   title: string;
+28:   selected_headline: string | null;
+29:   raw_content: string;
+30:   source_url: string;
+31:   author_name: string | null;
+32:   author_avatar_url: string | null;
+33:   author_followers: number | null;
+34:   rating_news: number;
+35:   rating_evergreen: number;
+36:   metadata: any;
+37:   media_paths: string[];
+38:   status: 'scraped' | 'ready_for_design' | 'designed' | 'posted' | 'archived';
+39:   created_at: string;
+40:   updated_at: string;
+41: }
+42: 
+43: interface GraphicItem {
+44:   id: string;
+45:   content_id: string;
+46:   file_path: string;
+47:   image_ratio: string;
+48:   theme_name: string;
+49:   created_at: string;
+50: }
+51: 
+52: interface PaletteTheme {
+53:   id: string;
+54:   name: string;
+55:   gradient: [string, string];
+56:   primaryText: string;
+57:   highlight: string;
+58:   highlightText: string;
+59:   secondaryHighlight: string;
+60:   accent: string;
+61: }
+62: 
+63: const PALETTE_THEMES: PaletteTheme[] = [
+64:   
+<truncated 41665 bytes>
+a: {
+758:             ...canvasSelectedItem.metadata,
+759:             copywriting: resData.data
+760:           }
+761:         };
+762:         setCanvasSelectedItem(updatedItem);
+763:         setCanvasImportedItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+764:         setCanvasAllItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+765:         fetchVaultData();
+766:         fetchApprovedItems();
+767:         alert("✨ ปรับแก้ไขตามคำติชมเรียบร้อยแล้ว!");
+768:       } else {
+769:         alert("⚠️ " + (resData.error || "เกิดข้อผิดพลาดในการปรับแก้บทความ"));
+770:       }
+771:     } catch (err) {
+772:       console.error("Copywriting feedback rewrite error:", err);
+773:       alert("⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+774:     } finally {
+775:       setGeneratingCopywriting(false);
+776:     }
+777:   };
+778: 
+779:   const fetchSavedLogos = async () => {
+780:     try {
+781:       const res = await fetch(`${API_BASE}/vault/logos`);
+782:       const data = await res.json();
+783:       if (Array.isArray(data)) {
+784:         setSavedLogos(data);
+785:       }
+786:     } catch (err) {
+787:       console.error('Failed to load saved logos:', err);
+788:     }
+789:   };
+790: 
+791:   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+792:     const file = e.target.files?.[0];
+793:     if (!file) return;
+794: 
+795:     const reader = new FileReader();
+796:     reader.onload = async () => {
+797:       const base64 = reader.result as string;
+798:       try {
+799:         const res = await fetch(`${API_BASE}/vault/logos`, {
+800:           method: 'POST',
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

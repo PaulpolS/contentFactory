@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Inject SQLite vault credentials sync hook into VerticalVideoSuitePortal mount\"",
+  "EndLine": "994",
+  "Instruction": "\"Add a new useEffect hook after the saved brains load hook to fetch all SQLite credentials and sync them to localstorage under the correct keys (openrouter_key, kie_key, kie_api_key) so they are active without requiring tab refresh.\"",
+  "ReplacementContent": "\"    window.addEventListener('focus', loadSavedBrains);\\n    return () => window.removeEventListener('focus', loadSavedBrains);\\n  }, []);\\n\\n  // Auto-sync active API Keys from SQLite DB to localStorage on mount for zero-configuration startup\\n  useEffect(() => {\\n    const syncApiKeysFromDb = async () => {\\n      try {\\n        const res = await fetch('/api/vault/credentials');\\n        if (res.ok) {\\n          const data = await res.json();\\n          if (data.success && Array.isArray(data.data)) {\\n            data.data.forEach((row: any) => {\\n              const service = row.service_name;\\n              const key = row.credential_key?.trim();\\n              if (key && key !== `MOCK_${service.toUpperCase()}_KEY`) {\\n                if (service === 'openrouter') {\\n                  localStorage.setItem('openrouter_key', key);\\n                } else if (service === 'kie') {\\n                  localStorage.setItem('kie_key', key);\\n                  localStorage.setItem('kie_api_key', key);\\n                } else if (service === 'github') {\\n                  localStorage.setItem('github_token', key);\\n                } else if (service === 'dropbox') {\\n                  localStorage.setItem('dropbox_key', key);\\n                }\\n              }\\n            });\\n          }\\n        }\\n      } catch (err) {\\n        console.warn('Failed to auto-sync SQLite vault credentials:', err);\\n      }\\n    };\\n    syncApiKeysFromDb();\\n  }, []);\\n\\n  // Terminal scroll to bottom\"",
+  "StartLine": "990",
+  "TargetContent": "\"    window.addEventListener('focus', loadSavedBrains);\\n    return () => window.removeEventListener('focus', loadSavedBrains);\\n  }, []);\\n\\n  // Terminal scroll to bottom\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Adding auto credentials syncer hook\"",
+  "toolSummary": "\"Update VerticalVideoSuitePortal.tsx\""
+}

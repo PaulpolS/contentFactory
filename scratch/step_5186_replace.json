@@ -1,0 +1,10 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Restore original line 2055 in App.tsx\"",
+  "EndLine": "2056",
+  "Instruction": "\"Restore original grid columns for line 2055 in App.tsx\"",
+  "ReplacementContent": "\"                      <div className=\\\"grid grid-cols-1 md:grid-cols-2 gap-4\\\">\"",
+  "StartLine": "2054",
+  "TargetContent": "\"                      <div className=\\\"grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-1\\\">\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\""
+}

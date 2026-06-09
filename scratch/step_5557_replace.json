@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Add CSS aspect ratio classes for 4:3 and 4:5 in the Live Preview container so these new ratios display correctly.\\\"\"",
+  "EndLine": "2975",
+  "Instruction": "\"Update the preview container to handle 4:3 and 4:5 ratios properly\"",
+  "ReplacementContent": "\"                          className={`preview-canvas-container relative overflow-hidden rounded-xl border border-slate-800 shadow-2xl ${\\n                            canvasRatio === '16:9' \\n                              ? 'aspect-[16/9] w-full' \\n                              : canvasRatio === '4:3'\\n                                ? 'aspect-[4/3] w-full'\\n                                : canvasRatio === '9:16'\\n                                  ? 'aspect-[9/16] h-[400px]'\\n                                  : canvasRatio === '4:5'\\n                                    ? 'aspect-[4/5] h-[400px]'\\n                                    : 'aspect-square w-full'\\n                          }`}\"",
+  "StartLine": "2969",
+  "TargetContent": "\"                          className={`preview-canvas-container relative overflow-hidden rounded-xl border border-slate-800 shadow-2xl ${\\n                            canvasRatio === '16:9' \\n                              ? 'aspect-[16/9] w-full' \\n                              : canvasRatio === '9:16'\\n                                ? 'aspect-[9/16] h-[400px]'\\n                                : 'aspect-square w-full'\\n                          }`}\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Updating preview container ratios\"",
+  "toolSummary": "\"Preview ratio update\""
+}

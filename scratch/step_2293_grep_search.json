@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"Whisper STT segments\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Searching for Whisper STT segments in code\"",
+  "toolSummary": "\"Grep search Whisper STT segments\""
+}

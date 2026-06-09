@@ -1,0 +1,1717 @@
+1: # Task List: Synchronized Pillow Graphic Generator Fixes
+2: 
+3: - `[ ]` Update Python rendering engine (`06_graphic_generator.py`)
+4:   - `[ ]` Modernize `draw_category_badge` to match HTML mockup rounded glow card exactly
+5:   - `[ ]` Fine-tune `draw_tilted_word_layer` for dynamic highlight snug padding & border radius
+6: - `[ ]` Update React frontend canvas studio (`App.tsx`)
+7:   - `[ ]` Fix queue/batch highlight and headline state fallback mapping in `runNextQueueItem`
+8:   - `[ ]` Add "สุ่มภาพพื้นหลังใหม่ (Randomize Background)" button in background stock UI
+9:   - `[ ]` Fix single render query params to prevent redundant randomization when previewed
+10: - `[ ]` Verify successful compilation and rendering
+11:   - `[ ]` Run TypeScript type checking
+12:   - `[ ]` Render a single preview poster with multi-word highlighted lines & stock background
+13:   - `[ ]` Run a batch render to verify consistent highlight blocks across different posts
+14: 
+15:   Trash2,
+16:   Sparkles,
+17:   X,
+18:   Download,
+19:   FolderOpen,
+20:   ChevronLeft,
+21:   ChevronRight
+22: } from 'lucide-react';
+23: import DiscoveryPortal from './components/DiscoveryPortal';
+24: import SettingsPortal from './components/SettingsPortal';
+25: 
+26: const API_BASE = 'http://localhost:5005/api';
+27: 
+28: interface VaultContent {
+29:   id: string;
+30:   source_type: 'radar' | 'rss' | 'youtube' | 'github';
+31:   title: string;
+32:   selected_headline: string | null;
+33:   raw_content: string;
+34:   source_url: string;
+35:   author_name: string | null;
+36:   author_avatar_url: string | null;
+37:   author_followers: number | null;
+38:   rating_news: number;
+39:   rating_evergreen: number;
+40:   metadata: any;
+41:   media_paths: string[];
+42:   status: 'scraped' | 'ready_for_design' | 'designed' | 'posted' | 'archived';
+43:   created_at: string;
+44:   updated_at: string;
+45: }
+46: 
+47: interface GraphicItem {
+48:   id: string;
+49:   content_id: string;
+50:   file_path: string;
+51:   image_ratio: string;
+52:   theme_name: string;
+53:   created_at: string;
+54: }
+55: 
+56: interface PaletteTheme {
+57:   id: string;
+58:   name: string;
+59:   gradient: [string, string];
+60:   primaryText: string;
+67: const PALETTE_THEMES: PaletteTheme[] = [
+68:   {
+69:     id: "Classic Red Blue",
+70:     name: "Neutron Red Blue",
+71:     gradient: ["#18181b", "#09090b"],
+72:     primaryText: "#ffffff",
+73:     highlight: "#dc2626",
+74:     highlightText: "#ffffff",
+75:     secondaryHighlight: "#1d4ed8",
+76:     accent: "#dc2626"
+77:   },
+78:   {
+79:     id: "Emerald Gold",
+80:     name: "Morkot Emerald Gold",
+81:     gradient: ["#022c22", "#020f0c"],
+82:     primaryText: "#ffffff",
+83:     highlight: "#059669",
+84:     highlightText: "#f59e0b",
+85:     secondaryHighlight: "#f59e0b",
+86:     accent: "#f59e0b"
+87:   },
+88:   {
+89:     id: "Neon Purple",
+90:     name: "Cyberpunk Neon Purple",
+91:     gradient: ["#4c1d95", "#0f172a"],
+92:     primaryText: "#ffffff",
+93:     highlight: "#a855f7",
+94:     highlightText: "#facc15",
+95:     secondaryHighlight: "#f97316",
+96:     accent: "#a855f7"
+97:   },
+98:   {
+99:     id: "orange_teal",
+100:     name: "Orange Teal Burst",
+101:     gradient: ["#18181b", "#09090b"],
+102:     primaryText: "#ffffff",
+103:     highlight: "#f97316",
+104:     highlightText: "#fde047",
+105:     secondaryHighlight: "#0891b2",
+106:     accent: "#f97316"
+107:   },
+108:   {
+109:     id: "purple_lime",
+110:     name: "Purple Lime Electro",
+395:   const [canvasRatio, setCanvasRatio] = useState<'1:1' | '4:5' | '4:3' | '16:9' | '9:16'>('1:1');
+396:   const [canvasTheme, setCanvasTheme] = useState('Classic Red Blue');
+397:   const [canvasLayout, setCanvasLayout] = useState('top_gainers');
+398:   const [canvasHeadline, setCanvasHeadline] = useState('');
+399:   const [canvasCaption, setCanvasCaption] = useState('');
+400:   const [canvasHeadlineMode, setCanvasHeadlineMode] = useState<'single' | 'triple'>('triple');
+401:   const [canvasHeadlineLine1, setCanvasHeadlineLine1] = useState('');
+402:   const [canvasHeadlineLine2, setCanvasHeadlineLine2] = useState('');
+403:   const [canvasHeadlineLine3, setCanvasHeadlineLine3] = useState('');
+404:   const [generatingCopywriting, setGeneratingCopywriting] = useState(false);
+405:   const [canvasHeadlineLine3, setCanvasHeadlineLine3] = useState('');
+406:   const [generatingCopywriting, setGeneratingCopywriting] = useState(false);
+407:   const [exportDirHandle, setExportDirHandle] = useState<any>(null);
+408:   const [exportFolderName, setExportFolderName] = useState<string>(() => localStorage.getItem('canvas_export_folder_name') || '');
+409:   const [quickViewCopywriting, setQuickViewCopywriting] = useState<VaultContent | null>(null);
+410:   const [quickViewTab, setQuickViewTab] = useState<'post' | 'headlines'>('post');
+411:   const [canvasHighlight, setCanvasHighlight] = useState('');
+412:   const [canvasBgImage, setCanvasBgImage] = useState('');
+413:   const [canvasBgSource, setCanvasBgSource] = useState<'default' | 'stock'>(() => (localStorage.getItem('canvas_bg_source') as any) || 'default');
+414:   const [latestGraphic, setLatestGraphic] = useState<GraphicItem | null>(null);
+415:   const [loadingGraphics, setLoadingGraphics] = useState(false);
+416:   const [contentGraphics, setContentGraphics] = useState<any[]>([]);
+417:   const [graphicIndex, setGraphicIndex] = useState<number>(0);
+418: 
+419:   // V1 Logo circular stamps & margins
+420:   const [savedLogos, setSavedLogos] = useState<{ name: string; url: string }[]>([]);
+421:   const [canvasLogoUrl, setCanvasLogoUrl] = useState('');
+422:   const [canvasLogoSize, setCanvasLogoSize] = useState(10);
+423:   const [canvasLogoMarginX, setCanvasLogoMarginX] = useState(20);
+424:   const [canvasLogoMarginY, setCanvasLogoMarginY] = useState(20);
+425:   const [canvasShowPageLogo, setCanvasShowPageLogo] = useState(false);
+426:   const [rememberLogo, setRememberLogo] = useState(false);
+427:   const [stockFolder, setStockFolder] = useState<string>(() => localStorage.getItem('canvas_stock_folder') || '');
+428:   const [stockFolderName, setStockFolderName] = useState<string>(() => {
+429:     const saved = localStorage.getItem('canvas_stock_folder') || '';
+430:     if (!saved) return '';
+431: 
+432:   // Category Badge (Strap / Label)
+433:   const [canvasShowBadge, setCanvasShowBadge] = useState(true);
+434:   const [canvasBadgeStyle, setCanvasBadgeStyle] = useState('dev-pick');
+435:   const [canvasBadgeText, setCanvasBadgeText] = useState('AI');
+436: 
+437:   // News Card Overlay
+438:   const [canvasShowNewsCard, setCanvasShowNewsCard] = useState(false);
+439:   const [canvasNewsTitle, setCanvasNewsTitle] = useState('');
+440:   const [canvasNewsDetail, setCanvasNewsDetail] = useState('');
+760:   };
+761: 
+762:   const handleExportLocal = async () => {
+763:     let activeDirHandle = exportDirHandle;
+764:     if (!activeDirHandle) {
+765:       try {
+766:         activeDirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+767:         setExportDirHandle(activeDirHandle);
+768:         setExportFolderName(activeDirHandle.name);
+769:         localStorage.setItem('canvas_export_folder_name', activeDirHandle.name);
+770:       } catch (e: any) {
+771:         if (e.name === 'AbortError') return;
+772:         console.error('Folder picker error:', e);
+773:         alert('❌ กรุณาเลือกโฟลเดอร์เพื่อเริ่มต้นบันทึกไฟล์ครับ: ' + e.message);
+774:         return;
+775:       }
+776:     }
+777: 
+778:     const idsToExport = canvasSelectedIds.length > 0 
+779:       ? canvasSelectedIds 
+780:       : canvasImportedItems.map(i => i.id);
+781:     
+782:     if (idsToExport.length === 0) {
+783:       alert('⚠️ ไม่มีข้อมูลที่จะส่งออก กรุณาเลือกรายการก่อน');
+784:       return;
+785:     }
+786: 
+787:     try {
+788:       // Call backend export API
+789:       const resp = await fetch(`${API_BASE}/vault/export-local`, {
+790:         method: 'POST',
+791:         headers: { 'Content-Type': 'application/json' },
+792:         body: JSON.stringify({ content_ids: idsToExport })
+793:       });
+794:       
+795:       if (!resp.ok) throw new Error('Export failed');
+796:       con
+805:         const writable = await csvFile.createWritable();
+806:         await writable.write(csvBlob);
+807:         await writable.close();
+808:       }
+809: 
+810:       // Download rendered images via browser
+811:       let imgCount = 0;
+812:       if (result.images && result.images.length > 0) {
+813:         for (const img of result.images) {
+814:           try {
+815:             const imgResp = await fetch(`${API_BASE}/vault/media?path=${encodeURIComponent(img.path)}`);
+816:             if (imgResp.ok) {
+817:               const imgBlob = await imgResp.blob();
+818:               const imgFile = await activeDirHandle.getFileHandle(img.filename, { create: true });
+819:               const writable = await imgFile.createWritable();
+820:               await writable.write(imgBlob);
+821:               await writable.close();
+822:               imgCount++;
+823:             }
+824:           } catch (e) { console.warn('Image copy failed:', img.filename, e); }
+825:         }
+826:       }
+827: 
+828:       alert(`✅ ส่งออกสำเร็จ!\n📁 โฟลเดอร์: ${activeDirHandle.name}\n📊 CSV: ${result.total_records} รายการ\n🖼️ รูปภาพ: ${imgCount} ไฟล์`);
+829:     } catch (e: any) {
+830:       console.error('Export error:', e);
+831:       alert('❌ เกิดข้อผิดพลาดในการส่งออก: ' + e.message);
+832:     }
+833:   };
+834: 
+835:   // Interactive Copywriting Rewrite using AI Teacher Feedback Loop
+836:   const handleRewriteCopywritingWithFeedback = async (feedbackText: string) => {
+837:     if (!canvasSelectedItem) return;
+838:     if (!feedbackText.trim()) return alert("⚠️ กรุณากรอกคำแนะนำก่อนสั่งเกลาครับ");
+839:     
+840:     setGeneratingCopywriting(true);
+955:   };
+956: 
+957:   const appendCustomParams = (q: URLSearchParams) => {
+958:     q.append('show_logo', String(canvasShowPageLogo));
+959:     if (canvasLogoUrl) {
+960:       const urlParams = new URLSearchParams(canvasLogoUrl.split('?')[1]);
+961:       const logoPathVal = urlParams.get('path');
+962:       if (logoPathVal) {
+963:         q.append('page_logo_path', logoPathVal);
+964:       }
+965:     }
+966:     q.append('page_logo_size', String(canvasLogoSize));
+967:     q.append('page_logo_margin_x', String(canvasLogoMarginX));
+968:     q.append('page_logo_margin_y', String(canvasLogoMarginY));
+969: 
+970:     // Category badge
+971:     q.append('show_badge', String(canvasShowBadge));
+972:     q.append('badge_style', canvasBadgeStyle);
+973:     q.append('badge_text', canvasBadgeText);
+974:     q.append('badge_subtext', canvasBadgeSubtext);
+975: 
+976:     // News card
+977:     q.append('show_news_card', String(canvasShowNewsCard));
+978:     q.append('news_title', canvasNewsTitle);
+979:     q.append('news_detail', canvasNewsDetail);
+980:     q.append('news_source', canvasNewsSource);
+981: 
+982:     // Callout
+983:     q.append('show_callout', String(canvasShowCallout));
+984:     q.append('callout_text', canvasCalloutText);
+985:     q.append('callout_highlight', canvasCalloutHighlight);
+986:     q.append('callout_placement', canvasCalloutPlacement);
+987:     q.append('callout_sticker', canvasCalloutSticker);
+988: 
+989:     // Meme
+990:     q.append('show_meme', String(canvasShowMeme));
+991:     q.append('meme_text', canvasMemeText);
+992:     q.append('meme_subtext', canvasMemeSubtext);
+993: 
+994:     // Other properties
+995:     q.append('credit_text', canvasCreditText);
+996:     q.append('font_scale', String(canvasFontScale));
+997:     q.append('image_split', String(canvasImageSplit));
+998:     q.append('font-family', canvasFontFamily);
+999:     q.append('headline_align', canvasHeadlineAlign);
+1000:     q.append('headline_margin', String(canvasHeadlineMargin));
+1001:     q.append('highlight_color_set', canvasHighlightColorSet);
+1002:   };
+1003: 
+1004:   // Auto scroll terminal logs
+1005:   const scrollTerminal = (module: 'canvas') => {
+1006:     setTimeout(() => {
+1007:       terminalBottoms[module].current?.scrollIntoView({ behavior: 'smooth' });
+1008:     }, 50);
+1009:   };
+1010: 
+1011:   // SSE Process Runner Engine
+1012:   const runModule = (module: 'canvas', queryParams: string) => {
+1013:     // Terminate existing SSE
+1014:     if (sseConnections.current[module]) {
+1015:       sseConnections.current[module]?.close();
+1016:     }
+1017: 
+1018:     setLogs(prev => ({
+1019:       ...prev,
+1020:       [module]: [`[SYSTEM] Starting spawned child process for '${module}'...`]
+1021:     }));
+1022:     setRunningModule(prev => ({ ...prev, [module]: true }));
+1023: 
+1024:     const url = `${API_BASE}/orchestrator/run/${module}?${queryParams}`;
+1025:     const source = new EventSource(url);
+1026:     sseConnections.current[module] = source;
+1027: 
+1028:     source.onmessage = (event) => {
+1029:       setLogs(prev => ({
+1030:         ...prev,
+1031:         [module]: [...prev[module], event.data]
+1032:       }));
+1033:       scrollTerminal(module);
+1034: 
+1035:       // Check if process finished
+1036:       if (event.data.includes('Exit Code:')) {
+1037:         source.close();
+1038:         setRunningModule(prev => ({ ...prev, [module]: false }));
+1039: 
+1040:         const isSuccess = event.data.includes('Exit Code: 0');
+1041:         const parsedParams = new URLSearchParams(queryParams);
+1042:         const contentId = parsedParams.get('content_id');
+1043:         
+1044:         if (module === 'canvas') {
+1045:           if (isSuccess && contentId) {
+1046:             // Fetch the newly rendered graphic and append to session
+1047:             fetchNewestGraphic(contentId).then(newG => {
+1048:               if (newG) {
+1049:                 setContentGraphics(prev => {
+1050:                   const updated = [...prev, newG];
+1051:                   setGraphicIndex(updated.length - 1);
+1052:                   setLatestGraphic(newG);
+1053:                   return updated;
+1054:                 });
+1055:               }
+1056:             });
+1057:           }
+1058: 
+1059:           // If queue is active, run next item!
+1060:           if (queueIndexRef.current !== null) {
+1061:             const nextIdx = queueIndexRef.current + 1;
+1062:             setCanvasQueueIndex(nextIdx);
+1063:           } else {
+1064:             setPreviewTab('pillow');
+1065:           }
+1066:         } else if (canvasSelectedItem) {
+1067:           fetchGraphicsForContent(canvasSelectedItem.id);
+1068:           setPreviewTab('pillow');
+1069:         }
+1070:       }
+1071:     };
+1072: 
+1073:     source.onerror = (err) => {
+1074:       console.error(`SSE stream error on ${module}:`, err);
+1075:       setLogs(prev => ({
+1076:         ...prev,
+1077:         [module]: [...prev[module], '[ERROR] การเชื่อมต่อเซิร์ฟเวอร์ขัดข้อง หรือโปรเซสหยุดทำงานกะทันหัน']
+1078:       }));
+1079:       source.close();
+1080:       setRunningModule(prev => ({ ...prev, [module]: false }));
+1210:     queueIndexRef.current = canvasQueueIndex;
+1211:   }, [canvasQueueIndex]);
+1212: 
+1213:   useEffect(() => {
+1214:     queueIdsRef.current = canvasQueueIds;
+1215:   }, [canvasQueueIndex]);
+1216: 
+1217:   useEffect(() => {
+1218:     queueIdsRef.current = canvasQueueIds;
+1219:   }, [canvasQueueIds]);
+1220: 
+1221:   const runNextQueueItem = async (idx: number, ids: string[]) => {
+1222:     if (idx >= ids.length) {
+1223:       // Completed all items!
+1224:       setCanvasQueueIndex(null);
+1225:       setCanvasQueueIds([]);
+1226:       // Reload lists
+1227:       fetchVaultData();
+1228:       fetchApprovedItems();
+1229:       if (canvasSelectedItem) {
+1230:         fetchGraphicsForContent(canvasSelectedItem.id);
+1231:       }
+1232:       return;
+1233:     }
+1234: 
+1235:     const currentId = ids[idx];
+1236:       return;
+1237:     }
+1238: 
+1239:     // Set as selected item to show active logs and preview
+1240:   useEffect(() => {
+1241:     queueIdsRef.current = canvasQueueIds;
+1242:   }, [canvasQueueIds]);
+1243: 
+1244:   const runNextQueueItem = async (idx: number, ids: string[]) => {
+1245:     if (idx >= ids.length) {
+1246:       // Completed all items!
+1247:       setCanvasQueueIndex(null);
+1248:       setCanvasQueueIds([]);
+1249:       // Reload lists
+1250:       fetchVaultData();
+1251:       fetchApprovedItems();
+1252:       // Keep the newly populated batch session graphics active in contentGraphics, do not overwrite them!
+1253:       return;
+1254:     }
+1255: 
+1256:     const currentId = ids[idx];
+1257:     const item = (canvasShowAll ? canvasAllItems : canvasImportedItems).find(i => i.id === currentId);
+1258:     if (!item) {
+1259:       // Skip if not found
+1260:       setCanvasQueueIndex(idx + 1);
+1261:       return;
+1262:     }
+1263: 
+1264:     // Set as selected item to show active logs and preview
+1265:     setCanvasSelectedItem(item);
+1266: 
+1267:     const q = new URLSearchParams();
+1268:     q.append('content_id', item.id);
+1269:     q.append('ratio', canvasRatio);
+1270:     q.append('theme', canvasTheme);
+1271:     q.append('layout', canvasLayout);
+1272:     // Use manually typed headline if it is the currently selected active item, otherwise use item headline/title
+1273:     let activeHeadline = '';
+1274:     if (canvasSelectedItem?.id === item.id) {
+1275:       if (canvasHeadlineMode === 'triple') {
+1276:         activeHeadline = [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3].filter(Boolean).join('\n');
+1277:       } else {
+1278:         activeHeadline = canvasHeadline;
+1279:       }
+1280:     } else {
+1281:       activeHeadline = item.selected_headline || item.title;
+1282:     }
+1283:     q.append('headline', activeHeadline);
+1284:     
+1285:     // Background image source logic
+1286:     if (canvasBgSource === 'stock' && stockFolder) {
+1287:       try {
+1288:         const stockRes = await fetch(`${API_BASE}/vault/stock-random?folder=${encodeURIComponent(stockFolder)}`);
+1289:         const stockData = await stockRes.json();
+1290:         if (stockData.success && stockData.absolute_path) {
+1291:           q.append('base_image', stockData.absolute_path);
+1292:         } else {
+1293:           if (canvasBgImage) q.append('base_image', canvasBgImage);
+1294:           else if (item.media_paths && item.media_paths.length > 0) q.append('base_image', item.media_paths[0]);
+1295:         }
+1296:       } catch {
+1297:         if (canvasBgImage) q.append('base_image', canvasBgImage);
+1298:         else if (item.media_paths && item.media_paths.length > 0) q.append('base_image', item.media_paths[0]);
+1299:       }
+1300:     } else {
+1301:       if (canvasBgImage) {
+1302:         q.append('base_image', canvasBgImage);
+1303:       } else if (item.media_paths && item.media_paths.length > 0) {
+1304:         q.append('base_image', item.media_paths[0]);
+1305:       }
+1306:     }
+1307: 
+1308:     // Keyword Highlight
+1309:     const activeHighlight = (canvasSelectedItem?.id === item.id) ? canvasHighlight : '';
+1310:     if (activeHighlight) {
+1311:       q.append('keywords', activeHighlight);
+1312:     } else {
+1313:       // Fetch fallback keywords from metadata
+1314:       let keywords: string[] = [];
+1315:       if (item.metadata) {
+1316:         const meta = item.metadata;
+1317:         keywords = meta.keywords || meta.tags || [];
+1318:       }
+1319:       if (keywords.length > 0) {
+1320:         q.append('keywords', keywords.join(','));
+1321:       }
+1322:     }
+1323: 
+1324:     // Append custom branding & overlays parameters
+1325:     appendCustomParams(q);
+1326:   const fetchAllCanvasItems = async () => {
+1327:     try {
+1328:       const res = await fetch(`${API_BASE}/vault/contents`);
+1329:       const data = await res.json();
+1330:       if (data.success) {
+1331:         setCanvasAllItems(data.data);
+1332:       }
+1333:     } catch (err) {
+1334:       console.error('Failed to load all canvas items:', err);
+1335:     }
+1336:   };
+1337: 
+1338:   // Fetch graphics
+1339:     }
+1340:   };
+1341: 
+1342:   // Fetch graphics
+1343:   const fetchGraphicsForContent = async (id: string) => {
+1344:     setLoadingGraphics(true);
+1345:     try {
+1346:       const res = await fetch(`${API_BASE}/vault/contents/${id}/graphics`);
+1347:       const data = await res.json();
+1348:       if (data.success && data.data.length > 0) {
+1349:         setContentGraphics(data.data);
+1350:         setGraphicIndex(0);
+1351:         setLatestGraphic(data.data[0]);
+1352:       } else {
+1353:         setContentGraphics([]);
+1354:         setGraphicIndex(0);
+1355:         setLatestGraphic(null);
+1356:       }
+1357:     } catch (err) {
+1358:       console.error('Failed to load graphics for content:', err);
+1359:       setContentGraphics([]);
+1360:       setGraphicIndex(0);
+1361:       setLatestGraphic(null);
+1362:     } finally {
+1363:       setLoadingGraphics(false);
+1364:     }
+1365:   };
+1366: 
+1367: 
+1368: 
+1369:   // Initial load
+1370:   useEffect(() => {
+1420:       setCanvasHeadline(canvasSelectedItem.selected_headline || canvasSelectedItem.title);
+1421:       setCanvasCaption(canvasSelectedItem.metadata?.copywriting?.caption || '');
+1422:       const l3 = canvasSelectedItem.metadata?.copywriting?.headline_3line || [];
+1423:       setCanvasHeadlineLine1(l3[0] || '');
+1424:       setCanvasHeadlineLine2(l3[1] || '');
+1425:   }, [filterSource, filterStatus, filterMinRating, sortBy]);
+1426: 
+1427:   // Save manually updated copywriting metadata to SQLite
+1428:   const handleSaveManuallyUpdatedMetadata = async (itemId: string, updatedCopywriting: any) => {
+1429:     try {
+1430:       const item = (canvasShowAll ? canvasAllItems : canvasImportedItems).find(i => i.id === itemId);
+1431:       if (!item) return;
+1432: 
+1433:       const updatedMetadata = {
+1434:         ...(item.metadata || {}),
+1435:         copywriting: updatedCopywriting
+1436:       };
+1437: 
+1438:       const res = await fetch(`${API_BASE}/vault/contents/${itemId}/metadata`, {
+1439:         method: 'PUT',
+1440:         headers: { 'Content-Type': 'application/json' },
+1441:         body: JSON.stringify({ metadata: updatedMetadata })
+1442:       });
+1443:       const data = await res.json();
+1444:       if (res.ok && data.success) {
+1445:         const updateList = (list: VaultContent[]) => list.map(i => i.id === itemId ? { ...i, metadata: updatedMetadata } : i);
+1446:         setCanvasImportedItems(updateList);
+1447:         setCanvasAllItems(updateList);
+1448:         
+1449:         // Update selected item in local state too
+1450:         if (canvasSelectedItem && canvasSelectedItem.id === itemId) {
+1451:           setCanvasSelectedItem({ ...canvasSelectedItem, metadata: updatedMetadata });
+1452:         }
+1453:         
+1454:         alert('💾 บันทึกการแก้ไขคำโฆษณาและพาดหัวเรียบร้อยแล้ว!');
+1455:       } else {
+1456:         alert(`❌ ไม่สามารถบันทึกได้: ${data.error || 'Unknown error'}`);
+1457:       }
+1458:     } catch (e: any) {
+1459:       alert(`❌ ข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์: ${e.message}`);
+1460:     }
+1461:   };
+1462: 
+1463:   // Load canvas selection details
+1464:   useEffect(() => {
+1465:     if (canvasSelectedItem) {
+1466:       setCanvasHeadline(canvasSelectedItem.selected_headline || canvasSelectedItem.title);
+1467:       setCanvasCaption(canvasSelectedItem.metadata?.copywriting?.caption || '');
+1468:       const l3 = canvasSelectedItem.metadata?.copywriting?.headline_3line || [];
+1469:       setCanvasHeadlineLine1(l3[0] || '');
+1470:       setCanvasHeadlineLine2(l3[1] || '');
+1471:       setCanvasHeadlineLine3(l3[2] || '');
+1472:       setCanvasHighlight(canvasSelectedItem.metadata?.copywriting?.highlight || '');
+1473:       // Automatically default to triple headline mode
+1474:       setCanvasHeadlineMode('triple');
+1475:       // Pre-select first keyframe if available
+1476:       if (canvasSelectedItem.media_paths && canvasSelectedItem.media_paths.length > 0) {
+1477:         setCanvasBgImage(canvasSelectedItem.media_paths[0]);
+1478:       } else {
+1479:         setCanvasBgImage('');
+1480:       }
+1481:       // ONLY fetch graphics manually or during rendering sessions, do not auto-fetch history to maintain clean session renders!
+1482:     } else {
+1483:       setCanvasHeadline('');
+1484:       setCanvasCaption('');
+1485:       setCanvasHeadlineLine1('');
+1486:       setCanvasHeadlineLine2('');
+1487:       setCanvasHeadlineLine3('');
+1488:       setCanvasHighlight('');
+1489:       setCanvasBgImage('');
+1490:       setContentGraphics([]);
+1491:       setGraphicIndex(0);
+1492:       setLatestGraphic(null);
+1493:     }
+1494:   }, [canvasSelectedItem]);
+1495: 
+1496:   // Filter canvas items by search query and showAll toggle
+1497:   const canvasSearchFiltered = canvasImportedItems.filter(item => 
+1498:     item.title.toLowerCase().includes(canvasSearchQuery.toLowerCase()) ||
+1499:     (item.selected_headline || '').toLowerCase().includes(canvasSearchQuery.toLowerCase())
+1500:   );
+1501: 
+1502:   const renderHeadlineWithHighlights = (text: string, keywordsStr: string) => {
+1503:     if (!text) return null;
+1504:     const lines = text.split('\n');
+1505: 
+1506:     // Parse the 5 premium color sets matching Pillow
+1507:     const previewColorSets: Record<string, Array<{ box: string; text: string }>> = {
+1508:       classic: [
+1509:         { box: '#EF4444', text: '#FFFFFF' }, // Red
+1510:         { box: '#F59E0B', text: '#000000' }, // Yellow
+1511:         { box: '#3B82F6', text: '#FFFFFF' }  // Blue
+1512:       ],
+1513:       cyber: [
+1514:         { box: '#EC4899', text: '#FFFFFF' }, // Pink
+1515:         { box: '#8B5CF6', text: '#FFFFFF' }, // Purple
+1516:         { box: '#06B6D4', text: '#000000' }  // Cyan
+1517:       ],
+1518:       gold: [
+1519:         { box: '#B45309', text: '#FFFFFF' }, // Dark Gold
+1520:         { box: '#F59E0B', text: '#000000' }, // Amber
+1521:         { box: '#FBBF24', text: '#000000' }  // Light Gold
+1522:       ],
+1523:       forest: [
+1524:         { box: '#10B981', text: '#FFFFFF' }, // Emerald
+1525:         { box: '#84CC16', text: '#000000' }, // Lime
+1526:         { box: '#14B8A6', text: '#FFFFFF' }  // Teal
+1527:       ],
+1528:       sunset: [
+1529:         { box: '#F97316', text: '#FFFFFF' }, // Orange
+1530:         { box: '#F43F5E', text: '#FFFFFF' }, // Rose
+1531:         { box: '#F59E0B', text: '#000000' }  // Amber
+1532:       ]
+1533:     };
+1534: 
+1535:     const activeTheme = previewColorSets[canvasHighlightColorSet] || previewColorSets.classic;
+1536: 
+1537:     return lines.map((line, lineIdx) => {
+1538:       let content;
+1539:       if (!keywordsStr) {
+1540:         content = <span className="text-white">{line}</span>;
+1541:       } else {
+1542:         // Split keywords by comma or space
+1543:         const keywords = keywordsStr
+1544:           .split(',')
+1545:           .map(k => k.trim())
+1546:           .filter(Boolean);
+1547: 
+1548:         if (keywords.length === 0) {
+1549:           content = <span className="text-white">{line}</span>;
+1550:         } else {
+1551:           // Sort keywords by length descending so that longer phrases are matched first
+1552:           const sortedKeywords = [...keywords].sort((a, b) => b.length - a.length);
+1553:           const escapedKeywords = sortedKeywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+1554:           const regex = new RegExp(`(${escapedKeywords.join('|')})`, 'gi');
+1555:           
+1556:           const parts = line.split(regex);
+1557:           const colorConfig = activeTheme[lineIdx % activeTheme.length];
+1558: 
+1559:           content = parts.map((part, idx) => {
+1560:             const isMatch = keywords.some(
+1561:               kw => part.toLowerCase() === kw.toLowerCase()
+1562:             );
+1563:             if (isMatch) {
+1564:               return (
+1565:                 <span 
+1566:                   key={idx} 
+1567:                   className="live-highlight-box"
+1568:                   style={{
+1569:                     backgroundColor: colorConfig.box,
+1570:                     color: colorConfig.text
+1571:                   }}
+1572:                 >
+1573:                   {part}
+1574:                 </span>
+1575:               );
+1576:             }
+1577:             return <span key={idx} className="text-white">{part}</span>;
+1578:           });
+1579:         }
+1580:       }
+1581:       return (
+1582:         <span key={lineIdx} style={{ display: 'block', minHeight: line.trim() ? 'auto' : '1.2em' }}>
+1583:           {content}
+1584:         </span>
+1585:       );
+1586:     });
+1587:   };
+1588: 
+1589:   return (
+1590:     <div className="app-container">
+1591:       {/* Sidebar Section */}
+1592:       <aside className="sidebar">
+1593:         <div className="sidebar-logo">
+1594:           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-400 to-pink-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+1595:             <Cpu className="w-4 h-4 text-slate-900" />
+1596:           </div>
+1597:           <span className="sidebar-logo-text font-bold">CONTENT V2</span>
+1598:         </div>
+1599:         
+1600:         <nav className="sidebar-menu">
+1633:                     >
+1634:                       <option value="all">ทั้งหมด (All Sources)</option>
+1635:                       <option value="radar"> watchlist เรดาร์</option>
+1636:                       <option value="rss">ข่าวสาร RSS Feeds</option>
+1637:                       <option value="youtube">คลิปวิดีโอ YouTube</option>
+1638:                       <option value="github">คลังซอฟต์แวร์ GitHub</option>
+1639:                     </select>
+1640:                   </div>
+1641: 
+1642:                   {/* Filter status */}
+1643:                   <div>
+1644:                     <label className="block text-xs font-semibold text-slate-400 mb-2">คัดกรองตามขั้นตอน</label>
+1645:                     <select 
+1646:                       className="glass-input w-44"
+1647:                       value={filterStatus}
+1648:                       onChange={(e) => setFilterStatus(e.target.value)}
+1649:                     >
+1650:                       <option value="all">ทั้งหมด (All Status)</option>
+1651:                       <option value="scraped">ดึงข้อมูลแล้ว (Scraped)</option>
+1652:                       <option value="ready_for_design">อนุมัติสร้างโพสรูป (Ready for Design)</option>
+1653:                       <option value="designed">เรนเดอร์โพสรูปเสร็จ (Designed)</option>
+1654:                       <option valu
+2024:                     <button
+2025:                       onClick={() => {
+2026:                         const fileInput = document.getElementById('canvas-logo-uploader-basic');
+2027:                         fileInput?.click();
+2028:                       }}
+2029:                       className="w-full py-2.5 px-3 rounded-lg border-2 text-xs font-black flex items-center justify-center gap-2 transition-all duration-300 active:scale-[0.97] hover:scale-[1.015] bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 text-slate-950 border-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.5)] hover:shadow-[0_0_30px_rgba(249,115,22,0.8)]"
+2030:                     >
+2031:                       <Upload className="w-4 h-4" />
+2032:                       <span>🔗 อัพโหลดโลโก้ใหม่</span>
+2033:                     </button>
+2034:                     <input
+2035:                       type="file"
+2282:                               <input
+2283:                                 type="checkbox"
+2284:                                 checked={canvasShowNewsCard}
+2285:                                 onChange={(e) => setCanvasShowNewsCard(e.target.checked)}
+2286:                                 className="w-3.5 h-3.5 rounded border-slate-700 text-cyan-500 accent-cyan-400"
+2287:                               />
+2288:                               <span className="text-[11px] font-bold text-slate-200">การ์ดสรุปย่อมุมซ้ายล่าง (News Card)</span>
+2289:                             </label>
+2290:                           </div>
+2291:                           {canvasShowNewsCard && (
+2292:                             <div className="space-y-2 pt-1.5 border-t border-slate-850/40 text-[10px]">
+2293:                               <div className="grid grid-cols-2 gap-2">
+2294:                                 <div>
+2295:                                   <span className="text-slate-400 font-bold">หัวข้อสั้น</span>
+2296:                                   <input
+2297:                                     type="text"
+2298:                                     value={canvasNewsTitle}
+2299:                                     onChange={(e) => setCanvasNewsTitle(e.target.value)}
+2300:                                     placeholder="เช่น ข่าวด่วนไอที"
+2301:                                     className="glass-input h-8 py-1 mt-1 text-[10px] w-full"
+2302:                                   />
+2303:                                 </div>
+2304:                                 <div>
+2305:                                   <span className="text-slate-400 font-bold">แหล่งข่
+2706: 
+2707:                             {/* Big Action Button */}
+2708:                             <button
+2709:                               type="button"
+2710:                               disabled={generatingCopywriting || !canvasHeadlineStyle || !canvasWritingStyle}
+2711:                               onClick={handleBulkGenerateCopywriting}
+2712:                               className={`relative w-full py-3.5 px-5 rounded-xl font-black text-sm flex items-center justify-center gap-3 transition-all duration-300 shadow-xl active:scale-[0.97] hover:scale-[1.015] ${
+2713:                                 generatingCopywriting
+2714:                                   ? 'bg-green-900/30 text-green-400 cursor-wait border-2 border-green-800/40'
+2715:                                   : (!canvasHeadlineStyle || !canvasWritingStyle)
+2716:                                     ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed border border-slate-700/40'
+2717:                                     : 'bg-gradient-to-r from-green-500 via-emerald-400 to-green-500 text-slate-950 border-2 border-green-400 shadow-[0_0_25px_rgba(34,197,94,0.6)] hover:shadow-[0_0_40px_rgba(34,197,94,0.9)]'
+2718:                               }`}
+2719:                             >
+2720:                               {generatingCopywriting ? (
+2721:                                 <>
+2722:                                   <RefreshCw className="w-5 h-5 animate-spin text-purple-200" />
+2723:                                   <span>กำลังใช้ AI เขียนบทความแบบกลุ่ม... ({canvasSelectedIds.length} รายการ)</span>
+2724:                                 </>
+2725:                               ) : (
+2726:                                 <>
+2727:                                   <Sparkles className="w-5 h-5" />
+2728:                                   <span>🚀 เริ่มสั่ง AI เขียนบทความและพาดหัวทั้งหมด ({canvasSelectedIds.length} รายการ)</span>
+2729:                                 </>
+2730:                               )}
+2731:                             </button>
+2732:                           </div>
+2733:                         </div>
+2734:                       )}
+2735: 
+2736:                       {/* Interactive Card Grid */}
+2737:                       {canvasSearchFiltered.length === 0 ? (
+2738:                         <div className="text-center py-12 text-slate-500 border border-dashed border-slate-850 rounded-xl bg-slate-950/20">
+2739:                           <Info className="w-10 h-10 mx-auto mb-3 text-slate-700" />
+2740:                           <p className="text-xs font-bold text-slate-400">ยังไม่มีคอนเทนต์ที่นำเข้ามาในห้องควบคุมดีไซน์</p>
+2766:                               )}
+2767:                             </button>
+2768:                           </div>
+2769:                         </div>
+2770:                       )}
+2771: 
+2772:                     {/* === Background Image Source Dropdown === */}
+2773:                     <div style={{
+2774:                       marginTop: '10px',
+2775:                       padding: '10px 12px',
+2776:                       borderRadius: '10px',
+2777:                       border: '1px solid rgba(63, 63, 70, 0.5)',
+2778:                       background: 'rgba(15, 23, 42, 0.4)',
+2779:                     }}>
+2780:                       <div className="flex items-center gap-2" style={{ marginBottom: '8px' }}>
+2781:                         <ImageIcon className="w-3.5 h-3.5" style={{ color: '#94a3b8' }} />
+2782:                         <span style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+2783:                           🖼️ แหล่งภาพพื้นหลัง (Background Source)
+2784:                         </span>
+2785:                       </div>
+2786:                       <select
+2787:                         value={canvasBgSource}
+2788:                         onChange={(e) => {
+2789:                           const v = e.target.value as 'default' | 'stock';
+2790:                           setCanvasBgSource(v);
+2791:                           localStorage.setItem('canvas_bg_source', v);
+2792:                         }}
+2793:                         style={{
+2794:                           width: '100%',
+2795:                     }}>
+2796:                       <div className="flex items-center gap-2" style={{ marginBottom: '8px' }}>
+2797:                         <ImageIcon className="w-3.5 h-3.5" style={{ color: '#94a3b8' }} />
+2798:                         <span style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+2799:                           🖼️ แหล่งภาพพื้นหลัง (Background Source)
+2800:                         </span>
+2801:                       </div>
+2802:                       <select
+2803:                         value={canvasBgSource}
+2804:                         onChange={(e) => {
+2805:                           const v = e.target.value as 'default' | 'stock';
+2806:                           setCanvasBgSource(v);
+2807:                           localStorage.setItem('canvas_bg_source', v);
+2808:                         }}
+2809:                         style={{
+2810:                           width: '100%',
+2811:                           padding: '8px 10px',
+2812:                           borderRadius: '8px',
+2813:                           border: '1px solid rgba(63, 63, 70, 0.6)',
+2814:                           background: 'rgba(6, 8, 16, 0.85)',
+2815:                           color: '#e2e8f0',
+2816:                           fontSize: '12px',
+2817:                           fontWeight: 600,
+2818:                           cursor: 'pointer',
+2819:                           outline: 'none',
+2820:                         }}
+2821:                                   `📂 กรุณาพิมพ์ Full Path ของโฟลเดอร์ "${dirHandle.name}" ที่เลื
+2840:                       borderRadius: '10px',
+2841:                       border: '1px solid rgba(63, 63, 70, 0.5)',
+2842:                       background: 'rgba(15, 23, 42, 0.4)',
+2843:                     }}>
+2844:                       <div className="flex items-center gap-2" style={{ marginBottom: '8px' }}>
+2845:                         <ImageIcon className="w-3.5 h-3.5" style={{ color: '#94a3b8' }} />
+2846:                         <span style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+2847:                           🖼️ แหล่งภาพพื้นหลัง (Background Source)
+2848:                         </span>
+2849:                       </div>
+2850:                       <select
+2851:                         value={canvasBgSource}
+2852:                         onChange={(e) => {
+2853:                           const v = e.target.value as 'default' | 'stock';
+2854:                           setCanvasBgSource(v);
+2855:                           localStorage.setItem('canvas_bg_source', v);
+2856:                         }}
+2857:                         style={{
+2858:                           width: '100%',
+2859:                           padding: '8px 10px',
+2860:                           borderRadius: '8px',
+2861:                           border: '1px solid rgba(63, 63, 70, 0.6)',
+2862:                           background: 'rgba(6, 8, 16, 0.85)',
+2863:                           color: '#e2e8f0',
+2864:                           fontSize: '12p
+2865:                               {stockFolder
+2866:                                 ? `📂 Stock: ${stockFolderName}`
+2867:                           outline: 'none',
+2868:                         }}
+2869:                       >
+2870:                         <option value="default">📰 รูปจากบทความต้นทาง (Default Media)</option>
+2871:                         <option value="stock">📸 รูป Stock สุ่มจากโฟลเดอร์ที่เลือก</option>
+2872:                       </select>
+2873: 
+2874:                       {/* Show stock folder picker when stock mode is selected */}
+2875:                       {canvasBgSource === 'stock' && (
+2876:                         <div style={{ marginTop: '8px' }}>
+2877:                           <button
+2878:                             type="button"
+2879:                             onClick={async () => {
+2880:                               try {
+2881:                                 const dirHandle = await (window as any).showDirectoryPicker({ mode: 'read' });
+2882:                                 // Get the full path — we need to store it for the backend
+2883:                                 // File System Access API doesn't expose full path, so we store the handle name and use prompt
+2884:                                 const folderPath = prompt(
+2885:                                   `📂 กรุณาพิมพ์ Full Path ของโฟลเดอร์ "${dirHandle.name}" ที่เลือก:\n\n(เช่น /Users/.../stock-images/${dirHandle.name})`,
+2886:                                   stockFolder || `/Users/${dirHandle.name}`
+2887:                                 );
+2888:                                 if (folderPath) {
+2889:                                   setStockFolder(folderPath);
+2890:                                   setStockFolderName(dirHandle.name);
+2891:                                   localStorage.setItem('canvas_stock_folder', folderPath);
+2892:                                   // Verify folder with backend
+2893:                                   try {
+2894:                                     const res = await fetch(`${API_BASE}/vault/stock-list?folder=${encodeURIComponent(folderPath)}`);
+2895:                                     const data = await res.json();
+2896:                                     if (data.success) {
+2897:                                       setStockFolderLog(`✅ พบ ${data.total} รูปในโฟลเดอร์ Stock`);
+2898:                                     } else {
+2899:                                       setStockFolderLog(`⚠️ ${data.error}`);
+2900:                                     }
+2901:                                   } catch {
+2902:                                     setStockFolderLog('⚠️ ไม่สามารถตรวจสอบโฟลเดอร์กับ Backend ได้');
+2903:                                   }
+2904:                                 }
+2905:                               } catch (e: any) {
+2906:                                 if (e.name === 'AbortError') return;
+2907:                                 console.error('Stock folder picker error:', e);
+2908:                               }
+2909:                             }}
+2910:                             className="w-full flex items-center justify-center gap-2"
+2911:                             style={{
+2912:                               padding: '8px 12px',
+2913:                               borderRadius: '8px',
+2914:                               border: stockFolder
+2915:                                 ? '1px solid rgba(139, 92, 246, 0.4)'
+2916:                                 : '1px dashed rgba(139, 92, 246, 0.6)',
+2917:                               background: stockFolder
+2918:                                 ? 'rgba(139, 92, 246, 0.08)'
+2919:                                 : 'rgba(139, 92, 246, 0.05)',
+2920:                               color: '#c084fc',
+2921:                               fontSize: '11px',
+2922:                               fontWeight: 700,
+2923:                               cursor: 'pointer',
+2924:                               transition: 'all 0.2s ease',
+2925:                             }}
+2926:                           >
+2927:                             <FolderOpen className="w-3.5 h-3.5" />
+2928:                             <span>
+2929:                               {stockFolder
+2930:                                 ? `📂 Stock: ${stockFolderName}`
+2931:                                 : '📂 เลือกโฟลเดอร์ Stock...'
+2932:                               }
+2933:                             </span>
+2934:                           </button>
+2935:                           {stockFolderLog && (
+2936:                             <p style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', textAlign: 'center' }}>
+2937:                               {stockFolderLog}
+2938:                             </p>
+2939:                           )}
+2940:                           {canvasBgSource === 'stock' && !stockFolder && (
+2941:                             <p style={{ fontSize: '10px', color: '#f59e0b', marginTop: '4px', textAlign: 'center' }}>
+2942:                               ⚠️ กรุณาเลือกโฟลเดอร์ Stock ก่อนเรนเดอร์
+2943:                             </p>
+2944:                           )}
+2945:                         </div>
+2946:                       )}
+2947:                     </div>
+2948: 
+2949: 
+2950: 
+2951:                       {/* Interactive Card Grid */}
+2952:                       {canvasSearchFiltered.length === 0 ? (
+2953:                         <div className="text-center py-12 text-slate-500 border border-dashed border-slate-850 rounded-xl bg-slate-950/20">
+2954:                           <Info className="w-10 h-10 mx-auto mb-3 text-slate-700" />
+2955:                           <p className="text-xs font-bold text-slate-400">ยังไม่มีคอนเทนต์ที่นำเข้ามาในห้องควบคุมดีไซน์</p>
+2956:                           if (canvasBgImage && canvasSelectedItem?.id === item.id) q.append('base_image', canvasBgImage);
+2957:                           else if (item.media_paths && item.media_paths.length > 0) q.append('base_image', item.media_paths[0]);
+2958:                         }
+2959:                         
+2960:                         const activeHighlight = (canvasSelectedItem?.id === item.id) ? canvasHighlight : '';
+2961:                         if (activeHighlight) q.append('keywords', activeHighlight);
+2962:                         
+2963:                         // Append branding logos & advanced overlays parameters
+2964:                         appendCustomParams(q);
+2965:                         
+2966:                         runModule('canvas', q.toString());
+2967:                       }}
+2968:                     >
+2969:                       {runningModule.canvas ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+2970:                     <span className="font-semibold">
+2971:                       {canvasQueueIndex !== null 
+2972:         
+2973:                         : runningModule.canvas 
+2974:                           ? 'กำลังเขียนภาพและคำนวณสัดส่วน...' 
+2975:                           : canvasSelectedIds.length > 1
+2976:                         if (activeHighlight) q.append('keywords', activeHighlight);
+2977:                         
+2978:                         // Append branding logos & advanced overlays parameters
+2979:                         appendCustomParams(q);
+2980:                         
+2981:                         runModule('canvas', q.toString());
+2982:                       }}
+2983:                     >
+2984:                       {runningModule.canvas ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+2985:                     <span className="font-semibold">
+2986:                       {canvasQueueIndex !== null 
+2987:                         ? `กำลังสร้างโพสรูปที่ ${canvasQueueIndex + 1}/${canvasQueueIds.length} ...`
+2988:                         : runningModule.canvas 
+2989:                           ? 'กำลังเขียนภาพและคำนวณสัดส่วน...' 
+2990:                           : canvasSelectedIds.length > 1
+2991:                             ? `สั่งเรนเดอร์โพสรูปกลุ่มจำนวน ${canvasSelectedIds.length} ภาพด้วย Pillow (Draw Posters)`
+2992:                             : 'สั่งเรนเดอร์ภาพโพสรูปด้วย Pillow (Draw Poster)'
+2993:                       }
+2994:                     </span>
+2995:                    </button>
+2996: 
+2997:                       {/* Interactive Card Grid */}
+2998:                       {canvasSearchFiltered.length === 0 ? (
+2999:                         <div className="text-center py-12 text-slate-500 border border-dashed border-slate-850 rounded-xl bg-slate-950/20">
+3000:                           <Info className="w-10 h-10 mx-auto mb-3 text-slate-700" />
+3001:                           <p className="text-xs font-bold text-slate-400">ยังไม่มีคอนเทนต์ที่นำเข้ามาในห้องควบคุมดีไซน์</p>
+3002:                           <p className="text-[10px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+3003:                             กรุณาไปที่แท็บ <span className="text-cyan-400 font-bold">คลังวัตถุดิบคุณภาพ</span> และกดปุ่ม <span className="text-cyan-400 font-bold">📥 นำเข้าทำรูป</span> หรือใช้คำสั่งอนุมัติกลุ่มเพื่อส่งไอเดียเข้ามาทำงานที่นี่
+3004:                           </p>
+3005:                         </div>
+3006:                       ) : (
+3007:                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1.5 custom-scrollbar">
+3008:                           {canvasSearchFiltered.map(item => {
+3009:                             const isSelected = canvasSelectedItem?.id === item.id;
+3010:                             const isApproved = item.status === 'ready_for_design' || item.status === 'designed' || item.status === 'posted';
+3013:                       {/* Folder Selector Button */}
+3014:                       <button
+3015:                         type="button"
+3016:                         onClick={async () => {
+3017:                           try {
+3018:                             const dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+3019:                             setExportDirHandle(dirHandle);
+3020:                             setExportFolderName(dirHandle.name);
+3021:                             localStorage.setItem('canvas_export_folder_name', dirHandle.name);
+3022:                         q.append('theme', canvasTheme);
+3023:                         q.append('layout', canvasLayout);
+3024:                         
+3025:                                       type="checkbox"
+3026:                                       checked={isChecked}
+3027:                                       onChange={() => {
+3028:                                         setCanvasSelectedIds(prev => 
+3029:                                           prev.includes(item.id) ? prev.filter(x => x !== item.id) : [...prev, item.id]
+3030:                                         );
+3031:                                       }}
+3032:                                       className="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-slate-900 bg-slate-950/80 cursor-pointer accent-cyan-400 shrink-0"
+3033:                                     />
+3034:                                     <span className="text-[10px] font-bold text-slate-400">
+3035:                                       {isApproved ? 'พร้อมเขียนรูป' : 'ฉบับร่างดิบ'}
+3036:                                     </span>
+3037:                                     {isSelected && (
+3038:                                       <CheckCircle className="w-4 h-4 text-cyan-400 ml-1 shadow-sm shrink-0" />
+3039:                                     )}
+3040:                                   </div>
+3041:                                 </div>
+3042: 
+3043:                                 {/* Title headline */}
+3044:                                 <p className={`text-xs font-semibold leading-relaxed line-clamp-2 transition-colors mb-3 ${
+3045:                                   isSelected ? 'text-cyan-300' : 'text-slate-200 group-hover:text-white'
+3046:                                 }`}>
+3047:                                   {item.title}
+3048:                                 </p>
+3049: 
+3050:                                 {/* Footer: Date & author */}
+3051:                     </div>
+3052:                         ? `กำลังสร้างโพสรูปที่ ${canvasQueueIndex + 1}/${canvasQueueIds.length} ...`
+3053:                         : runningModule.canvas 
+3054:                           ? 'กำลังเขียนภาพและคำนวณสัดส่วน...' 
+3055:                           : canvasSelectedIds.length > 1
+3056:                             ? `สั่งเรนเดอร์โพสรูปกลุ่มจำนวน ${canvasSelectedIds.length} ภาพด้วย Pillow (Draw Posters)`
+3057:                             : 'สั่งเรนเดอร์ภาพโพสรูปด้วย Pillow (Draw Poster)'
+3058:                       }
+3059:                     </span>
+3060:                   </button>
+3061: 
+3062:                   {/* Export / Save to Local Section - Moved to the very bottom! */}
+3063:                   <div className="space-y-4 bg-slate-900/30 p-4 rounded-xl border border-slate-800 shadow-xl mt-4">
+3064:                     <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
+3065:                       <Download className="w-4 h-4 text-green-400" />
+3066:                       <span className="text-xs font-bold text-white">💾 ส่งออกข้อมูลและบันทึกรูปลง Local (Export Data & Images)</span>
+3067:                     </div>
+3068:                     <p className="text-[10px] text-slate-400 leading-snug">ตั้งค่าโฟลเดอร์ที่ต้องการจัดเก็บไฟล์ข้อมูล (.csv) และภาพที่ Render เสร็จสิ้น</p>
+3069:                     
+3070:                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+3110:                                       </div>
+3111: 
+3112:                                       {/* Highlight Keyword Input */}
+3113:                                       <div className="space-y-1 pt-1">
+3114:                                         <span className="text-[10px] text-slate-400 font-bold block">คำเด่นหลักที่ต้องการใส่สีเน้น (Highlight Keyword):</span>
+3115:                                         <input
+3116:                                           type="text"
+3117:                                           value={canvasHighlight}
+3118:                                           onChange={(e) => setCanvasHighlight(e.target.value)}
+3119:                                           className="glass-input h-8 text-[11px] py-1 bg-slate-900"
+3120:                                           placeholder="เช่น Llama 3, Agent, แจกฟรี..."
+3121:                                         />
+3122:                                       </div>
+3123:                                     </div>
+3124: 
+3125:                                     {/* Action Buttons inside Card */}
+3126:                                     <div className="flex flex-wrap gap-2 pt-2 justify-end border-t border-slate-800/40">
+3127:                                       <button
+3128:                                         type="button"
+3129:                                         onClick={() => {
+3130:                                           // Update preview state instantly
+3131:             
+3132:                           : '2px solid #4ade80',
+3133:                         borderRadius: '12px',
+3134:                         boxShadow: (runningModule.canvas || (!canvasSelectedItem && canvasSelectedIds.length === 0))
+3135:                           ? 'none'
+3136:                           : '0 0 25px rgba(34,197,94,0.6), 0 0 50px rgba(34,197,94,0.2)',
+3137:                                       >
+3138:                                         <span>👁️ แสดงตัวอย่างในพรีวิวด้านบน</span>
+3139:                                       </button>
+3140: 
+3141:                                       <button
+3142:                                         type="button"
+3143:                                         onClick={() => {
+3144:                                           const finalCopywriting = {
+3145:                                             ...(item.metadata?.copywriting || {}),
+3146:                                             caption: canvasCaption,
+3147:                                             headline_3line: [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3],
+3148:                                             highlight: canvasHighlight,
+3149:                                             headlines: item.metadata?.copywriting?.headlines || [canvasHeadline]
+3150:                                           };
+3151:                                           handleSaveManuallyUpdatedMetadata(item.id, finalCopywriting);
+3152:                                         }}
+3153:                                         className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] font-bold transition-all flex items-center gap-1"
+3154:                                       >
+3155:                                         <span>💾 บันทึกการแก้ไข</span>
+3156:                                       </button>
+3157:                                     </div>
+3158:                                   </div>
+3159:                                 )}
+3160:                               </div>
+3161:                           setCanvasQueueIndex(0);
+3162:                           return;
+3163:                         }
+3164: 
+3165:                         const activeId = canvasSelectedIds.length === 1 ? canvasSelectedIds[0] : canvasSelectedItem?.id;
+3175:                           : '0 0 25px rgba(34,197,94,0.6), 0 0 50px rgba(34,197,94,0.2)',
+3176:                         fontWeight: 900,
+3177:                         fontSize: '0.75rem',
+3178:                         cursor: (runningModule.canvas || (!canvasSelectedItem && canvasSelectedIds.length === 0)) ? 'not-allowed' : 'pointer',
+3179:                         opacity: (runningModule.canvas || (!canvasSelectedItem && canvasSelectedIds.length === 0)) ? 0.5 : 1,
+3180:                         pointerEvents: (runningModule.canvas || (!canvasSelectedItem && canvasSelectedIds.length === 0)) ? 'none' as any : 'auto' as any,
+3181:                         transition: 'all 0.3s ease',
+3182:                       }}
+3183:                       disabled={runningModule.canvas || (!canvasSelectedItem && canvasSelectedIds.length === 0)}
+3184:                       onClick={async () => {
+3185:                         setContentGraphics([]); // Clear previous graphics session
+3186:                         setGraphicIndex(0);
+3187:                         setLatestGraphic(null);
+3188: 
+3189:                         if (canvasSelectedIds.length > 1) {
+3190:                           setCanvasQueueIds(canvasSelectedIds);
+3191:                           setCanvasQueueIndex(0);
+3192:                           return;
+3193:                         }
+3194: 
+3195:                         const activeId = canvasSelectedIds.length === 1 ? canvasSelectedIds[0] : canvasSelectedItem?.id;
+3196:                         if (!activeId) return;
+3197:                         const item = (canvasShowAll ? canvasAllItems : canvasImportedItems).find(i => i.id === activeId);
+3198:                         if (!item) return;
+3199: 
+3200:                         const q = new URLSearchParams();
+3201:                         q.append('content_id', item.id);
+3202:                         q.append('ratio', canvasRatio);
+3203:                         q.append('theme', canvasTheme);
+3204:                         q.append('layout', canvasLayout);
+3205:                         
+3206:                         let activeHeadline = '';
+3207:                         if (canvasSelectedItem?.id === item.id) {
+3208:                           if (canvasHeadlineMode === 'triple') {
+3209:                             activeHeadline = [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3].filter(Boolean).join('\n');
+3210:                         q.append('content_id', item.id);
+3211:                         q.append('ratio', canvasRatio);
+3212:                         q.append('theme', canvasTheme);
+3213:                         q.append('layout', canvasLayout);
+3214:                         
+3215:                         let activeHeadline = '';
+3216:                         if (canvasSelectedItem?.id === item.id) {
+3217:                           if (canvasHeadlineMode === 'triple') {
+3218:                             activeHeadline = [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3].filter(Boolean).join('\n');
+3219:                           } else {
+3220:                             activeHeadline = canvasHeadline;
+3221:                           }
+3222:                         } else {
+3223:                           activeHeadline = item.selected_headline || item.title;
+3224:                         }
+3225:                         q.append('headline', activeHeadline);
+3226: 
+3227:                         // Background image source logic
+3228:                         if (canvasBgSource === 'stock' && stockFolder) {
+3229:                           // Fetch random stock image from backend
+3230:                           try {
+3231:                             const stockRes = await fetch(`${API_BASE}/vault/stock-random?folder=${encodeURIComponent(stockFolder)}`);
+3232:                             const stockData = await stockRes.json();
+3233:                             if (stockData.success && stockData.absolute_path) {
+3234:                 
+3235:                             console.error('Folder picker error:', e);
+3236:                               // Fallback to default
+3237:                               if (canvasBgImage && canvasSelectedItem?.id === item.id) q.append('base_image', canvasBgImage);
+3238:                               else if (item.media_paths && item.media_paths.length > 0) q.append('base_image', item.media_paths[0]);
+3239:                             }
+3240:                           } catch {
+3241:                             // Fallback to default on error
+3242:                             if (canvasBgImage && canvasSelectedItem?.id === item.id) q.append('base_image', canvasBgImage);
+3243:                             else if (item.media_paths && item.media_paths.length > 0) q.append('base_image', item.media_paths[0]);
+3244:                           }
+3245:                         } else {
+3246:                           // Default behavior
+3247:                           if (canvasBgImage && canvasSelectedItem?.id === item.id) q.append('base_image', canvasBgImage);
+3248:                           else if (item.media_paths && item.media_paths.length > 0) q.append('base_image', item.media_paths[0]);
+3249:                         }
+3250:                         
+3251:                         const activeHighlight = (canvasSelectedItem?.id === item.id) ? canvasHighlight : '';
+3252:                         if (activeHighlight) q.append('keywords', activeHighlight);
+3253:                         
+3254:                         // Append branding logos & advanced overlays parameters
+3255:                         appendCustomParams(q);
+3256:                         
+3257:                         runModule('canvas', q.toString());
+3258:                       }}
+3259:                     >
+3260:                       {runningModule.canvas ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+3267:                         
+3268:                         // Append branding logos & advanced overlays parameters
+3269:                         appendCustomParams(q);
+3270:                         
+3271:                         runModule('canvas', q.toString());
+3272:                       }}
+3273:                     >
+3274:                       {runningModule.canvas ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+3275:                     <span className="font-semibold">
+3276:                       {canvasQueueIndex !== null 
+3277:                         ? `กำลังสร้างโพสรูปที่ ${canvasQueueIndex + 1}/${canvasQueueIds.length} ...`
+3278:                         : runningModule.canvas 
+3279:                           ? 'กำลังเขียนภาพและคำนวณสัดส่วน...' 
+3280:                           : canvasSelectedIds.length > 1
+3281:                             ? `สั่งเรนเดอร์โพสรูปกลุ่มจำนวน ${canvasSelectedIds.length} ภาพด้วย Pillow (Draw Posters)`
+3282:                             : 'สั่งเรนเดอร์ภาพโพสรูปด้วย Pillow (Draw Poster)'
+3283:                       }
+3284:                     </span>
+3285:                   </button>
+3286: 
+3287:                   {/* Export / Save to Local Section - Moved to the very bottom! */}
+3288:                   <div className="space-y-4 bg-slate-900/30 p-4 rounded-xl border border-slate-800 shadow-xl mt-4">
+3289:                     <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
+3290:                       <Download className="w-4 h-4 text-green-400" />
+3294:                     
+3295:                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+3296:                       {/* Folder Selector Button */}
+3297:                       <button
+3298:                         type="button"
+3299:                         onClick={async () => {
+3300:                           try {
+3301:                             const dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+3302:                             setExportDirHandle(dirHandle);
+3303:                             setExportFolderName(dirHandle.name);
+3304:                             localStorage.setItem('canvas_export_folder_name', dirHandle.name);
+3305:                           } catch (e: any) {
+3306:                             if (e.name === 'AbortError') return;
+3307:                             console.error('Folder picker error:', e);
+3308:                             alert('❌ ไม่สามารถเลือกโฟลเดอร์ได้: ' + e.message);
+3309:                           }
+3310:                         }}
+3311:                         className="w-full rounded-xl text-xs font-black flex items-center justify-center gap-2.5"
+3312:                         style={{
+3313:                           background: exportFolderName
+3314:                             ? 'linear-gradient(90deg, rgba(124, 45, 18, 0.4), rgba(120, 53, 15, 0.4), rgba(15, 23, 42, 1))'
+3315:                             : 'rgba(249,115,22,0.1)',
+3316:                           color: '#fb923c',
+3317:                           border: exportFolderName
+3318:                             ? '2px solid rgba(249, 115, 22, 0.5)'
+3319:                             : '2px solid rgba(251, 146, 60, 0.8)',
+3320:                           padding: '14px 16px',
+3370:                         onClick={() => setPreviewTab('live')}
+3371:                         className={`px-3 py-1.5 text-[10px] font-extrabold rounded-md transition-all select-none ${
+3372:                           previewTab === 'live'
+3373:                             ? 'bg-cyan-500 text-slate-950 shadow-md font-black'
+3374:                             : 'text-slate-400 hover:text-white'
+3375:                         }`}
+3376:                       >
+3377:                         Live HTML5
+3378:                       </button>
+3379:                       <button
+3380:                         type="button"
+3381:                         onClick={() => setPreviewTab('pillow')}
+3382:                         className={`px-3 py-1.5 text-[10px] font-extrabold rounded-md transition-all select-none ${
+3383:                           previewTab === 'pillow'
+3384:                             ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+3385:                             : 'text-slate-400 hover:text-white'
+3386:                         }`}
+3387:                       >
+3388:                         Pillow Render
+3389:                       </button>
+3390:                     </div>
+3391:                   </div>
+3392:                   <p className="text-[11px] text-slate-400 mb-6 leading-relaxed">
+3393:                     {previewTab === 'live' 
+3394:                       ? 'จำลองการจัดวางสัดส่วน สีสัน โลโก้ และเนื้อหาแบบเรียลไทม์ (L
+3396:                     }
+3397:                   </p>
+3398:                 </div>
+3399: 
+3400:                     
+3401:                     // Fallback visual mock content when fields are empty to let user preview layout instantly
+3402:                     const defaultContent = canvasWritingStyle === 'ai_trendtech'
+3403:                       ? {
+3404:                           headline: "สร้างกองทัพ AI 15 ตัวด้วย Sub-agents ทำแทนคุณอัตโนมัติ! (มีต่อ👇)",
+3405:                           highlight: "Sub-agents"
+3406:                         }
+3407:                       : {
+3408:                           headline: "วิธีประหยัดเวลาทำงาน 10 เท่า ด้วย 100 Prompt เทพที่บริษัทที่ปรึกษาปกปิด! (มีต่อ👇)",
+3409:                           highlight: "100 Prompt"
+3410:                         };
+3411:                         
+3412:                     const displayHeadline = (canvasHeadlineMode === 'triple'
+3413:                       ? [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3].filter(Boolean).join('\n')
+3414:                       : canvasHeadline) || defaultContent.headline;
+3415:                     const displayHighlight = canvasHighlight || defaultContent.highlight;
+3416:                     const mockBgUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800";
+3417: 
+3418:                     return (
+3419:                       <div className="w-full flex flex-col items-center justify-start p-2
+3420: 
+3421:                     return (
+3422:                       <div className="w-full flex flex-col items-center justify-start p-2 mb-2 animate-fade-in">
+3423:                         <div 
+3424:                           className={`preview-canvas-container relative overflow-hidden rounded-xl border border-slate-800 shadow-2xl ${
+3425:                             canvasRatio === '16:9' 
+3426:                               ? 'aspect-[16/9] w-full' 
+3427:                               : canvasRatio === '4:3'
+3428:                                 ? 'aspect-[4/3] w-full'
+3429:                                 : canvasRatio === '9:16'
+3430:                                   ? 'aspect-[9/16] h-[400px]'
+3431:                                   : canvasRatio === '4:5'
+3432:                           style={{ maxWidth: '380px', margin: '0 auto' }}
+3433:                         >
+3434:                           {/* Upper Background Split region / Full Background region */}
+3435:                           <div 
+3436:                             className="absolute top-0 left-0 right-0 overflow-hidden"
+3437:                             style={{ 
+3438:                               height: canvasLayout === 'top_gainers' ? `${canvasImageSplit}%` : '100%',
+3439:                               backgroundImage: canvasBgImage 
+3440:                                 ? `url(${API_BASE}/vault/media?path=${encodeURIComponent(canvasBgImage)})` 
+3441:                                 : `url(${mockBgUrl})`,
+3442:                               backgroundSize: 'cover',
+3443:                               backgroundPosition: 'center',
+3444:                             }}
+3445:                           >
+3446:                             {/* Visual Tint Overlay */}
+3447:                             <div className="absolute inset-0 bg-black/40" />
+3448: 
+3449:                             {/* YouTube bottom vertical smooth black gradient overlay */}
+3450:                             {canvasLayout === 'youtube' && (
+3451:                               <div 
+3452:                                 className="absolute inset-0 z-10" 
+3453:                                 style={{
+3454:                                   background: 'linear-gradient(to top, rgba(12, 12, 12, 0.95) 0%, rgba(12, 12, 12, 0.8) 35%, rgba(12, 12, 12, 0) 65%)'
+3455:                                 }}
+3456:                               />
+3457:                             )}
+3458: 
+3459:                             {/* AI News Red Strap with Neon Outline at Top-Left */}
+3460:                             {canvasLayout === 'ai_news' && (
+3461:                                   ”
+3462:                                 </span>
+3463:                               </>
+3464:                             )}
+3465: 
+3466:                             {/* Backdrop Image Cycler Controls */}
+3467:                             {canvasSelectedItem && canvasSelectedItem.media_paths && canvasSelectedItem.media_paths.length > 1 && (
+3468:                               <>
+3469:                                 <button
+3470:                                 }}
+3471:                               >
+3472:                                 <span className="text-[10px] font-black tracking-wider text-white">ข่าว AI</span>
+3473:                               </div>
+3474:                             )}
+3475: 
+3476:                             {/* GitHub green strap at Top-Left */}
+3477:                             {canvasLayout === 'github' && (
+3478:                               <div 
+3479:                                 className="absolute z-20 flex items-center justify-center rounded-lg bg-[#10b981] px-3 py-1.5 shadow-lg border border-emerald-450" 
+3480:                                 style={{
+3481:                                   left: '4cqw',
+3482:                                   top: '4cqw',
+3483:                                 }}
+3484:                               >
+3485:                                 <span className="text-[10px] font-black tracking-wider text-white">GITHUB</span>
+3486:                               </div>
+3487:                             )}
+3488: 
+3489:                             {/* Quotes large transparent quotation marks */}
+3490:                             {canvasLayout === 'quotes' && (
+3491:                               <>
+3492:                                 <span 
+3493:                                   className="absolute z-10 font-serif select-none pointer-events-none" 
+3494:                                   style={{
+3495:                                     left: '5cqw',
+3496:                                     top: '1cqw',
+3497:                                     fontSize: '18cqw',
+3498:                                     color: activeTheme.highlight,
+3499:                                     opacity: 0.3,
+3500:                                     lineHeight: 1
+3550:                                   🖼️ ฉากคลังภาพที่ {(canvasSelectedItem.media_paths.indexOf(canvasBgImage) !== -1 ? canvasSelectedItem.media_paths.indexOf(canvasBgImage) : 0) + 1}/{canvasSelectedItem.media_paths.length}
+3551:                                 </div>
+3552:                               </>
+3553:                             )}
+3554: 
+3555:                             {/* Category Badge overlay */}
+3556:                             {canvasShowBadge && (
+3557:                               <div 
+3558:                                 className="live-badge"
+3559:                                 style={{ 
+3560:                                   backgroundColor: activeTheme.highlight,
+3561:                                   border: `0.3cqw solid ${activeTheme.accent}`
+3562:                                 }}
+3563:                               >
+3564:                                 <span className="live-badge-title font-extrabold" style={{ color: activeTheme.highlightText }}>
+3565:                                   {canvasBadgeText || 'AI'}
+3566:                                 </span>
+3567:                                 <span className="live-badge-subtitle font-medium text-white">
+3568:                                   {canvasBadgeSubtext || 'Content Lab'}
+3569:                                 </span>
+3570:                               </div>
+3571:                             )}
+3572: 
+3573:                             {/* Page Branding Logo stamp */}
+3574:                             {canvasShowPageLogo && (
+3575:                               <>
+3576:                                 {canvasLogoUrl ? (
+3577:                                   <img
+3578:                                     src={canvasLogoUrl}
+3579:                                     alt="Page Logo"
+3580:                                     className="live-logo-image"
+3581:                                     style={{
+3582:                                       right: `${canvasLogoMarginX}px`,
+3583:                                       top: `${canvasLogoMarginY}px`,
+3584:                                       width: `${canvasLogoSize}%`
+3585:                                     }}
+3586:                                   />
+3587:                                 ) : (
+3588:                                   <div 
+3589:                                     className="live-logo-placeholder"
+3590:                                     style={{
+3620:                                 paddingTop: `${canvasHeadlineMargin / 10.8}cqw`
+3621:                               }}
+3622:                             >
+3623:                               <div 
+3624:                                 className="live-headline-text flex-1 flex items-center" 
+3625:                                 style={{ 
+3626:                                   fontSize: `${canvasFontScale * 4.2}cqw`,
+3627:                                   fontFamily: canvasFontFamily
+3628:                                 }}
+3629:                               >
+3630:                                 <p 
+3631:                                   className="w-full font-black tracking-wide leading-snug"
+3632:                                   style={{ textAlign: canvasHeadlineAlign }}
+3633:                                 >
+3634:                                   {renderHeadlineWithHighlights(displayHeadline, displayHighlight)}
+3635:                                 </p>
+3636:                               </div>
+3637: 
+3638:                               <div className="live-credit-text border-t border-slate-900 pt-3 text-slate-400">
+3639:                                 เครดิต: {canvasCreditText || 'Coinpulse Content Lab'}
+3640:                               </div>
+3641:                             </div>
+3642:                           ) : (
+3643:                             /* Full Overlay text layout */
+3644:                             <div 
+3645:                               className="absolute inset-x-0 bottom-0 top-0 flex flex-col justify-between p-6 z-20"
+3646:                               style={{ 
+3647:                                 fontFamily: canvasFontFamily,
+3648:                                 pointerEvents: 'none'
+3649:                               }}
+3650:                             >
+3690:                                     }}
+3691:                                   >
+3692:                                     <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center shadow-inner overflow-hidden shrink-0">
+3693:                                       {canvasLogoUrl ? (
+3694:                                         <img src={canvasLogoUrl} alt="Channel Logo" className="w-full h-full object-contain" />
+3695:                                       ) : (
+3696:                                         <span className="text-[10px] font-black text-white">YT</span>
+3697:                                       )}
+3698:                                     </div>
+3699:                                     <div className="text-left">
+3700:                                       <p className="text-[9px] font-black text-white truncate max-w-[130px]">{canvasCreditText || 'Coinpulse Tech'}</p>
+3701:                                       <p className="text-[7.5px] font-bold text-slate-400 mt-0.5">👤 1.25M subscribers</p>
+3702:                                     </div>
+3703:                                   </div>
+3704:                                 )}
+3705:                                     <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center shadow-inner overflow-hidden shrink-0">
+3706:                                       {canvasLogoUrl ? (
+3707:                                         <img src={canvasLogoUrl} alt="Channel Logo" className="w-full h-full object-contain" />
+3708:                                       ) : (
+3709:                                         <span className="text-[10px] font-black text-white">YT</span>
+3710:                                       )}
+3711:                                     </div>
+3712:                                     <div className="text-left">
+3713:                                       <p className="text-[9px] font-black text-white truncate max-w-[130px]">{canvasCreditText || 'Coinpulse Tech'}</p>
+3714:                                       <p className="text-[7.5px] font-bold text-slate-400 mt-0.5">👤 1.25M subscribers</p>
+3715:                                     </div>
+3716:                                   </div>
+3717:                                 )}
+3718:                               </div>
+3719:                             </div>
+3720:                                   {renderHeadlineWithHighlights(displayHeadline, displayHighlight)}
+3721:                                 </p>
+3722:                               </div>
+3723: 
+3724:                               {/* Bottom section (Author line or YouTube Channel card) */}
+3725:                               <div className="flex items-end justify-between w-full min-h-16">
+3726:                                 {/* Quotes Author line */}
+3727:                                 {canvasLayout === 'quotes' && (
+3728:                                   <div 
+3729:                                     className="w-full text-center font-bold text-amber-550"
+3730:                                     style={{
+3731:                                       fontSize: '3.4cqw',
+3732:                                       textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+3733:                                     }}
+3734:                                   >
+3735:                                     — {canvasCreditText || 'Content Factory V2'}
+3736:                                   </div>
+3737:                                 )}
+3738: 
+3739:                                 {/* YouTube documentary card badge */}
+3740:                                 {canvasLayout === 'youtube' && (
+3741:                                   <div 
+3742:                                     className="ml-auto flex items-center gap-2 bg-slate-950/85 border border-slate-800/80 rounded-xl p-2.5 max-w-[210px] shadow-lg shadow-black/60"
+3743:                                     style={{
+3744:                                       backdropFilter: 'blur(4px)'
+3745:                                     }}
+3746:                                   >
+3747:                                     <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center shadow-inner overflow-hidden shrink-0">
+3748:                                       {canvasLogoUrl ? (
+3749:                                         <img src={canvasLogoUrl} alt="Channel Logo" className="w-full h-full object-contain" />
+3750:                                       ) : (
+3751:                                         <span className="text-[10px] font-black text-white">YT</span>
+3752:                                       )}
+3753:                                     </div>
+3754:                                     <div className="text-left">
+3755:                                       <p className="text-[9px] font-black text-white truncate max-w-[130px]">{canvasCreditText || 'Coinpulse Tech'}</p>
+3756:                                       <p className="text-[7.5px] font-bold text-slate-400 mt-0.5">👤 1.25M subscribers</p>
+3757:                                     </div>
+3758:                                   </div>
+3759:                                 )}
+3760:                               </div>
+3761:                             </div>
+3762:                           )}
+3763:                         </div>
+3764: 
+3765:                         {/* 🎯 ผลลัพธ์จากการเรนเดอร์ล่าสุด (Pillow Output) */}
+3766:                         {latestGraphic && (
+3767:                           <div className="w-full mt-6 pt-6 border-t border-slate-800/80 animate-fade-in flex flex-col items-center">
+3768:                             <div className="flex items-center justify-between mb-3 text-left w-full">
+3769:                               <div className="flex items-center gap-2">
+3770:                                 <CheckCircle className="w-4 h-4 text-emerald-400" />
+3771:                                 <span className="text-xs font-black text-emerald-400 uppercase tracking-wider text-left">🎯 ผลลัพธ์ (Pillow Output)</span>
+3772:                               </div>
+3773:                               <div className="flex items-center gap-2">
+3774:                                 {contentGraphics.length > 0 && (
+3775:                                   <button
+3776:                                     type="button"
+3777:                                     onClick={() => {
+3778:                                       setContentGraphics([]);
+3779:                                       setLatestGraphic(null);
+3780:                                     }}
+3781:                                     className="flex items-center gap-1 text-[10px] fo
+3788:                   <Sparkles className="w-4 h-4 text-white" />
+3789:                 </div>
+3790:                 <div>
+3791:                   <h3 className="text-sm font-bold text-white leading-tight">AI Copywriting Viewer</h3>
+3792:                             
+3793:                             {/* Gallery Grid: 5 items per row */}
+3794:                             <div className="w-full grid grid-cols-2 sm:grid-cols-5 gap-3">
+3795:                               {contentGraphics.map((g, idx) => (
+3796:                                 <div 
+3797:                                   key={g.id} 
+3798:                                   className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50 p-1.5 shadow-lg group hover:border-emerald-400/80 transition-all duration-350 cursor-zoom-in"
+3799:                                   onClick={() => setLightboxImage(`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`)}
+3800:                                 >
+3801:                                   <img 
+3802:                                     src={`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`}
+3803:                                     alt={`Poster Output ${idx + 1}`}
+3804:                                     className="w-full h-auto rounded-lg object-contain border border-slate-900 group-hover:scale-[1.03] transition-all duration-305"
+3805:                                   />
+3806:                                   <div className="absolute top-2.5 right-2.5 bg-slate-950/80 backdrop-blur-sm text-slate-300 border border-slate-800 font-mono text-[8px] px-1.5 py-0.5 rounded-md shadow z-10">
+3807:                                     #{idx + 1}
+3808:                                   </div>
+3809:                                   <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
+3810:                                     <Eye className="w-5 h-5 text-emerald-400 filter drop-shadow" />
+3811:                                       e.stopPropagation();
+3812:                                       setGraphicIndex(prev => (prev === contentGraphics.length - 1 ? 0 : prev + 1));
+3813:                                     }}
+3814:                                     className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-slate-950/80 border border-slate-800 hover:border-emerald-400 text-slate-400 hover:text-white flex items-center justify-center transition-all cursor-pointer shadow-lg hover:scale-105 active:scale-95 z-10"
+3815:                                     style={{ backdropFilter: 'blur(4px)' }}
+3816:                                     title="ดูรูปถัดไป"
+3817:                                   >
+3818:                                     <ChevronRight className="w-5 h-5" />
+3819:                                   </button>
+3820:                                 </>
+3821:                               )}
+3822:                             </div>
+3823:                           </div>
+3824:                         )}
+3825:                       </div>
+3826:                     );
+3827:                   })()
+3828:                 ) : (
+3829:                   <div className="w-full flex flex-col items-center justify-start p-4 bg-slate-950/40 rounded-xl border border-slate-850/80 mb-4 relative overflow-hidden min-h-[300px]">
+3830:                     {loadingGraphics ? (
+3831:                       <div className="flex flex-col items-center text-slate-500 gap-2">
+3832:                         <RefreshCw className="w-8 h-8 animate-spin text-cyan-400" />
+3833:                         <span className="text-xs">กำลังโหลดไฟล์รูปภาพ...</span>
+3834:                       </div>
+3835:                     ) : latestGraphic ? (
+3836:                       <div className="w-full h-full flex flex-col items-center justify-center">
+3837:                         <div className="flex items-center justify-between w-full mb-3 px-1 border-b border-slate-800/80 pb-2">
+3838:                           <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
+3839:                             <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+3840:                                   setLatestGraphic(null);
+3841:                                 }}
+3842:                                 className="flex items-center gap-1 text-[9px] font-black text-slate-400 hover:text-pink-400 bg-slate-900 hover:bg-pink-950/20 px-2 py-0.5 rounded border border-slate-800 hover:border-pink-900 transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+3843:                               >
+3844:                                 <Trash2 className="w-2.5 h-2.5" />
+3845:                                 เคลียร์รูปภาพ
+3846:                               </button>
+3847:                             )}
+3848:                             <span className="text-[9px] font-black text-slate-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-800 shrink-0">
+3849:                               {contentGraphics.length} รูป
+3850:                             </span>
+3851:                           </div>
+3852:                         </div>
+3853:                         
+3854:                         {/* Gallery Grid: 5 items per row */}
+3855:                         <div className="w-full grid grid-cols-2 sm:grid-cols-5 gap-3">
+3856:                           {contentGraphics.map((g, idx) => (
+3857:                             <div 
+3858:                               key={g.id} 
+3859:                               className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50 p-1.5 shadow-lg group hover:border-emerald-400/80 transition-all duration-350 cursor-zoom-in"
+3860:                               onClick={() => setLightboxImage(`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`)}
+3861:                             >
+3862:                               <img 
+3863:                                 src={`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`}
+3864:                                 alt={`Poster Output ${idx + 1}`}
+3865:                                 className="w-full h-auto rounded-lg object-contain border border-slate-900 group-hover:scale-[1.03] transition-all duration-300"
+3866:                               />
+3867:                               <div className="absolute top-2.5 right-2.5 bg-slate-950/80 backdrop-blur-sm text-slate-300 border border-slate-800 font-mono text-[8px] px-1.5 py-0.5 rounded-md shadow z-10">
+3868:                                 #{idx + 1}
+3869:                               </div>
+3870:                               <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
+3871:                                 <Eye className="w-5 h-5 text-emerald-400 filter drop-shadow" />
+3872:                               </div>
+3873:                             </div>
+3874:                           ))}
+3875:                         </div>
+3876:                       </div>
+3877:                     ) : (
+3878:                       <div className="text-center p-8 text-slate-600 w-full flex flex-col items-center justify-center min-h-[220px]">
+3879:                         <ImageIcon className="w-16 h-16 mx-auto mb-4 text-slate-800" />
+3880:                         <p className="text-xs font-semibold">ไม่มีภาพโพสรูปที่สร้างขึ้นในระบบขณะนี้</p>
+3881:                             </div>
+3882:                           ))}
+3883:                         </div>
+3884:                       </div>
+3885:                     ) : (
+3886:                       <div className="text-center p-8 text-slate-600 w-full flex flex-col items-center justify-center min-h-[220px]">
+3887:                         <ImageIcon className="w-16 h-16 mx-auto mb-4 text-slate-800" />
+3888:                         <p className="text-xs font-semibold">ไม่มีภาพโพสรูปที่สร้างขึ้นในระบบขณะนี้</p>
+3889:                         <p className="text-[10px] mt-1 text-slate-700">กรุณาเลือกคอนเทนต์และสั่งเรนเดอร์วาดภาพโพสรูปด้วยปุ่มทางด้านซ้าย</p>
+3890:                       </div>
+3980:                     <div className="grid grid-cols-1 gap-2.5">
+3981:                       {quickViewCopywriting.metadata.copywriting.comments.map((cmt: string, idx: number) => (
+3982:                         <div key={idx} className="bg-slate-950/20 p-3 rounded-lg border border-slate-850/80 text-[11px] leading-relaxed relative">
+3983:                           <div className="flex items-center justify-between mb-1 text-[9px] font-black text-slate-400 tracking-wider">
+3984:                             <span>💬 เม้นท์ที่ {idx + 1}</span>
+3985:                             <button
+3986:                               type="button"
+3987:                               onClick={() => {
+3988:                                 navigator.clipboard.writeText(cmt);
+3989:                                 alert(`📋 คัดลอกคอมเม้นท์ที่ ${idx + 1} สำเร็จ!`);
+3990:                               }}
+3991:                               className="text-[9px] text-cyan-400 hover:text-white bg-slate-950 border border-slate-850 rounded px-1.5 py-0.5"
+3992:                             >
+3993:                               คัดลอก
+3994:                             </button>
+3995:                           </div>
+3996:                           <p className="text-slate-300 font-medium">{cmt}</p>
+3997:                         </div>
+3998:                       ))}
+3999:                     </div>
+4000:                   </div>
+4001:                 </div>
+4002:               ) : (
+4003:        
+4027:                             <span className={`w-2 h-2 rounded-full ${i === 0 ? 'bg-pink-500 shadow-sm shadow-pink-500/30' : i === 1 ? 'bg-slate-200' : 'bg-yellow-400 shadow-sm shadow-yellow-400/30'}`} />
+4028:                             <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide w-14 shrink-0">Line {i + 1}:</span>
+4029:                             <span>{line}</span>
+4030:                           </div>
+4031:                         ))}
+4032:                       </div>
+4033:                     </div>
+4034:                   ) : (
+4035:                     <div className="text-center py-8 text-slate-500 border border-dashed border-slate-850 rounded-xl bg-slate-950/20">
+4036:                       <p className="text-xs font-bold text-slate-400">ไม่พบข้อมูลพาดหัว 3 บรรทัดสำหรับรายการนี้</p>
+4037:                     </div>
+4038:                   )}
+4039:                 </div>
+4040:               )}
+4041:             </div>
+4042: 
+4043:             {/* Footer */}
+4044:             <div className="p-4 border-t border-slate-850/80 flex justify-end bg-slate-950/20">
+4045:               <button
+4046:                 type="button"
+4047:                 onClick={() => setQuickViewCopywriting(null)}
+4048:                 className="btn-neon btn-neon-cyan px-6 py-2 text-xs"
+4049:               >
+4050:                 ปิดหน้าต่าง
+4051:               </button>
+4052:             </div>
+4053:           </div>
+4054:         </div>
+4055:       )}
+4056:     </div>
+4057:   );
+4058:   if (false) { console.log(approvedItems, canvasShowAll, setCanvasShowAll, canvasAllItems, fetchAllCanvasItems, logs); }
+4059: }
+4060: 

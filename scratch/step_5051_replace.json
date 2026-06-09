@@ -1,0 +1,10 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Add canvasHeadlineAlign and canvasHeadlineMargin states in App.tsx\"",
+  "EndLine": "457",
+  "Instruction": "\"Declare canvasHeadlineAlign and canvasHeadlineMargin state hooks in App.tsx\"",
+  "ReplacementContent": "\"  const [canvasImageSplit, setCanvasImageSplit] = useState(60);\\n  const [canvasFontFamily, setCanvasFontFamily] = useState('Kanit');\\n  const [canvasHeadlineAlign, setCanvasHeadlineAlign] = useState<'left' | 'center' | 'right'>('left');\\n  const [canvasHeadlineMargin, setCanvasHeadlineMargin] = useState<number>(35);\"",
+  "StartLine": "454",
+  "TargetContent": "\"  const [canvasImageSplit, setCanvasImageSplit] = useState(60);\\n  const [canvasFontFamily, setCanvasFontFamily] = useState('Kanit');\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\""
+}

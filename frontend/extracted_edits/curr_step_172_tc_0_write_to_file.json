@@ -1,0 +1,13 @@
+{
+  "name": "write_to_file",
+  "args": {
+    "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Python script to locate the original uncorrupted contents of SettingsPortal.tsx in the previous conversation logs.\"}",
+    "CodeContent": "\"import json\\n\\nlog_path = \\\"/Users/paulpolsulintaboon/.gemini/antigravity/brain/59119761-b490-421b-b15d-46f12f5c4158/.system_generated/logs/transcript.jsonl\\\"\\n\\nwith open(log_path, 'r', encoding='utf-8') as f:\\n    for idx, line in enumerate(f):\\n        data = json.loads(line)\\n        # Check tool calls in PLANNER_RESPONSE\\n        if data.get('type') == 'PLANNER_RESPONSE':\\n            for tc in data.get('tool_calls', []):\\n                if tc.get('name') == 'view_file' and 'SettingsPortal' in tc.get('args', {}).get('AbsolutePath', ''):\\n                    print(f\\\"Line {idx} (PLANNER_RESPONSE): view_file path={tc.get('args', {}).get('AbsolutePath')} start={tc.get('args', {}).get('StartLine')} end={tc.get('args', {}).get('EndLine')}\\\")\\n        \\n        # Check VIEW_FILE output\\n        if data.get('type') == 'VIEW_FILE' and data.get('status') == 'DONE':\\n            # Check if this corresponds to a SettingsPortal view\\n            content = data.get('content', '')\\n            if 'SettingsPortal' in content or 'import { useState' in content:\\n                print(f\\\"Line {idx} (VIEW_FILE): content length={len(content)}\\\")\\n                # Print first 200 chars and last 200 chars\\n                print(f\\\"  Start: {repr(content[:150])}\\\")\\n                print(f\\\"  End: {repr(content[-150:])}\\\")\\n                \\n        # Check if it was written by write_to_file\\n        if data.get('type') == 'PLANNER_RESPONSE':\\n            for tc in data.get('tool_calls', []):\\n                if tc.get('name') == 'write_to_file' and 'SettingsPortal' in tc.get('args', {}).get('TargetFile', ''):\\n                    print(f\\\"Line {idx} (PLANNER_RESPONSE): write_to_file to SettingsPortal\\\")\\n                    # print length of CodeContent\\n                    print(f\\\"  CodeContent length: {len(tc.get('args', {}).get('CodeContent', ''))}\\\")\\n\"",
+    "Description": "\"Find the original content of SettingsPortal.tsx in the previous log file\"",
+    "IsArtifact": "false",
+    "Overwrite": "true",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx.find_original.py\"",
+    "toolAction": "\"Writing python finder script\"",
+    "toolSummary": "\"Create file finder script\""
+  }
+}

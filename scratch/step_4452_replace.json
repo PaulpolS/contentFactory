@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Remove unused logs state to resolve TypeScript compilation error.\"",
+  "EndLine": "364",
+  "Instruction": "\"Remove unused logs state to resolve TypeScript compilation error.\"",
+  "ReplacementContent": "\"\"",
+  "StartLine": "358",
+  "TargetContent": "\"  // Active Terminal log states for SSE streams\\n  const [logs, setLogs] = useState<{\\n    canvas: string[];\\n  }>({\\n    canvas: ['[SYSTEM] Terminal ready. Select an item and click \\\"Draw Poster\\\" to start...'],\\n  });\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Removing unused state variable\"",
+  "toolSummary": "\"Edit App.tsx\""
+}

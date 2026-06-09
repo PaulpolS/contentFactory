@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Apply 380px max-width limits to static Pillow Render elements to ensure unified compact sizing in App.tsx\"",
+  "EndLine": "3363",
+  "Instruction": "\"Add maxWidth limit of 380px and margin 0 auto to Pillow Render elements\"",
+  "ReplacementContent": "\"                      <div className=\\\"w-full h-full flex items-center justify-center max-h-[350px]\\\" style={{ maxWidth: '380px', margin: '0 auto' }}>\\n                        <img \\n                          src={`${API_BASE}/vault/media?path=${encodeURIComponent(latestGraphic.file_path)}`}\\n                          alt=\\\"Pillow Poster Output Preview\\\"\\n                          className=\\\"max-w-full rounded-md object-contain border border-slate-700 shadow-xl\\\"\\n                        />\\n                      </div>\"",
+  "StartLine": "3357",
+  "TargetContent": "\"                      <div className=\\\"w-full h-full flex items-center justify-center max-h-[350px]\\\">\\n                        <img \\n                          src={`${API_BASE}/vault/media?path=${encodeURIComponent(latestGraphic.file_path)}`}\\n                          alt=\\\"Pillow Poster Output Preview\\\"\\n                          className=\\\"max-w-full max-h-full rounded-md object-contain border border-slate-700 shadow-xl\\\"\\n                        />\\n                      </div>\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Limiting static preview image max width\"",
+  "toolSummary": "\"Edit file content\""
+}

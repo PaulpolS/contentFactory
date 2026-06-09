@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": "false",
+    "Description": "\"Implement handleCopyToClipboard, savePageTokenLocally, saveAllPageTokens, and removeSavedToken functions in SettingsPortal to handle Facebook page token management and clipboard interactions, resolving TypeScript errors.\"",
+    "EndLine": "408",
+    "Instruction": "\"Add clipboard and Facebook page token management helper functions before the return statement\"",
+    "ReplacementContent": "\"  // Helper to copy text to clipboard with feedback\\n  const handleCopyToClipboard = async (text: string, id: string) => {\\n    try {\\n      await navigator.clipboard.writeText(text);\\n      setCopiedId(id);\\n      setTimeout(() => setCopiedId(null), 2000);\\n    } catch (err) {\\n      console.error('Failed to copy to clipboard:', err);\\n    }\\n  };\\n\\n  // Save a single Facebook page token\\n  const savePageTokenLocally = (id: string, token: string) => {\\n    const updated = { ...savedPageTokens, [id]: token };\\n    setSavedPageTokens(updated);\\n    localStorage.setItem('fb_page_tokens_map', JSON.stringify(updated));\\n  };\\n\\n  // Save all discovered Facebook page tokens at once\\n  const saveAllPageTokens = () => {\\n    if (fbPages.length === 0) return;\\n    const updated = { ...savedPageTokens };\\n    fbPages.forEach(page => {\\n      updated[page.id] = page.access_token;\\n    });\\n    setSavedPageTokens(updated);\\n    localStorage.setItem('fb_page_tokens_map', JSON.stringify(updated));\\n    alert(`💾 บันทึก Access Token ของทั้ง ${fbPages.length} เพจเรียบร้อยแล้วครับ!`);\\n  };\\n\\n  // Remove a saved page token\\n  const removeSavedToken = (id: string) => {\\n    const updated = { ...savedPageTokens };\\n    delete updated[id];\\n    setSavedPageTokens(updated);\\n    localStorage.setItem('fb_page_tokens_map', JSON.stringify(updated));\\n  };\\n\\n  return (\"",
+    "StartLine": "405",
+    "TargetContent": "\"    } finally {\\n      setLoadingPages(false);\\n    }\\n  };\\n\\n  return (\"",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx\"",
+    "toolAction": "\"Adding token management helper functions\"",
+    "toolSummary": "\"Add token helpers to SettingsPortal\""
+  }
+}

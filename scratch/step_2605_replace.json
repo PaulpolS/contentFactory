@@ -1,0 +1,10 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Load saved logos and remembered configuration selections from localStorage on component mount\"",
+  "EndLine": "740",
+  "Instruction": "\"Add fetchSavedLogos and localStorage loading logic to the initial load useEffect\"",
+  "ReplacementContent": "\"  // Initial load\\n  useEffect(() => {\\n    fetchVaultData();\\n    fetchApprovedItems();\\n    fetchSavedLogos();\\n\\n    // Load remembered logo variables if rememberLogo was active\\n    const savedRemember = localStorage.getItem('canvas_remember_logo');\\n    if (savedRemember === 'true') {\\n      setRememberLogo(true);\\n      const savedLogoUrl = localStorage.getItem('canvas_logo_url');\\n      if (savedLogoUrl) setCanvasLogoUrl(savedLogoUrl);\\n      const savedLogoSize = localStorage.getItem('canvas_logo_size');\\n      if (savedLogoSize) setCanvasLogoSize(Number(savedLogoSize));\\n      const savedLogoMarginX = localStorage.getItem('canvas_logo_margin_x');\\n      if (savedLogoMarginX) setCanvasLogoMarginX(Number(savedLogoMarginX));\\n      const savedLogoMarginY = localStorage.getItem('canvas_logo_margin_y');\\n      if (savedLogoMarginY) setCanvasLogoMarginY(Number(savedLogoMarginY));\\n      const savedShowLogo = localStorage.getItem('canvas_show_page_logo');\\n      if (savedShowLogo) setCanvasShowPageLogo(savedShowLogo === 'true');\\n    }\\n  }, [filterSource, filterStatus, filterMinRating, sortBy]);\"",
+  "StartLine": "736",
+  "TargetContent": "\"  // Initial load\\n  useEffect(() => {\\n    fetchVaultData();\\n    fetchApprovedItems();\\n  }, [filterSource, filterStatus, filterMinRating, sortBy]);\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\""
+}

@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Remove flex-1 and justify-center to move live preview content tightly up in App.tsx\"",
+  "EndLine": "3106",
+  "Instruction": "\"Replace flex-1 and justify-center with flex-col justify-start in the canvas wrapper div\"",
+  "ReplacementContent": "\"                      <div className=\\\"w-full flex flex-col items-center justify-start p-2 mb-2 animate-fade-in\\\">\"",
+  "StartLine": "3106",
+  "TargetContent": "\"                      <div className=\\\"w-full flex-1 flex flex-col items-center justify-center p-2 mb-6 animate-fade-in\\\">\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Removing flex-1 from preview child container\"",
+  "toolSummary": "\"Edit file content\""
+}

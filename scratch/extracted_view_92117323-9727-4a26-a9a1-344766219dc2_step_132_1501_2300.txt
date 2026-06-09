@@ -1,0 +1,65 @@
+Created At: 2026-05-28T06:19:17Z
+Completed At: 2026-05-28T06:19:17Z
+File Path: `file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx`
+Total Lines: 4170
+Total Bytes: 238085
+Showing lines 1501 to 2300
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1501:       setContentGraphics([]);
+1502:       setGraphicIndex(0);
+1503:       setLatestGraphic(null);
+1504:     }
+1505:   }, [canvasSelectedItem]);
+1506: 
+1507:   // Filter canvas items by search query and showAll toggle
+1508:   const canvasSearchFiltered = canvasImportedItems.filter(item => 
+1509:     item.title.toLowerCase().includes(canvasSearchQuery.toLowerCase()) ||
+1510:     (item.selected_headline || '').toLowerCase().includes(canvasSearchQuery.toLowerCase())
+1511:   );
+1512: 
+1513:   const renderHeadlineWithHighlights = (text: string, keywordsStr: string) => {
+1514:     if (!text) return null;
+1515:     const lines = text.split('\n');
+1516: 
+1517:     // Parse the 5 premium color sets matching Pillow
+1518:     const previewColorSets: Record<string, Array<{ box: string; text: string }>> = {
+1519:       classic: [
+1520:         { box: '#EF4444', text: '#FFFFFF' }, // Red
+1521:         { box: '#F59E0B', text: '#000000' }, // Yellow
+1522:         { box: '#3B82F6', text: '#FFFFFF' }  // Blue
+1523:       ],
+1524:       cyber: [
+1525:         { box: '#EC4899', text: '#FFFFFF' }, // Pink
+1526:         { box: '#8B5CF6', text: '#FFFFFF' }, // Purple
+1527:         { box: '#06B6D4', text: '#000000' }  // Cyan
+1528:       ],
+1529:       gold: [
+1530:         { box: '#B45309', text: '#FFFFFF' }, // Dark Gold
+1531:         { box: '#F59E0B', text: '#000000' }, // Amber
+1532:         { box: '#FBBF24', text: '#000000' }  // Light Gold
+1533:       ],
+1534:       forest: [
+1535:         { box: '#10B981', text: '#FFFFFF' }, // Emerald
+1536:         { box: '#8
+<truncated 45283 bytes>
+ยาว (Reels / TikTok / Story)</option>
+2220:                           </select>
+2221:                           {/* Shape Preview indicator */}
+2222:                           <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+2223:                             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+2224:                               {canvasRatio === '1:1' && <rect x="3" y="3" width="14" height="14" rx="2" stroke="#22d3ee" strokeWidth="1.5" fill="#22d3ee" fillOpacity="0.15"/>}
+2225:                               {canvasRatio === '4:5' && <rect x="4" y="2" width="12" height="16" rx="2" stroke="#22d3ee" strokeWidth="1.5" fill="#22d3ee" fillOpacity="0.15"/>}
+2226:                               {canvasRatio === '4:3' && <rect x="2" y="4" width="16" height="12" rx="2" stroke="#22d3ee" strokeWidth="1.5" fill="#22d3ee" fillOpacity="0.15"/>}
+2227:                               {canvasRatio === '16:9' && <rect x="1" y="5" width="18" height="10" rx="2" stroke="#22d3ee" strokeWidth="1.5" fill="#22d3ee" fillOpacity="0.15"/>}
+2228:                               {canvasRatio === '9:16' && <rect x="5" y="1" width="10" height="18" rx="2" stroke="#22d3ee" strokeWidth="1.5" fill="#22d3ee" fillOpacity="0.15"/>}
+2229:                             </svg>
+2230:                           </div>
+2231:                         </div>
+2232:                         <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+2233:                           {canvasRatio === '1:1' && '🔲 1080×1080px — Facebook, Instagram Feed, LINE Timeline'}
+2234:                           {canvasRatio === '4:5' && '📱 1080×1350px — Instagram Portrait, Facebook Ads, Pinterest'}
+2235:                           {canvasRatio === '4:3' && '🖥️ 1080×810px — Presentation Slide, Blog Hero, LinkedIn'}
+2236:                           {canva
+<truncated 4843 bytes>
+
+NOTE: The output was truncated because it was too long. Use a more targeted query or a smaller range to get the information you need.

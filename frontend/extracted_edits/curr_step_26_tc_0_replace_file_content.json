@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": "false",
+    "Description": "\"Remove duplicate throw line that was created during the previous edit\"",
+    "EndLine": "393",
+    "Instruction": "\"Remove the duplicate throw line\"",
+    "ReplacementContent": "\"      if (data.error) {\\n        throw new Error(data.error.message || 'เกิดข้อผิดพลาดจาก Facebook Graph API');\\n      }\"",
+    "StartLine": "391",
+    "TargetContent": "\"      if (data.error) {\\n        throw new Error(data.error.message || '犹犧≒ｸｴ犧扉ｸもｹ霞ｸｭ犧憫ｸｴ犧扉ｸ樅ｸ･犧ｲ犧扉ｸ謂ｸｲ犧� Facebook Graph API');\\n        throw new Error(data.error.message || '犹€犧≒ｸｴ犧扉ｸもｹ霞ｸｭ犧憫ｸｴ犧扉ｸ樅ｸ･犧ｲ犧扉ｸ謂ｸｲ犧 Facebook Graph API');\\n      }\"",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx\"",
+    "toolAction": "\"Removing duplicate line\"",
+    "toolSummary": "\"Fix duplicate throw\""
+  }
+}

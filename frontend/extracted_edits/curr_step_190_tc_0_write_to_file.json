@@ -1,0 +1,13 @@
+{
+  "name": "write_to_file",
+  "args": {
+    "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Updated python decoding script to target the corrupted throw new Error line.\"}",
+    "CodeContent": "\"import sys\\n\\nwith open(\\\"src/components/SettingsPortal.tsx\\\", \\\"rb\\\") as f:\\n    content = f.read()\\n\\nfor line in content.split(b\\\"\\\\n\\\"):\\n    if b\\\"throw new Error\\\" in line and b\\\"Facebook\\\" in line:\\n        print(\\\"Line:\\\", line)\\n        print(\\\"Bytes:\\\", list(line))\\n        try:\\n            m = line.split(b\\\"'\\\")\\n            if len(m) > 1:\\n                corrupted_str = m[1].decode('utf-8')\\n                print(\\\"Corrupted string:\\\", corrupted_str)\\n                # Try to encode/decode\\n                for enc in ['utf-8', 'latin-1', 'windows-1252', 'cp874']:\\n                    for dec in ['utf-8', 'latin-1', 'windows-1252', 'cp874']:\\n                        try:\\n                            # Let's try encode(enc).decode(dec) or other combinations\\n                            # Some tools treat UTF-8 as Latin-1 when reading, then write it out as UTF-8\\n                            # That means we need to encode as utf-8, then decode as latin-1 or vice-versa\\n                            b = corrupted_str.encode(enc)\\n                            s = b.decode(dec)\\n                            if 'เกิด' in s:\\n                                print(f\\\"SUCCESS: encode={enc}, decode={dec} -> {s}\\\")\\n                        except:\\n                            pass\\n        except Exception as e:\\n            print(\\\"Error:\\\", e)\\n        break\\n\"",
+    "Description": "\"Update decoding script to find exact match for corrupted throw line.\"",
+    "IsArtifact": "false",
+    "Overwrite": "true",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx.decode.py\"",
+    "toolAction": "\"Updating decoder script\"",
+    "toolSummary": "\"Update SettingsPortal.decode.py\""
+  }
+}

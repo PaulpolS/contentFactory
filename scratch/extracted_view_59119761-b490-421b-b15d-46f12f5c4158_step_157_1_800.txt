@@ -1,0 +1,91 @@
+Created At: 2026-05-27T04:23:24Z
+Completed At: 2026-05-27T04:23:24Z
+File Path: `file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx`
+Total Lines: 1142
+Total Bytes: 59842
+Showing lines 1 to 800
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: import { useState, useEffect, useRef } from 'react';
+2: import { 
+3:   Compass, 
+4:   Database, 
+5:   Image as ImageIcon, 
+6:   Play, 
+7:   CheckCircle, 
+8:   Sliders, 
+9:   Search, 
+10:   Info, 
+11:   Layers, 
+12:   Tv, 
+13:   Star,
+14:   ExternalLink,
+15:   ChevronRight,
+16:   TrendingUp,
+17:   Cpu,
+18:   RefreshCw,
+19:   Eye
+20: } from 'lucide-react';
+21: 
+22: const API_BASE = 'http://localhost:5005/api';
+23: 
+24: interface VaultContent {
+25:   id: string;
+26:   source_type: 'radar' | 'rss' | 'youtube' | 'github';
+27:   title: string;
+28:   selected_headline: string | null;
+29:   raw_content: string;
+30:   source_url: string;
+31:   author_name: string | null;
+32:   author_avatar_url: string | null;
+33:   author_followers: number | null;
+34:   rating_news: number;
+35:   rating_evergreen: number;
+36:   metadata: any;
+37:   media_paths: string[];
+38:   status: 'scraped' | 'ready_for_design' | 'designed' | 'posted' | 'archived';
+39:   created_at: string;
+40:   updated_at: string;
+41: }
+42: 
+43: interface GraphicItem {
+44:   id: string;
+45:   content_id: string;
+46:   file_path: string;
+47:   image_ratio: string;
+48:   theme_name: string;
+49:   created_at: string;
+50: }
+51: 
+52: export default function App() {
+53:   const [activeTab, setActiveTab] = useState<'discovery' | 'vault' | 'canvas'>('discovery');
+54: 
+55:   // Vault data states
+56:   const [vaultItems, setVaultItems] = useState<VaultContent[]>([]);
+57:   const [selectedItem, setSelectedItem] = useState<VaultContent | null>(null);
+58:   const [loadingItems, setLoadingItems] = useState(false);
+5
+<truncated 39358 bytes>
+               </div>
+779:                                 </td>
+780:                                 <td className="data-grid-td text-center">
+781:                                   <div className="inline-flex items-center gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-md">
+782:                                     <Star className="w-3.5 h-3.5 fill-cyan-400 text-cyan-400" />
+783:                                     <span className="text-xs font-bold text-cyan-400 font-mono">{maxRating}/10</span>
+784:                                   </div>
+785:                                 </td>
+786:                                 <td className="data-grid-td">
+787:                                   <span className={`badge-status 
+788:                                     ${item.status === 'scraped' ? 'badge-scraped' : ''}
+789:                                     ${item.status === 'ready_for_design' ? 'badge-ready' : ''}
+790:                                     ${item.status === 'designed' ? 'badge-designed' : ''}
+791:                                     ${item.status === 'posted' ? 'badge-posted' : ''}
+792:                                     ${item.status === 'archived' ? 'badge-ready' : ''}
+793:                                   `}>
+794:                                     {item.status === 'scraped' && 'ดึงดิบ'}
+795:                                     {item.status === 'ready_for_design' && 'รอดีไซน์'}
+796:                                     {item.status === 'designed' && 'ปกเสร็จแล้ว'}
+797:                                     {item.status === 'posted' && 'เผยแพร่แล้ว'}
+798:                                     {item.status === 'archived' && 'จัดเก็บ'}
+799:                                   </span>
+800:                                 </td>
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

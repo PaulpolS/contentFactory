@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Replaced uncompiled aspect-[4/3.2] Tailwind utility class with standard style={{ aspectRatio: '1.25' }} inline property on the headline preset buttons.\"",
+  "EndLine": "3716",
+  "Instruction": "\"Replace aspect-[4/3.2] with style={{ aspectRatio: '1.25' }} on the button element inside the HEADLINE_PRESETS loop in VerticalVideoSuitePortal.tsx\"",
+  "ReplacementContent": "\"                    <button\\n                      key={p.id}\\n                      type=\\\"button\\\"\\n                      onClick={() => applyHeadlinePreset(p)}\\n                      style={{ aspectRatio: '1.25' }}\\n                      className={`relative flex flex-col items-center justify-between p-2 rounded-xl border transition-all text-center select-none ${\\n                        isSelected \\n                          ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300 font-bold shadow-md shadow-indigo-500/10 ring-1 ring-indigo-500/50' \\n                          : 'border-white/5 bg-black/30 hover:bg-indigo-950/20 hover:border-indigo-500/20 text-white/80'\\n                      }`}\\n                    >\"",
+  "StartLine": "3706",
+  "TargetContent": "\"                    <button\\n                      key={p.id}\\n                      type=\\\"button\\\"\\n                      onClick={() => applyHeadlinePreset(p)}\\n                      className={`relative flex flex-col items-center justify-between p-2 rounded-xl border transition-all text-center aspect-[4/3.2] select-none ${\\n                        isSelected \\n                          ? 'border-indigo-500 bg-indigo-950/40 text-indigo-300 font-bold shadow-md shadow-indigo-500/10 ring-1 ring-indigo-500/50' \\n                          : 'border-white/5 bg-black/30 hover:bg-indigo-950/20 hover:border-indigo-500/20 text-white/80'\\n                      }`}\\n                    >\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Modifying vertical video portal file\"",
+  "toolSummary": "\"File edit\""
+}

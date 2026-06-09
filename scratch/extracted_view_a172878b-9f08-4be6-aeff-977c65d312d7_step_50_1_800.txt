@@ -1,0 +1,102 @@
+Created At: 2026-05-30T10:41:45Z
+Completed At: 2026-05-30T10:41:45Z
+File Path: `file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx`
+Total Lines: 5264
+Total Bytes: 311286
+Showing lines 1 to 800
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: import { useState, useEffect, useRef, Fragment } from 'react';
+2: import { 
+3:   Compass, 
+4:   Database, 
+5:   Image as ImageIcon, 
+6:   Play, 
+7:   CheckCircle, 
+8:   Sliders, 
+9:   Search, 
+10:   Info, 
+11:   Cpu,
+12:   RefreshCw,
+13:   Eye,
+14:   Upload,
+15:   Trash2,
+16:   Sparkles,
+17:   X,
+18:   Download,
+19:   FolderOpen,
+20:   ChevronLeft,
+21:   ChevronRight,
+22:   Users,
+23:   User,
+24:   FileText,
+25:   Quote
+26: } from 'lucide-react';
+27: import DiscoveryPortal from './components/DiscoveryPortal';
+28: import SettingsPortal from './components/SettingsPortal';
+29: import PromptGeneratorPortal from './components/PromptGeneratorPortal';
+30: import VerticalVideoSuitePortal from './components/VerticalVideoSuitePortal';
+31: import QuoteVideoPortal from './components/QuoteVideoPortal';
+32: import { AvatarVerticalClipPortal } from './components/AvatarVerticalClipPortal';
+33: import FlowAutomatorPortal from './components/FlowAutomatorPortal';
+34: 
+35: 
+36: const API_BASE = 'http://localhost:5005/api';
+37: 
+38: interface VaultContent {
+39:   id: string;
+40:   source_type: 'radar' | 'rss' | 'youtube' | 'github';
+41:   title: string;
+42:   selected_headline: string | null;
+43:   raw_content: string;
+44:   source_url: string;
+45:   author_name: string | null;
+46:   author_avatar_url: string | null;
+47:   author_followers: number | null;
+48:   rating_news: number;
+49:   rating_evergreen: number;
+50:   metadata: any;
+51:   media_paths: string[];
+52:   status: 'scraped' | 'ready_for_design' | 'designed' | 'posted' | 'archived';
+53:   created_at: string;
+
+<truncated 42868 bytes>
+es: activeHeadlinePack?.headlines || []
+763:           })
+764:         });
+765:         const resData = await response.json();
+766:         if (resData.success) {
+767:           successCount++;
+768:           const hl3 = resData.data.headline_3line || [];
+769:           const joinedHl = hl3.length > 0 ? hl3.filter(Boolean).join('\n') : item.title;
+770: 
+771:           const updatedItem = {
+772:             ...item,
+773:             selected_headline: joinedHl,
+774:             metadata: {
+775:               ...item.metadata,
+776:               copywriting: resData.data
+777:             }
+778:           };
+779: 
+780:           // Update state lists immediately to reflect AI results in real-time
+781:           setCanvasImportedItems(prev => prev.map(x => x.id === updatedItem.id ? updatedItem : x));
+782:           setCanvasAllItems(prev => prev.map(x => x.id === updatedItem.id ? updatedItem : x));
+783: 
+784:           // Also update selected item if currently focused
+785:           if (canvasSelectedItem && canvasSelectedItem.id === item.id) {
+786:             setCanvasSelectedItem(updatedItem);
+787:           }
+788:         }
+789:       }
+790: 
+791:       // Sync and reload DB
+792:       fetchVaultData();
+793:       fetchApprovedItems();
+794: 
+795:       alert(`✨ ประมวลผลและเขียนบทความจำลองพาดหัวด้วย AI สำเร็จทั้งหมด ${successCount}/${canvasSelectedIds.length} รายการ!`);
+796:     } catch (err) {
+797:       console.error("Bulk copywriting generation error:", err);
+798:       alert("⚠️ เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อประมวลผลคำโฆษณาแบบกลุ่ม");
+799:     } finally {
+800:       setGeneratingCopywriting(false);
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

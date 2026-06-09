@@ -1,0 +1,66 @@
+Created At: 2026-05-29T03:30:39Z
+Completed At: 2026-05-29T03:30:39Z
+File Path: `file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx`
+Total Lines: 5264
+Total Bytes: 311286
+Showing lines 4465 to 5264
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+4465:                             </div>
+4466:                           )}
+4467:                         </div>
+4468: 
+4469:                         {/* 🎯 ผลลัพธ์จากการเรนเดอร์ล่าสุด (Pillow Output) */}
+4470:                         {latestGraphic && (
+4471:                           <div className="w-full mt-6 pt-6 border-t border-slate-800/80 animate-fade-in flex flex-col items-center">
+4472:                             <div className="flex items-center justify-between mb-3 text-left w-full">
+4473:                               <div className="flex items-center gap-2">
+4474:                                 <CheckCircle className="w-4 h-4 text-emerald-400" />
+4475:                                 <span className="text-xs font-black text-emerald-400 uppercase tracking-wider text-left">🎯 ผลลัพธ์ (Pillow Output)</span>
+4476:                               </div>
+4477:                               <div className="flex items-center gap-2">
+4478:                                 {contentGraphics.length > 0 && (
+4479:                                   <>
+4480:                                     <button
+4481:                                       type="button"
+4482:                                       onClick={() => {
+4483:                                         setContentGraphics([]);
+4484:                                         setLatestGraphic(null);
+4485:                                       }}
+4486:                                       className="flex items-center gap-1 
+<truncated 45282 bytes>
+6:                   borderRadius: '10px',
+5147:                   padding: '12px 14px',
+5148:                 }}>
+5149:                   {canvasSelectedItem?.metadata?.copywriting?.headline_3line?.length > 0 ? (
+5150:                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+5151:                       {canvasSelectedItem?.metadata?.copywriting?.headline_3line?.map((line: string, i: number) => (
+5152:                         <p key={i} style={{
+5153:                           fontSize: '14px',
+5154:                           fontWeight: 800,
+5155:                           color: '#f1f5f9',
+5156:                           margin: 0,
+5157:                           lineHeight: 1.4,
+5158:                         }}>
+5159:                           {line}
+5160:                         </p>
+5161:                       ))}
+5162:                     </div>
+5163:                   ) : (
+5164:                     <p style={{ fontSize: '14px', fontWeight: 700, color: '#e2e8f0', margin: 0, lineHeight: 1.4 }}>
+5165:                       {canvasSelectedItem?.selected_headline || canvasSelectedItem?.title || 'ไม่มีพาดหัว'}
+5166:                     </p>
+5167:                   )}
+5168:                 </div>
+5169:               </div>
+5170: 
+5171:               {/* Caption / Post Article */}
+5172:               <div style={{ flex: 1, minHeight: 0 }}>
+5173:                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+5174:                   <p style={{ fontSize: '9px', fontWeight: 700, color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>
+5175:                     📝 บทความโพส
+5176:                   </p>
+5177:                   {canvasSelectedItem?.metadata?.copywriting?.caption && (
+5178:              
+<truncated 4379 bytes>
+
+NOTE: The output was truncated because it was too long. Use a more targeted query or a smaller range to get the information you need.

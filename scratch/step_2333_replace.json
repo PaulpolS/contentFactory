@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Update runModule's SSE completion check to advance the bulk rendering queue.\"",
+  "EndLine": "160",
+  "Instruction": "\"Add condition to increment canvasQueueIndex when event finishes.\"",
+  "ReplacementContent": "\"      // Check if process finished\\n      if (event.data.includes('Exit Code:')) {\\n        source.close();\\n        setRunningModule(prev => ({ ...prev, [module]: false }));\\n        \\n        // If queue is active, run next item!\\n        if (module === 'canvas' && queueIndexRef.current !== null) {\\n          const nextIdx = queueIndexRef.current + 1;\\n          setCanvasQueueIndex(nextIdx);\\n        } else if (canvasSelectedItem) {\\n          fetchGraphicsForContent(canvasSelectedItem.id);\\n        }\\n      }\"",
+  "StartLine": "151",
+  "TargetContent": "\"      // Check if process finished\\n      if (event.data.includes('Exit Code:')) {\\n        source.close();\\n        setRunningModule(prev => ({ ...prev, [module]: false }));\\n        // If canvas, query latest graphic\\n        if (canvasSelectedItem) {\\n          fetchGraphicsForContent(canvasSelectedItem.id);\\n        }\\n      }\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Integrating queue indexing in SSE stream listener\"",
+  "toolSummary": "\"Replace file content\""
+}

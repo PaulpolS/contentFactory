@@ -1,0 +1,13 @@
+{
+  "name": "write_to_file",
+  "args": {
+    "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Python script to clean line numbers from extracted log content to recreate the original, uncorrupted version of SettingsPortal.tsx before any edits were made in the previous conversation.\"}",
+    "CodeContent": "\"import re\\n\\nwith open(\\\"SettingsPortal.tsx.extracted\\\", \\\"r\\\", encoding=\\\"utf-8\\\") as f:\\n    lines = f.readlines()\\n\\ncleaned_lines = []\\nin_code = False\\nfor line in lines:\\n    if line.startswith(\\\"1:\\\"):\\n        in_code = True\\n    if in_code:\\n        if line.startswith(\\\"The above content shows the entire\\\"):\\n            break\\n        # Match e.g. \\\"123:   some code\\\"\\n        m = re.match(r\\\"^\\\\d+:\\\\s?(.*)\\\", line)\\n        if m:\\n            cleaned_lines.append(m.group(1))\\n        else:\\n            # If it's a wrapped line that doesn't start with digits, just append it\\n            cleaned_lines.append(line)\\n\\nwith open(\\\"SettingsPortal.tsx.original\\\", \\\"w\\\", encoding=\\\"utf-8\\\") as f:\\n    f.write(\\\"\\\\n\\\".join(cleaned_lines))\\n\\nprint(f\\\"Cleaned {len(cleaned_lines)} lines and saved to SettingsPortal.tsx.original\\\")\\n\"",
+    "Description": "\"Write python script to clean line numbers from extracted original file\"",
+    "IsArtifact": "false",
+    "Overwrite": "true",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx.clean.py\"",
+    "toolAction": "\"Writing python cleaner script\"",
+    "toolSummary": "\"Create line number cleaner script\""
+  }
+}

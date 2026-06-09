@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Set max-width of static Pillow preview outer wrapper to 412px for perfect visual alignment in App.tsx\"",
+  "EndLine": "3350",
+  "Instruction": "\"Add inline style maxWidth 412px to the static preview wrapper div\"",
+  "ReplacementContent": "\"                  <div className=\\\"w-full flex flex-col items-center justify-start p-4 bg-slate-950/40 rounded-xl border border-slate-850/80 mb-4 relative overflow-hidden min-h-[300px]\\\" style={{ maxWidth: '412px', margin: '0 auto' }}>\"",
+  "StartLine": "3350",
+  "TargetContent": "\"                  <div className=\\\"w-full flex flex-col items-center justify-start p-4 bg-slate-950/40 rounded-xl border border-slate-850/80 mb-4 relative overflow-hidden min-h-[300px]\\\">\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Adjusting static preview wrapper style\"",
+  "toolSummary": "\"Edit file content\""
+}

@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": "false",
+    "Description": "\"Inject the beautifully styled, dark Coinpulse display settings tab panel into SettingsPortal.tsx to manage program global zoom scale seamlessly\"",
+    "EndLine": "991",
+    "Instruction": "\"Inject display settings subtab rendering code in SettingsPortal.tsx\"",
+    "ReplacementContent": "\"      )}\\n\\n      {/* SUBTAB 3: DISPLAY SETTINGS (ZOOM SCALING) */}\\n      {activeSubTab === 'display' && (\\n        <div className=\\\"space-y-6 animate-fade-in\\\">\\n          \\n          <div className=\\\"p-6 rounded-2xl border bg-zinc-900 border-zinc-800 shadow-md space-y-6\\\">\\n            <div>\\n              <h4 className=\\\"text-sm font-bold text-white flex items-center gap-1.5 font-mono\\\">\\n                🖥️ ปรับขนาดหน้าต่าง & ตัวอักษรการใช้งาน (Display Scale Setting)\\n              </h4>\\n              <p className=\\\"text-xs text-zinc-400 mt-1.5 leading-relaxed pr-6\\\">\\n                ระบบจะทำการขยายหรือย่อขนาดตัวอักษร ไอคอน ข้อมูลในตาราง ตลอดจนขนาดของปุ่มควบคุมคำสั่งทั้งหมดในโปรแกรมโดยอัตโนมัติ \\n                ช่วยให้คุณอ่านเนื้อหา สแกนโพสต์คู่แข่ง และจัดแจง Canvas ได้อย่างมีประสิทธิภาพและสบายตาที่สุดครับ\\n              </p>\\n            </div>\\n\\n            {/* Scale Selector Grid in Dark Theme Coinpulse */}\\n            <div className=\\\"grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2\\\">\\n              {[100, 115, 130, 145].map(scale => {\\n                let label = 'ขนาดปกติ';\\n                let scaleDesc = 'ขนาดมาตรฐานตั้งต้น คมชัด พอดีกับหน้าจอ';\\n                \\n                if (scale === 115) {\\n                  label = 'ขนาดใหญ่';\\n                  scaleDesc = 'ขยาย 15% ตัวหนังสือโตขึ้นอย่างพอเหมาะ';\\n                }\\n                if (scale === 130) {\\n                 \n<truncated 3701 bytes>",
+    "StartLine": "989",
+    "TargetContent": "\"      )}\"",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx\"",
+    "toolAction": "\"Injecting display settings subtab panel in SettingsPortal.tsx\"",
+    "toolSummary": "\"Edit file\""
+  }
+}

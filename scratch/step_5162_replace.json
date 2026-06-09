@@ -1,0 +1,10 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Pass font_scale to generate-copywriting for bulk items\"",
+  "EndLine": "696",
+  "Instruction": "\"Add font_scale state in handleBulkGenerateCopywriting POST request body\"",
+  "ReplacementContent": "\"          body: JSON.stringify({\\n            length: canvasArticleLength,\\n            font_scale: canvasFontScale\\n          })\"",
+  "StartLine": "693",
+  "TargetContent": "\"          body: JSON.stringify({ length: canvasArticleLength })\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\""
+}

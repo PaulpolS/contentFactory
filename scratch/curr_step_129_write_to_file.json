@@ -1,0 +1,9 @@
+{
+  "CodeContent": "\"import os\\n\\npath = \\\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/QuoteVideoPortal.tsx\\\"\\n\\ntry:\\n    with open(path, \\\"rb\\\") as f:\\n        content_bytes = f.read()\\n    \\n    # Decode as iso-8859-11\\n    text = content_bytes.decode(\\\"iso-8859-11\\\")\\n    \\n    # Save back as UTF-8\\n    with open(path, \\\"w\\\", encoding=\\\"utf-8\\\") as f:\\n        f.write(text)\\n        \\n    print(\\\"Successfully converted QuoteVideoPortal.tsx to UTF-8!\\\")\\n    \\nexcept Exception as e:\\n    print(\\\"Error during conversion:\\\", e)\\n\"",
+  "Description": "\"Create convert_quote_portal_to_utf8.py to convert QuoteVideoPortal.tsx from ISO-8859-11 to UTF-8 encoding\"",
+  "IsArtifact": "false",
+  "Overwrite": "true",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/scratch/convert_quote_portal_to_utf8.py\"",
+  "toolAction": "\"Creating convert_quote_portal_to_utf8.py\"",
+  "toolSummary": "\"Write file\""
+}

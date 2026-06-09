@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"AI ส่งบทสคริปต์ว่างกลับมา\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Searching for empty script error\"",
+  "toolSummary": "\"Grep search empty script error\""
+}

@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"google_key\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Searching for direct google api key usage\"",
+  "toolSummary": "\"Grep search google_key\""
+}

@@ -1,0 +1,13 @@
+{
+  "name": "write_to_file",
+  "args": {
+    "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Python script to inspect the bytes of the corrupted characters in SettingsPortal.tsx to determine the correct decoding/encoding process.\"}",
+    "CodeContent": "\"import sys\\n\\n# Let's inspect the exact characters around line 390\\nwith open(\\\"src/components/SettingsPortal.tsx\\\", \\\"rb\\\") as f:\\n    content = f.read()\\n\\n# Let's find the 'throw new Error' line around Facebook Graph API\\nfor line in content.split(b\\\"\\\\n\\\"):\\n    if b\\\"Facebook Graph API\\\" in line:\\n        print(\\\"Line:\\\", line)\\n        print(\\\"Bytes:\\\", list(line))\\n        # Let's try to see if we can decode it:\\n        # If it was decoded as utf-8 but it was originally read as utf-8, encoded as latin-1, etc.\\n        # Let's try some standard recovery:\\n        try:\\n            # Let's extract the string within single quotes\\n            m = line.split(b\\\"'\\\")\\n            if len(m) > 1:\\n                corrupted_str = m[1].decode('utf-8')\\n                print(\\\"Corrupted string:\\\", corrupted_str)\\n                # Try to encode back to latin-1 or windows-1252 or other encodings, then decode as utf-8!\\n                for enc in ['latin-1', 'windows-1252', 'utf-8', 'cp874']:\\n                    try:\\n                        b = corrupted_str.encode(enc)\\n                        print(f\\\"  Encode as {enc} -> bytes: {list(b)}\\\")\\n                        for dec in ['utf-8', 'cp874', 'latin-1']:\\n                            try:\\n                                s = b.decode(dec)\\n                                print(f\\\"    Decode as {dec} -> {s}\\\")\\n                            except:\\n                                pass\\n                    except Exception as e:\\n                        pass\\n        except Exception as e:\\n            print(\\\"Error:\\\", e)\\n        break\\n\"",
+    "Description": "\"Write a python script to inspect the bytes and find the correct encoding/decoding sequence for the mojibake.\"",
+    "IsArtifact": "false",
+    "Overwrite": "true",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx.decode.py\"",
+    "toolAction": "\"Writing python decoder script\"",
+    "toolSummary": "\"Create byte decoder script\""
+  }
+}

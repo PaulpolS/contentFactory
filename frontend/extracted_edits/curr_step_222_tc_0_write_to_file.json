@@ -1,0 +1,13 @@
+{
+  "name": "write_to_file",
+  "args": {
+    "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Python script to test reversing the Mojibake encoding on SettingsPortal.tsx.\"}",
+    "CodeContent": "\"import sys\\n\\nwith open(\\\"src/components/SettingsPortal.tsx\\\", \\\"r\\\", encoding=\\\"utf-8\\\") as f:\\n    text = f.read()\\n\\n# Let's try to convert the text back to bytes using latin-1 / cp1252, then decode as utf-8\\nencodings_to_try = ['latin-1', 'cp1252', 'mac-roman']\\n\\nfor enc in encodings_to_try:\\n    try:\\n        raw_bytes = text.encode(enc)\\n        decoded_text = raw_bytes.decode('utf-8')\\n        # Check if the word \\\"ระบบ\\\" or \\\"ข้อมูล\\\" or \\\"เกิด\\\" is in the decoded text\\n        if \\\"ระบบ\\\" in decoded_text or \\\"ข้อมูล\\\" in decoded_text or \\\"เกิด\\\" in decoded_text:\\n            print(f\\\"SUCCESS with encoding: {enc}!\\\")\\n            # Let's print some sample lines:\\n            sample_lines = decoded_text.split('\\\\n')\\n            for line in sample_lines:\\n                if \\\"Facebook Graph API\\\" in line or \\\"ปรับขนาด\\\" in line or \\\"กุญแจ\\\" in line:\\n                    print(\\\"Sample line:\\\", line.strip())\\n            break\\n    except Exception as e:\\n        print(f\\\"Failed with {enc}: {e}\\\")\\n\"",
+    "Description": "\"Write a python script to test recovering the file from Mojibake.\"",
+    "IsArtifact": "false",
+    "Overwrite": "true",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx.fix_encoding.py\"",
+    "toolAction": "\"Writing encoding fixer script\"",
+    "toolSummary": "\"Create encoding fixer script\""
+  }
+}

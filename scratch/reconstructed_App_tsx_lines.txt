@@ -1,0 +1,3099 @@
+1: # Walkthrough - Graphic Canvas Backdrop Selection Persistence & Styling Adjustments
+2: 
+3: I have successfully resolved the backdrop frame selection persistence issue and applied visual improvements to the Pillow image generator script.
+4: 
+5: ## Changes Made
+6: 
+7: ### 1. Persistent Selected Background Image Logic
+8: - **File Modified**: [App.tsx](file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx)
+9: - **New Helper Function**:
+10:   - `handleSelectCanvasBgImage(item, path)`: Sets the current background preview state (`canvasBgImage`), updates the item's metadata in memory (`selected_bg_image` under `metadata.copywriting`), and silently performs a `PUT` request to `/api/vault/contents/${item.id}/metadata` to persist the chosen background image to the SQLite database instantly in the background.
+11: - **Loading Saved Selection**:
+12:   - Updated the detail loader `useEffect` hook to read `selected_bg_image` from the article's copywriting metadata. If present, it restores the user's selected frame; otherwise, it falls back to the first available media path.
+13: - **UI Binding & Actions**:
+14:   - Bound the new helper function to the frame thumbnail list item click action.
+15:   - Bound the helper to the cycler back (`◀`) and forward (`▶`) arrow buttons overlaying the preview.
+16:   - Updated the manual copywriting save button (`💾 บันทึกการแก้ไข`) to preserve the selected image path in its SQLite update payload.
+17: 
+18: ### 2. Backdrop Image Scaling & Blurred Ba
+19:     3. Performs a silent background `PUT` request to `/api/vault/contents/${item.id}/metadata` to update the item's metadata in the SQLite database instantly.
+20: 
+21: - **Update UI Actions**:
+22:   - Scales the 16:9 foreground image to fit the width of the vertical canvas without cropping, pasting it centered on top of a heavily blurred and darkened copy of itself.
+23: - **Prevent Excessive Zooming (top_gainers Split)**:
+24:   - In `top_gainers` layout, updated the `prepare_base_canvas` invocation to pass the split height `image_split_y` instead of the full canvas height. This ensures the background image is scaled to fit the actual top portion height, minimizing scaling zoom from 2.66x to a natural 1.33x.
+25: 
+26: ### 3. Top-Left & Bottom-Right Channel Badge Proportions
+27: - **File Modified**: [06_graphic_generator.py](file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/scripts/06_graphic_generator.py)
+28: - **Shorthand Subscriber Count Label**:
+29:   - Updated the subscriber formatting functions to use `"Sub"` instead of the full `"subscriber"` / `"subscribers"` string (e.g. `42.7K Sub` instead of `42.7k subscribers`).
+30:     - Line 1: Cyber YouTube Red box `(255, 0, 51)` with White text.
+31:     - Line 2: Cyber Neon Yellow box `(255, 230, 0)` with Dark Charcoal `(10, 10, 10)` text.
+32:     - Line 3: Pure White box with Cyber YouTube Red text.
+33: - **Dynamic Sticker Tilt**:
+34:   - Replaced flat rectangles by applying alternating rotation angles in `draw_tilted_word_layer` calls in the `top_gainers` layout:
+35:     - Even lines tilt left at `-0.03` radians (approx -1.7°).
+36:     - Odd lines tilt right at `0.02` radians (approx 1.1°).
+37:     - This provides a natural, high-engagement sticker placement look.
+38: 
+39: ### 3. Fixed Dropbox + CSV Export Duplication
+40: - **File Modified**: [App.tsx](file:///Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx)
+41: - **Problem**:
+42:   - The batch Dropbox upload returned upload results for multiple files.
+43:   - The CSV builder looped through the results but pulled the `headline` and `caption` from the globally selected canvas item (`canvasSelectedItem`) instead of looking up each file's corresponding source item.
+44: - **Solution**:
+45:   - Linked each upload result's `file_path` back to its graphic record in `contentGraphics` to obtain the `content_id`.
+46:   - Found the corresponding copywriting item in the local item lists (`canvasAllItems` or `canvasImportedItems`) using the `content_id`.
+47:   - Exported the unique `headline` and `caption` for each uploaded poster row in the CSV file, falling back to `canvasSelectedItem` only if the graphic record could not be mapped.
+48:   - Fixed this mapping inside both Dropbox upload button callbacks.
+49: 
+50: ---
+51: 
+52: ## Renders & Verification
+53: 
+54: ### 1. Dynamic Grid Layout (`top_gainers`) with Top-Left Badge and Tilted Stickers
+55: - **Render Output**: [rendered_badge.png](file:///Users/paulpolsulintaboon/.gemini/antigravity/brain/eccbdc81-f670-4dae-922b-0be80b80189b/rendered_badge.png)
+56: 
+57: ![Rendered Dynamic Grid with top-left badge and tilted highlight stickers](/Users/paulpolsulintaboon/.gemini/antigravity/brain/eccbdc81-f670-4dae-922b-0be80b80189b/rendered_badge.png)
+58: 
+59: ### 2. YouTube Layout Style (`youtube`) with Unified Bottom-Right Cyber Glassmorphic Badge
+60: - **Render Output**: [rendered_badge_youtube.png](file:///Users/paulpolsulintaboon/.gemini/antigravity/brain/eccbdc81-f670-4dae-922b-0be80b80189b/rendered_badge_youtube.png)
+92:                   height: '36px',
+220: export const PALETTE_WRITING_STYLES: WritingStyle[] = [
+221:   {
+222:     id: "ai_trendtech",
+223:     name: "AI Trendtech (เล่าเทรนด์สุดล้ำ)",
+224:     desc: "เน้นเล่าเรื่องเทคโนโลยี/เครื่องมือ AI เป็นขั้นตอน อารมณ์เป็นกันเอง แทรกความตื่นเต้น มีสติ๊กเกอร์ มีการแชร์วิธีสร้าง Sub-agents อย่างชัดเจน",
+225:     content: `สร้างกองทัพ AI 15 ตัวที่ทำงานพร้อมกันได้ ด้วยการใช้ Sub-agent ใน Claude Cowork ตั้งค่าไม่ยาก สามารถทำตามได้ทันที
+226: .
+227: กลับมาที่ Claude เพื่อรัก ฮ่าา
+228: ตอนนี้อินสุด ๆ มันจริง ๆ ครับ ฮ่าา
+229: วันนี้มาในเรื่องของการสร้างกองทัพ AI ที่ทำงานพร้อมกันได้
+230: ทีละหลาย ๆ ตัว โดยใช้ Sub-agents และ สามารถบันทุกมาเป็น
+231: plugins ไว้ใช้งานทีหลังได้ง่าย ๆ เลย
+232: .
+233: ด้วยความที่เป็น Claude มัน user friendly มาก ๆ 
+234: ตั้งค่าไม
+257: - แบ่งเนื้อหาเป็น ใต้เม้น1, ใต้เม้น2, ใต้เม้น3 เหมือนคอลัมน์ใน CSV
+258: - แต่ละใต้เม้นเป็นเนื้อหาต่อกัน ไม่ต้องเขียนเกริ่นซ้ำ
+259: - ถ้าเป็นรายการ ให้แบ่งลำดับต่อเนื่อง เช่น 1-5, 6-10, 11-15
+260: - ใต้เม้น3 ปิดด้วย CTA หรือแหล่งที่มาเมื่อมีลิงก์
+261: 
+262: == ตัวอย่างแคปชั่น ==
+263: แจก 100 Prompt ลับ! ที่บริษัทที่ปรึกษาราคาแพงไม่เคยบอกคุณ ใช้เวลา 6 เดือนรวบรวม-ทดสอบ ช่วยให้คุณนำหน้าคน 99% ในเวลาแค่ 12 เดือน (มีต่อ👇)
+264: 
+265: วิธีนำหน้าคู่แข่ง 99% ใน 3 เดือน โดยไม่ต้องเสียเงินเพิ่ม! แค่มี 100 Prompt นี้ เหมือนมีโค้ชธุรกิจส่วนตัว 24 ชม. (มีต่อ👇)
+266: 
+267: == กฎสำคัญ ==
+268: - ภาษาไทยเป็นหลัก อาจมีภาษาอังกฤษสำหรับชื่อเทคนิค/เครื่องมือ
+269: - ใช้คำย่อที่คนไทยเข้าใจ เช่น AI, Prompt, Tools, คอร์ส, เครดิต
+270: - ไม่ใช้ภาษาวิชาการเกินไป อ่านง่าย เข้าถึงได้
+350: 
+351:   // Global scale state for accessibility
+352:   const [appScale, setAppScale] = useState<number>(() => {
+353:     const saved = localStorage.getItem('app_scale');
+354:     return saved ? Number(saved) : 100;
+355:   });
+356: 
+357:   // Apply scale to root element on changes
+358:   useEffect(() => {
+359:     localStorage.setItem('app_scale', String(appScale));
+360:     const rootSize = (appScale / 100) * 16; // 16px is base font size
+361:     document.documentElement.style.fontSize = `${rootSize}px`;
+362:   }, [appScale]);
+363: 
+364:   // Synchronize Google API Key for tracking dashboard iframe compatibility
+365:   useEffect(() => {
+366:     const googleKey = localStorage.getItem('google_key');
+367:     if (googleKey) {
+368:       localStorage.setItem('google_api_key', googleKey);
+369:     }
+370:   }, [activeTab]);
+371: 
+372:   // Vault data states
+373:   const [vaultItems, setVaultItems] = useState<VaultContent[]>([]);
+374:   const [loadingItems, setLoadingItems] = useState(false);
+375:   const [vaultSelectedIds, setVaultSelectedIds] = useState<string[]>([]);
+376:   const [expandedImageIds, setExpandedImageIds] = useState<string[]>([]);
+377:   const [expandedScriptIds, setExpandedScriptIds] = useState<string[]>([]);
+378: 
+379:   const toggleImages = (itemId: string) => {
+380:     setExpandedImageIds(prev =>
+381:       prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]
+382:     );
+383:   };
+384: 
+385:   const toggleScript = (itemId: string) => {
+386:     setExpandedScriptIds(prev =>
+387:       prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]
+388:     );
+389:   };
+390: 
+391:   // Vault filters state
+392:   const [filterSource, setFilterSource] = useState<string>('all');
+393:   const [filterStatus, setFilterStatus] = useState<string>('all');
+394:   const [filterKeyword, setFilterKeyword] = useState<string>('');
+395:   const [filterMinRating, setFilterMinRating] = useState<number>(0);
+396:   const [sortBy] = useState<string>('newest');
+397:   // Active Terminal log states for SSE streams
+398:   const [logs, setLogs] = useState<{
+399:     canvas: string[];
+400:   }>({
+401:     canvas: ['[SYSTEM] Terminal ready. Select an item and click "Draw Poster" to start...'],
+402:   });
+403: 
+404:   const [runningModule, setRunningModule] = useState<{
+405:     canvas: boolean;
+406:   }>({
+407:     canvas: false,
+408:   });
+409: 
+410:   // SSE event connections
+411:   const sseConnections = useRef<{ [key: string]: EventSource | null }>({
+412:     canvas: null,
+413:   });
+414: 
+415:   // Terminal scroll targets
+416:   const terminalBottoms = {
+417:     canvas: useRef<HTMLDivElement>(null),
+418:   };
+419: 
+420:   // Canvas View Configuration States
+421:   const [approvedItems, setApprovedItems] = useState<VaultContent[]>([]);
+422:   const [canvasAllItems, setCanvasAllItems] = useState<VaultContent[]>([]);
+423:   const [canvasShowAll, setCanvasShowAll] = useState(false);
+424:   const [canvasSearchQuery, setCanvasSearchQuery] = useState('');
+425:   const [canvasSelectedItem, setCanvasSelectedItem] = useState<VaultContent | null>(null);
+426:   const [showCanvasItemMedia, setShowCanvasItemMedia] = useState<boolean>(true);
+427:   const [showCanvasCardDetails, setShowCanvasCardDetails] = useState<boolean>(true);
+428:   const [canvasImportedItems, setCanvasImportedItems] = useState<VaultContent[]>([]);
+429:   const [canvasSelectedIds, setCanvasSelectedIds] = useState<string[]>([]);
+430:   const [canvasQueueIndex, setCanvasQueueIndex] = useState<number | null>(null);
+431:   const [canvasQueueIds, setCanvasQueueIds] = useState<string[]>([]);
+432:   const queueIndexRef = useRef<number | null>(null);
+433:   const queueIdsRef = useRef<string[]>([]);
+434:   const [canvasRatio, setCanvasRatio] = useState<'1:1' | '4:5' | '4:3' | '16:9' | '9:16'>('1:1');
+435:   const [canvasTheme, setCanvasTheme] = useState('Classic Red Blue');
+436:   const [canvasLayout, setCanvasLayout] = useState('top_gainers');
+437:   const [canvasHeadline, setCanvasHeadline] = useState('');
+438:   const [canvasCaption, setCanvasCaption] = useState('');
+439:   const [canvasHeadlineMode, setCanvasHeadlineMode] = useState<'single' | 'triple'>('triple');
+440:   const [canvasHeadlineLine1, setCanvasHeadlineLine1] = useState('');
+441:   const [canvasHeadlineLine2, setCanvasHeadlineLine2] = useState('');
+442:   const [canvasHeadlineLine3, setCanvasHeadlineLine3] = useState('');
+443:   const [generatingCopywriting, setGeneratingCopywriting] = useState(false);
+444:   const [exportDirHandle, setExportDirHandle] = useState<any>(null);
+445:   const [exportFolderName, setExportFolderName] = useState<string>(() => localStorage.getItem('canvas_export_folder_name') || '');
+446:   const [quickViewCopywriting, setQuickViewCopywriting] = useState<VaultContent | null>(null);
+447:   const [quickViewTab, setQuickViewTab] = useState<'post' | 'headlines'>('post');
+448:   const [canvasHighlight, setCanvasHighlight] = useState('');
+449:   const [canvasBgImage, setCanvasBgImage] = useState('');
+450:   const [canvasBgSource, setCanvasBgSource] = useState<'default' | 'stock'>(() => (localStorage.getItem('canvas_bg_source') as any) || 'default');
+490:   const [canvasCalloutHighlight, setCanvasCalloutHighlight] = useState('เคสนี้น่าแชร์');
+491:   const [canvasCalloutPlacement, setCanvasCalloutPlacement] = useState('random');
+492:   const [canvasCalloutSticker, setCanvasCalloutSticker] = useState('random');
+493: 
+494:   // Meme Sticker
+495:   const [canvasShowMeme, setCanvasShowMeme] = useState(false);
+496:   const [canvasMemeText, setCanvasMemeText] = useState('เร็วกว่าเดิม');
+497:   const [canvasMemeSubtext, setCanvasMemeSubtext] = useState('AI ช่วยย่นเวลา');
+498: 
+499:   // Credit, Font scale, Image split
+500:   const [canvasCreditText, setCanvasCreditText] = useState('วางแผนเป็น เห็นทางรวย');
+501:   const [canvasFontScale, setCanvasFontScale] = useState(1.0);
+502:   const [canvasImageSplit, setCanvasImageSplit] = useState(60);
+503:   const [canvasFontFamily, setCanvasFontFamily] = useState('Kanit');
+504:   const [canvasHeadlineAlign, setCanvasHeadlineAlign] = useState<'left' | 'center' | 'right'>('left');
+505:   const [canvasHeadlineMargin, setCanvasHeadlineMargin] = useState<number>(35);
+506:   const [canvasHighlightColorSet, setCanvasHighlightColorSet] = useState<string>('classic');
+507:   const [canvasHighlightPaddingX, setCanvasHighlightPaddingX] = useState<number>(() => {
+508:     const saved = localStorage.getItem('canvas_highlight_padding_x');
+509:     return saved ? Number(saved) : 0.22;
+510:   });
+511:   const [canvasHighlightPaddingY, setCanvasHighlightPaddingY] = useState<number>(() => {
+512:     const saved = localStorage.getItem('canvas_highlight_padding_y');
+513:     return saved ? Number(saved) : 0.09;
+514:   });
+515:   
+516:   // Right side panel preview toggle
+517:   const [previewTab, setPreviewTab] = useState<'live' | 'pillow'>('live');
+518: 
+519:   // Dropbox integration state
+520:   const [dropboxToken, setDropboxToken] = useState<string>(() => localStorage.getItem('dropbox_token') || '');
+521:   const [dropboxFolder, setDropboxFolder] = useState<string>(() => localStorage.getItem('dropbox_folder') || '/ContentFactory/exports');
+522:   const [isUploadingDropbox, setIsUploadingDropbox] = useState(false);
+523:   const [dropboxUploadProgress, setDropboxUploadProgress] = useState('');
+524: 
+525:   // Copywriting styles state
+526:   const [canvasWritingStyle, setCanvasWritingStyle] = useState('ai_trendtech');
+527:   const [canvasHeadlineStyle, setCanvasHeadlineStyle] = useState('ai_clickbait');
+528:   const [canvasImagePromptStyle, setCanvasImagePromptStyle] = useState('trendtech');
+529:   const [rewritingHeadline, setRewritingHeadline] = useState(false);
+530:   
+531:   // Premium Credit Checker States
+532:   const [creditCheckResults, setCreditCheckResults] = useState<{
+533:     label: string;
+534:     keyPreview: string;
+535:     valid: boolean;
+536:     balance: string;
+537:     usage: string;
+538:     isFreeTier?: boolean;
+539:     keyApiLabel?: string;
+540:     error?: string;
+570:       return { valid: true, balance, balanceFormatted, usage, limit, isFreeTier, keyLabel, rawData: data.data };
+571:     } catch (e: any) {
+572:       return {
+573:         valid: false, balance: 0, balanceFormatted: '$0.00', usage: 0, limit: null,
+574:         error: e.message || 'Network error',
+575:       };
+576:     }
+577:   };
+578: 
+579:   // One-click OpenRouter AI copywriting completion using Gemini 2.5 Flash
+580:   const handleAIRewriteHeadline = async () => {
+581:     if (!canvasSelectedItem) {
+582:       alert("⚠️ กรุณาเลือกหัวข้อวัตถุดิบลักษณะการ์ดด้านล่างสุดก่อนกดเกลาครับ");
+583:       return;
+584:     }
+585: 
+586:     const openRouterKey = localStorage.getItem('openrouter_key')?.trim();
+587:     if (!openRouterKey) {
+588:       alert("❌ ไม่พบคีย์ระบบหลังบ้าน OpenRouter API Key!\nกรุณาไปที่แท็บ '⚙️ ตั้งค่าระบบ' (Settings Tab) และกรอกกุญแจในส่วน 'OpenRouter API Key' ก่อนครับ");
+589:       return;
+590:     }
+591: 
+592:     setRewritingHeadline(true);
+593:     try {
+594:       // Find writing style templates
+595:       const activeStyle = PALETTE_WRITING_STYLES.find(s => s.id === canvasWritingStyle);
+596:       const activeHeadlinePack = PALETTE_HEADLINE_STYLES.find(h => h.id === canvasHeadlineStyle);
+597: 
+598:       const postStylePrompt = activeStyle ? activeStyle
+613: 2. "highlight": 1-2 important standout words or names from the headline that should be colored for highlight emphasis (e.g. "Gemini 2.5", "Sub-agents", "Sony AI").
+614: 
+615: Make sure to return only the raw JSON block without any markdown wrappers or backticks. Example:
+616: {"headline": "สร้างกองทัพ AI 15 ตัวด้วย Sub-agent (มีต่อ👇)", "highlight": "Sub-agent"}`;
+617: 
+618:       const userContent = `ARTICLE TITLE: ${canvasSelectedItem.title}
+619: ARTICLE CONTENT:
+620: ${canvasSelectedItem.raw_content || canvasSelectedItem.title}
+621: 
+622: Please rewrite this following the copywriting style tone and output rules above.`;
+623: 
+624:       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+625:         method: "POST",
+626:         headers: {
+627:           "Content-Type": "application/json",
+628:           "Authorization": `Bearer ${openRouterKey}`,
+629:           "HTTP-Referer": "https://contentfactory.antigravity.ai", // Required by OpenRouter
+630:           "X-Title": "Antigravity ContentFactory"
+631:         },
+632:         body: JSON.stringify({
+633:           model: "google/gemini-2.5-flash",
+634:           messages: [
+635:             { role: "system", content: systemPrompt },
+636:             { role: "user", content: userContent }
+637:           ],
+638:           temperature: 0.7,
+639:           response_format: { type: "json_object" }
+640:         })
+641:       });
+642: 
+643:       if (!response.ok) {
+644:         throw new Error(`OpenRouter returned status ${response.status}`);
+645:       }
+646: 
+647:       const data = await response.json();
+648:       const contentText = data.choices?.[0]?.message?.content;
+649:       if (!contentText) {
+650:         throw new Error("Empty response from AI engine");
+651:       }
+652: 
+653:       // Parse JSON response safely
+654:       let parsedResult;
+655:       try {
+656:         parsedResult = JSON.parse(contentText.trim().replace(/^```json\s*|```$/g, ''));
+657:       } catch {
+658:         // Fallback if not pure JSON
+659:         parsedResult = { headline: contentText.trim(), highlight: "" };
+660:       }
+661: 
+662:       if (parsedResult.headline) {
+663:         setCanvasHeadline(parsedResult.headline);
+664:         if (parsedResult.highlight) {
+665:           setCanvasHighlight(parsedResult.highlight);
+666:         }
+667:         alert("✨ ให้ AI เกลาหัวข้อข่าวและปรับสไตล์เรียบร้อยแล้วครับ!");
+668:       }
+669:     } catch (err: any) {
+670:     } catch (err: any) {
+671:       console.error("AI Copywriting rewrite failure:", err);
+672:       alert(`❌ การแปลเรียบเรียงและเกลาด้วย AI ขัดข้อง: ${err.message || err}`);
+673:     } finally {
+674:       setRewritingHeadline(false);
+675:     }
+676:   };
+677: 
+678:   // One-click AI Copywriting Details Suite Generator (Post Caption, Selective Headlines, 3 comments, 3-line headline) for a specific item
+679:   const handleGenerateCopywritingForItem = async (targetItem: VaultContent) => {
+680:     if (!targetItem) return;
+681:     
+682:     setGeneratingCopywriting(true);
+683:     try {
+684:       const activeStyle = PALETTE_WRITING_STYLES.find(s => s.id === canvasWritingStyle);
+685:       const activeHeadlinePack = PALETTE_HEADLINE_STYLES.find(h => h.id === canvasHeadlineStyle);
+686:       const openRouterKey = localStorage.getItem('openrouter_key')?.trim() || '';
+687: 
+688:       const response = await fetch(`${API_BASE}/vault/contents/${targetItem.id}/generate-copywriting`, {
+689:         method: 'POST',
+690:         headers: {
+691:           'Content-Type': 'application/json'
+692:         },
+693:         body: JSON.stringify({
+694:           length: canvasArticleLength,
+695:           font_scale: canvasFontScale,
+696:           writing_style_prompt: activeStyle?.content || '',
+697:           headline_style_examples: activeHeadlinePack?.headlines || [],
+698:           openrouter_key: openRouterKey
+699:         })
+700:       });
+701:       const resData = await response.json
+702: 
+703:         // Update item's copywriting metadata locally immediately
+704:         const updatedItem = {
+705:           ...targetItem,
+706:           selected_headline: joinedHl,
+707:           metadata: {
+708:             ...targetItem.metadata,
+709:             copywriting: resData.data
+710:           }
+711:         };
+712:         
+713:         // If the processed item is currently selected, update the selected state too
+714:         if (canvasSelectedItem && canvasSelectedItem.id === targetItem.id) {
+715:           setCanvasSelectedItem(updatedItem);
+716:         }
+717:         
+718:         // Update the main state list too
+719:         setCanvasImportedItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+720:         setCanvasAllItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+721:         
+722:         // Reload from database to ensure everything is synchronized
+723:         fetchVaultData();
+724:         fetchApprovedItems();
+725:         
+726:         alert("✨ สร้างบทความและจำลองคำโฆษณาเรียบร้อยแล้ว!");
+727:       } else {
+728:         alert("⚠️ " + (resData.error || "เกิดข้อผิดพลาดในการสร้างบทความ"));
+729:       }
+730:     } catch (err) {
+740:     if (!canvasSelectedItem) {
+741:       alert("⚠️ กรุณาเลือกหัวข้อวัตถุดิบลักษณะการ์ดด้านล่างสุดก่อนกดเขียนบทความครับ");
+742:       return;
+743:     }
+744:     await handleGenerateCopywritingForItem(canvasSelectedItem);
+745:   };
+746: 
+747:   // Bulk AI Copywriting Suite Generator for all selected items
+748: 
+749:   // Bulk AI Copywriting Suite Generator for all selected items
+750:   const handleBulkGenerateCopywriting = async () => {
+751:     if (canvasSelectedIds.length === 0) {
+752:       alert("⚠️ กรุณาเลือกหัวข้อไอเดียคอนเทนต์ที่ต้องการเขียนบทความอย่างน้อย 1 รายการก่อนครับ");
+753:       return;
+754:     }
+755: 
+756:     setGeneratingCopywriting(true);
+757:     let successCount = 0;
+758:     try {
+759:       const activeStyle = PALETTE_WRITING_STYLES.find(s => s.id === canvasWritingStyle);
+760:       const activeHeadlinePack = PALETTE_HEADLINE_STYLES.find(h => h.id === canvasHeadlineStyle);
+761:       const openRouterKey = localStorage.getItem('openrouter_key')?.trim() || '';
+762: 
+763:       for (let i = 0; i < canvasSelectedIds.length; i++) {
+764:         const id = canvasSelectedIds[i];
+765:         const item = (canvasShowAll ? canvasAllItems : canvasImportedItems).find(x => x.id === id);
+766:         if (!item) continue;
+767: 
+768:         console.log(`[BULK] Generating AI copywriting for item ${i+1}/${canvasSelectedIds.length}: ${item.title}`);
+769:         const response = await fetch(`${API_BASE}/vault/contents/${item.id}/generate-copywriting`, {
+770:           method: 'POST',
+771:           headers: { 'Content-Type': 'application/json' },
+772:           body: JSON.stringify({
+773:             length: canvasArticleLength,
+774:             font_scale: canvasFontScale,
+775:             writ
+776:           })
+777:         });
+778:         const resData = await response.json();
+779:         if (resData.success) {
+780:           successCount++;
+781: 
+782:           const updatedItem = {
+783:             ...item,
+784:             selected_headline: joinedHl,
+785:             metadata: {
+786: 
+787:           const updatedItem = {
+788:             ...item,
+789:             selected_headline: joinedHl,
+790:             metadata: {
+791:               ...item.metadata,
+792:               copywriting: resData.data
+793:             }
+794:           };
+795: 
+796:           // Update state lists immediately to reflect AI results in real-time
+797:           setCanvasImportedItems(prev => prev.map(x => x.id === updatedItem.id ? updatedItem : x));
+798:           setCanvasAllItems(prev => prev.map(x => x.id === updatedItem.id ? updatedItem : x));
+799: 
+800:           // Also update selected item if currently focused
+801:           if (canvasSelectedItem && canvasSelectedItem.id === item.id) {
+802:             setCanvasSelectedItem(updatedItem);
+803:           }
+804:         }
+805:       }
+806: 
+807:       // Sync and reload DB
+808:       fetchVaultData();
+809:       fetchApprovedItems();
+810: 
+811:       alert(`✨ ประมวลผลและเขียนบทความจำลองพาดหัวด้วย AI สำเร็จทั้งหมด ${successCount}/${canvasSelectedIds.length} รายการ!`);
+812:     } catch (err) {
+813:       console.error("Bulk copywriting generation error:", err);
+814:       alert("⚠️ เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อประมวลผลคำโฆษณาแบบกลุ่ม");
+815:     } finally {
+816:       setGeneratingCopywriting(false);
+817:     }
+818:   };
+819: 
+820:   const handleExportLocal = async () => {
+821:     let activeDirHandle = exportDirHandle;
+822:     if (!activeDirHandle) {
+823:       try {
+824:         activeDirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+825:         setExportDirHandle(activeDirHandle);
+826:         alert('❌ กรุณาเลือกโฟลเดอร์เพื่อเริ่มต้นบันทึกไฟล์ครับ: ' + e.message);
+827:         return;
+828:       }
+829:     }
+830: 
+831:     const idsToExport = canvasSelectedIds.length > 0 
+832:       ? canvasSelectedIds 
+833:       : canvasImportedItems.map(i => i.id);
+834:     
+835:     if (idsToExport.length === 0) {
+836:       alert('⚠️ ไม่มีข้อมูลที่จะส่งออก กรุณาเลือกรายการก่อน');
+837:       return;
+838:     }
+839: 
+840:     try {
+841:       // Call backend export API
+842:       const resp = await fetch(`${API_BASE}/vault/export-local`, {
+843:         method: 'POST',
+844:         headers: { 'Content-Type': 'application/json' },
+845:         body: JSON.stringify({ content_ids: idsToExport })
+846:       });
+847:       
+848:       if (!resp.ok) throw new Error('Export failed');
+849:       const result = await resp.json();
+850:       
+851:       // Download CSV via browser
+852:       if (result.csv_content) {
+853:         const csvBlob = new Blob([result.csv_content], { type: 'text/csv;charset=utf-8;' });
+854:         const csvFile = await activeDirHandle.getFileHandle(
+855:           `content_export_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.csv`, 
+856:           { create: true }
+857:         );
+858:         const writable = await csvFile.createWritable();
+859:         await writable.write(csvBlob);
+860:         await writable.close();
+861:       }
+862: 
+863:       // Download rendered images via browser
+864:       let imgCount = 0;
+865:       if (result.images && result.images.length > 0) {
+866:         for (const img of result.images) {
+867:           try {
+868:             const imgResp = await fetch(`${API_BASE}/vault/media?path=${encodeURIComponent(img.path)}`);
+869:             if (imgResp.ok) {
+870:               const imgBlob = await imgResp.blob();
+871:               const imgFile = await activeDirHandle.getFileHandle(img.filename, { create: true });
+872:               const writable = await imgFile.createWritable();
+873:               await writable.write(imgBlob);
+874:               await writable.close();
+875:               imgCount++;
+876:             }
+877:           } catch (e) { console.warn('Image copy failed:', img.filename, e); }
+878:         }
+879:       }
+880: 
+881:       alert(`✅ ส่งออกสำเร็จ!\n📁 โฟลเดอร์: ${activeDirHandle.name}\n📊 CSV: ${result.total_records} รายการ\n🖼️ รูปภาพ: ${imgCount} ไฟล์`);
+882:     } catch (e: any) {
+883:       console.error('Export error:', e);
+884:       alert('❌ เกิดข้อผิดพลาดในการส่งออก: ' + e.message);
+885:     }
+886:   };
+887: 
+888:       alert('❌ เกิดข้อผิดพลาดในการส่งออก: ' + e.message);
+889:     }
+890:   };
+891: 
+892:   // Interactive Copywriting Rewrite using AI Teacher Feedback Loop
+893:   const handleRewriteCopywritingWithFeedback = async (feedbackText: string) => {
+894:     if (!canvasSelectedItem) return;
+895:     if (!feedbackText.trim()) return alert("⚠️ กรุณากรอกคำแนะนำก่อนสั่งเกลาครับ");
+896:     
+897:     setGeneratingCopywriting(true);
+898:     try {
+899:       const response = await fetch(`${API_BASE}/vault/contents/${canvasSelectedItem.id}/generate-copywriting`, {
+900:         method: 'POST',
+901:         headers: {
+902:           'Content-Type': 'application/json'
+903:         },
+904:         body: JSON.stringify({
+905:           feedback: feedbackText,
+906:           length: canvasArticleLength,
+907:           font_scale: canvasFontScale
+908:           font_scale: canvasFontScale,
+909:           openrouter_key: openRouterKey
+910:         })
+911:       });
+912:       const resData = await response.json();
+913:       if (resData.success) {
+914:         const updatedItem = {
+915:           ...canvasSelectedItem,
+916:           metadata: {
+917:             ...canvasSelectedItem.metadata,
+918:             copywriting: resData.data
+919:           }
+920:         };
+921:         setCanvasSelectedItem(updatedItem);
+922:         setCanvasImportedItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+923:         setCanvasAllItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+924:         fetchVaultData();
+925:         fetchApprovedItems();
+926:         alert("✨ ปรับแก้ไขตามคำติชมเรียบร้อยแล้ว!");
+927:       } else {
+928:         alert("⚠️ " + (resData.error || "เกิดข้อผิดพลาดในการปรับแก้บทความ"));
+929:       }
+930:     } catch (err) {
+931:       console.error("Copywriting feedback rewrite error:", err);
+932:       alert("⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+933:     } finally {
+934:       setGeneratingCopywriting(false);
+935:     }
+936:   };
+937: 
+938:   const fetchSavedLogos = async () => {
+939:     try {
+940:       const res = await fetch(`${API_BASE}/vault/logos`);
+941:       const data = await res.json();
+942:       if (Array.isArray(data)) {
+943:         setSavedLogos(data);
+944:       }
+945:     } catch (err) {
+946:       console.error('Failed to load saved logos:', err);
+947:     }
+948:   };
+949: 
+950:   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+1050:     q.append('meme_text', canvasMemeText);
+1051:     q.append('meme_subtext', canvasMemeSubtext);
+1052: 
+1053:     // Other properties
+1054:     q.append('credit_text', canvasCreditText);
+1055:     q.append('font_scale', String(canvasFontScale));
+1056:     q.append('image_split', String(canvasImageSplit));
+1057:     q.append('font-family', canvasFontFamily);
+1058:     q.append('headline_align', canvasHeadlineAlign);
+1059:     q.append('headline_margin', String(canvasHeadlineMargin));
+1060:     q.append('highlight_color_set', canvasHighlightColorSet);
+1061:     q.append('highlight_padding_x', String(canvasHighlightPaddingX));
+1062:     q.append('highlight_padding_y', String(canvasHighlightPaddingY));
+1063:   };
+1064: 
+1065:   // Auto scroll terminal logs
+1066:   const scrollTerminal = (module: 'canvas') => {
+1067:     setTimeout(() => {
+1068:       terminalBottoms[module].current?.scrollIntoView({ behavior: 'smooth' });
+1069:     }, 50);
+1070:   };
+1071: 
+1072:   // SSE Process Runner Engine
+1073:   const runModule = (module: 'canvas', queryParams: string) => {
+1074:     // Terminate existing SSE
+1075:     if (sseConnections.current[module]) {
+1076:       sseConnections.current[module]?.close();
+1077:     }
+1078: 
+1079:     setLogs(prev => ({
+1080:       ...prev,
+1081:       [module]: [`[SYSTEM] Starting spawned child process for '${module}'...`]
+1082:     }));
+1083:     setRunningModule(prev => ({ ...prev, [module]: true }));
+1084: 
+1085:     const url = `${API_BASE}/orchestrator/run/${module}?${queryParams}`;
+1086:     const source = new Eve
+1087:     sseConnections.current[module] = source;
+1088: 
+1089:     source.onmessage = (event) => {
+1090:       setLogs(prev => ({
+1091:         ...prev,
+1092:         [module]: [...prev[module], event.data]
+1093:       }));
+1094:       scrollTerminal(module);
+1095: 
+1096:       // Check if process finished
+1097:       if (event.data.includes('Exit Code:')) {
+1098:         source.close();
+1099:         setRunningModule(prev => ({ ...prev, [module]: false }));
+1100: 
+1101:    
+1102:         const parsedParams = new URLSearchParams(queryParams);
+1103:         const contentId = parsedParams.get('content_id');
+1104:         
+1105:         if (module === 'canvas') {
+1106:           if (isSuccess && contentId) {
+1107:             // Fetch the newly rendered graphic and append to session
+1108:             fetchNewestGraphic(contentId).then(newG => {
+1109:               if (newG) {
+1110:                 setContentGraphics(prev => {
+1111:                   const updated = [...prev, newG];
+1112:                   setGraphicIndex(updated.length - 1);
+1113:                   setLatestGraphic(newG);
+1114:                   return updated;
+1115:                 });
+1116:               }
+1117:             });
+1118:           }
+1119: 
+1120:           // If queue is active, run next item!
+1121:           if (queueIndexRef.current !== null) {
+1122:             const nextIdx = queueIndexRef.current + 1;
+1123:             setCanvasQueueIndex(nextIdx);
+1124:           } else {
+1125:             setPreviewTab('pillow');
+1126:           }
+1127:         } else if (canvasSelectedItem) {
+1128:           fetchGraphicsForContent(canvasSelectedItem.id);
+1129:           setPreviewTab('pillow');
+1130:         }
+1131:       }
+1132:     };
+1133: 
+1134:     source.onerror = (err) => {
+1135:       console.error(`SSE stream error on ${module}:`, err);
+1136:       setLogs(prev => ({
+1137:         ...prev,
+1138:         [module]: [...prev[module], '[ERROR] การเชื่อมต่อเซิร์ฟเวอร์ขัดข้อง หรือโปรเซสหยุดทำงานกะทันหัน']
+1139:       }));
+1140:       source.close();
+1141:       setRunningModule(prev => ({ ...prev, [module]: false }));
+1142:     };
+1143:   };
+1144: 
+1145:   // Disconnect active processes on unmount
+1146:   useEffect(() => {
+1147:     return () => {
+1148:       Object.keys(sseConnections.current).forEach(key => {
+1149:         if (sseConnections.current[key]) {
+1150:           sseConnections.current[key]?.close();
+1151:   const fetchVaultData = async () => {
+1152:     setLoadingItems(true);
+1153:     try {
+1154:       const q = new URLSearchParams();
+1155:       if (filterSource !== 'all') q.append('source_type', filterSource);
+1156:       if (filterStatus !== 'all') q.append('status', filterStatus);
+1157:   const fetchVaultData = async () => {
+1158:     setLoadingItems(true);
+1159:     try {
+1160:       const q = new URLSearchParams();
+1161:       if (filterSource !== 'all') q.append('source_type', filterSource);
+1162:       if (filterStatus !== 'all') q.append('status', filterStatus);
+1163:       if (filterKeyword) q.append('keyword', filterKeyword);
+1164:       if (filterMinRating > 0) q.append('min_rating', filterMinRating.toString());
+1165:       q.append('sort_by', sortBy);
+1166: 
+1167:       const res = await fetch(`${API_BASE}/vault/contents?${q.toString()}`);
+1168:       const data = await res.json();
+1169:       if (data.success) {
+1170:         setVaultItems(data.data);
+1171:       }
+1172:     } catch (err) {
+1173:       console.error('Failed to load content vault:', err);
+1174:     } finally {
+1175:       setLoadingItems(false);
+1176:     }
+1177:   };
+1178: 
+1179:   // Selection toggles
+1180:   const toggleVaultItemSelection = (id: string) => {
+1181:     setVaultSelectedIds(prev => 
+1182:       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+1183:     );
+1184:   };
+1185: 
+1186:   const toggleSelectAllVaultItems = () => {
+1187:     if (vaultSelectedIds.length === vaultItems.length && vaultItems.length > 0) {
+1188:       setVaultSelectedIds([]);
+1189:     } else {
+1190:       setVaultSelectedIds(vaultItems.map(item => item.id));
+1191:     }
+1192:   };
+1193: 
+1194:   // Client-side Vault CSV Exporter
+1195:   const handleExportVaultCSV = () => {
+1196:     const itemsToExport = vaultSelectedIds.length > 0 
+1197:       ? vaultItems.filter(item => vaultSelectedIds.includes(item.id))
+1198:       : vaultItems;
+1199: 
+1200:     q.append('highlight_padding_x', String(canvasHighlightPaddingX));
+1201:     q.append('highlight_padding_y', String(canvasHighlightPaddingY));
+1202:   };
+1203: 
+1204:   // Auto scroll terminal logs
+1205:   const scrollTerminal = (module: 'canvas') => {
+1206:     setTimeout(() => {
+1207:       terminalBottoms[module].current?.scrollIntoView({ behavior: 'smooth' });
+1208:     }, 50);
+1209:   };
+1210: 
+1211:   // SSE Process Runner Engine
+1212:   const runModule = (module: 'canvas', queryParams: string) => {
+1213:     // Terminate existing SSE
+1214:     if (sseConnections.current[module]) {
+1215:       sseConnections.current[module]?.close();
+1216:     }
+1217: 
+1218:     setLogs(prev => ({
+1219:           // Check newly approved items in canvasSelectedIds
+1220:       [module]: [`[SYSTEM] Starting spawned child process for '${module}'...`]
+1221:     }));
+1222:     setRunningModule(prev => ({ ...prev, [module]: true }));
+1223: 
+1224:     const url = `${API_BASE}/orchestrator/run/${module}?${queryParams}`;
+1225:     const source = new EventSource(url);
+1226:     sseConnections.current[module] = source;
+1227: 
+1228:     source.onmessage = (event) => {
+1229:       setLogs(prev => ({
+1230:         ...prev,
+1231:         [module]: [...prev[module], event.data]
+1232:       }));
+1233:       scrollTerminal(module);
+1234: 
+1235:       // Check if process finished
+1236:       if (event.data.includes('Exit Code:')) {
+1237:         source.close();
+1238:         setRunningModule(prev => ({ ...prev, [module]: false }));
+1239: 
+1240:         const isSuccess = event.data.includes('Exit Code: 0');
+1241:         const parsedParams = new URLSearchParams(queryParams);
+1242:         const contentId = parsedParams.get('content_id');
+1243:         
+1244:         if (module === 'canvas') {
+1245:           if (isSuccess && contentId) {
+1246:             // Fetch the newly rendered graphic and append to session
+1247:             fetchNewestGraphic(contentId).then(newG => {
+1248:               if (newG) {
+1249:                 setContentGraphics(prev => {
+1250:                   const updated = [...prev, newG];
+1251:                   setGraphicIndex(updated.length - 1);
+1252:                   setLatestGraphic(newG);
+1253:                   return updated;
+1254:                 });
+1255:               }
+1256:             });
+1257:           }
+1258: 
+1259:           // If queue is active, run next item!
+1260:           if (queueIndexRef.current !== null) {
+1261:             const nextIdx = queueIndexRef.current + 1;
+1262:             setCanvasQueueIndex(nextIdx);
+1263:           } else {
+1264:             setPreviewTab('pillow');
+1265:           }
+1266:         } else if (canvasSelectedItem) {
+1267:           fetchGraphicsForContent(canvasSelectedItem.id);
+1268:           setPreviewTab('pillow');
+1269:         }
+1270:       }
+1290:       });
+1291:     };
+1292:   }, []);
+1293: 
+1294:   // Fetch Vault list
+1295:   const fetchVaultData = async () => {
+1296:     setLoadingItems(true);
+1297:     try {
+1298:       const q = new URLSearchParams();
+1299:       if (filterSource !== 'all') q.append('source_type', filterSource);
+1300:       if (filterStatus !== 'all') q.append('status', filterStatus);
+1301:       if (filterKeyword) q.append('keyword', filterKeyword);
+1302:       if (filterMinRating > 0) q.append('min_rating', filterMinRating.toString());
+1303:       q.append('sort_by', sortBy);
+1304: 
+1305:       const res = await fetch(`${API_BASE}/vault/contents?${q.toString()}`);
+1306:       const data = await res.json();
+1307:       if (data.success) {
+1308:         setVaultItems(data.data);
+1309:       }
+1310:     } catch (err) {
+1311:       console.error('Failed to load content vault:', err);
+1312:     } finally {
+1313:       setLoadingItems(false);
+1314:     }
+1315:   };
+1316: 
+1317:   // Selection toggles
+1318:   const toggleVaultItemSelection = (id: string) => {
+1319:     setVaultSelectedIds(prev => 
+1320:       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+1321:     );
+1322:   };
+1323: 
+1324:   const toggleSelectAllVaultItems = () => {
+1325:     if (vaultSelectedIds.length === vaultItems.length && vaultItems.length > 0) {
+1326:       setVaultSelectedIds([]);
+1327:     } else {
+1328:       setVaultSelectedIds(vaultItems.map(item => item.id));
+1329:     }
+1330:   };
+1331: 
+1332:   // Client-side Vault CSV Exporter
+1333:   const handleExportVaultCSV = () => {
+1334:     const itemsToExport = vaultSelectedIds.length > 0 
+1335:       ? vaultItems.filter(item => vaultSelectedIds.includes(item.id))
+1336:       : vaultItems;
+1337: 
+1338:     if (itemsToExport.length === 0) {
+1339:       alert('ไม่พบข้อมูลสำหรับดาวน์โหลด CSV');
+1340:       return;
+1341:   const handleSingleImport = async (item: VaultContent) => {
+1342:     if (item.status === 'scraped') {
+1343:       try {
+1344:         await fetch(`${API_BASE}/vault/contents/batch-status`, {
+1345:           method: 'POST',
+1346:           headers: { 'Content-Type': 'application/json' },
+1347:           body: JSON.stringify({ ids: [item.id], status: 'ready_for_design' })
+1348:         });
+1349:         fetchVaultData();
+1350:         fetchApprovedItems();
+1351:       } catch (err) {
+1352:         console.error('Failed to update status on single import:', err);
+1353:       }
+1354:     }
+1355: 
+1356:     setCanvasImportedItems(prev => {
+1357:       if (prev.some(x => x.id === item.id)) return prev;
+1358:       return [...prev, item];
+1359:     });
+1360: 
+1361:     setCanvasSelectedIds(prev => {
+1362:       if (prev.includes(item.id)) return prev;
+1363:       return [...prev, item.id];
+1364:     });
+1365: 
+1366:     setCanvasSelectedItem(item);
+1367:     setActiveTab('canvas');
+1368:   };
+1369: 
+1370:   const handleBatchDelete = async () => {
+1390:   // Synchronize queue index and ids state to refs to prevent stale closure in SSE streams
+1391:   useEffect(() => {
+1392:     queueIndexRef.current = canvasQueueIndex;
+1393:   }, [canvasQueueIndex]);
+1394: 
+1395:   useEffect(() => {
+1396:     queueIdsRef.current = canvasQueueIds;
+1397:   }, [canvasQueueIds]);
+1398: 
+1399:   const runNextQueueItem = async (idx: number, ids: string[]) => {
+1400: 
+1401:   useEffect(() => {
+1402:     queueIdsRef.current = canvasQueueIds;
+1403:   }, [canvasQueueIds]);
+1404: 
+1405:   const runNextQueueItem = async (idx: number, ids: string[]) => {
+1406:     if (idx >= ids.length) {
+1407:       // Completed all items!
+1408:       setCanvasQueueIndex(null);
+1409:       setCanvasQueueIds([]);
+1410:       // Reload lists
+1411:       fetchVaultData();
+1412:       fetchApprovedItems();
+1413:       // Keep the newly populated batch session graphics active in contentGraphics, do not overwrite them!
+1414:       return;
+1415:     }
+1416: 
+1417:     const currentId = ids[idx];
+1418:     const item = (canvasShowAll ? canvasAllItems : canvasImportedItems).find(i => i.id === currentId);
+1419:     if (!item) {
+1420:       // Skip if not found
+1421:       setCanvasQueueIndex(idx + 1);
+1422:       return;
+1423:     }
+1424: 
+1425:     // Set as selected item to show active logs and preview
+1426:     setCanvasSelectedItem(item);
+1427: 
+1428:     const q = new URLSearchParams();
+1429:     q.append('content_id', item.id);
+1430:     q.append('ratio', canvasRatio);
+1431:     q.append('theme', canvasTheme);
+1432:     q.append('layout', canvasLayout);
+1433:     // Use manually typed headline if it is the currently selected active item, otherwise use item headline/title
+1434:     let activeHeadline = '';
+1435:     if (canvasSelectedItem && canvasSelectedItem.id === item.id) {
+1436:       if (canvasHeadlineMode === 'triple') {
+1437:         activeHeadline = [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3].filter(Boo
+1440:       }
+1441:     } else {
+1442:       const h3 = item.metadata?.copywriting?.headline_3line;
+1443:       if (Array.isArray(h3) && h3.filter(Boolean).length > 0) {
+1444:         activeHeadline = h3.filter(Boolean).join('\n');
+1445:         fetchVaultData();
+1446:         
+1447:         // Fetch approved items, then set newly selected item and navigate to Canvas tab
+1448:         const approvedRes = await fetch(`${API_BASE}/vault/contents?status=ready_for_design`);
+1449:         const approvedData = await approvedRes.json();
+1450:         if (approvedData.success && approvedData.data && approvedData.data.length > 0) {
+1451:           setApprovedItems(approvedData.data);
+1452:           
+1453:           // Import newly approved items into canvasImportedItems
+1454:           const newlyApproved = approvedData.data.filter((i: any) => selectedIdsToApprove.includes(i.id));
+1455:           setCanvasImportedItems(prev => {
+1456:             const unique = [...prev];
+1457:             newlyApproved.forEach((item: any) => {
+1458:               if (!unique.some(x => x.id === item.id)) unique.push(item);
+1459:             });
+1460:             return unique;
+1461:           });
+1462: 
+1463:           // Check newly approved items in canvasSelectedIds
+1464:           setCanvasSelectedIds(prev => {
+1465:             const unique = [...prev];
+1466:             selectedIdsToApprove.forEach(id => {
+1467:               if (!unique.includes(id)) unique.push(id);
+1468:             });
+1469:             return unique;
+1470:           });
+1471: 
+1472:           const firstApprovedId = selectedIdsToApprove[0];
+1473:           const newlySelected = approvedData.data.find((i: any) => i.id === firstApprovedId) || approvedData.data[0];
+1474:           setCanvasSelectedItem(newlySelected);
+1475:         }
+1476:         
+1477:         setActiveTab('canvas');
+1478:       }
+1479:     } catch (err) {
+1480:       console.error('Batch approve failed:', err);
+1481:     }
+1482:   };
+1483: 
+1484:   // Single Item Import to Canvas Workspace
+1485:   const handleSingleImport = async (item: VaultContent) => {
+1486:     if (item.status === 'scraped') {
+1487:       try {
+1488:         await fetch(`${API_BASE}/vault/contents/batch-status`, {
+1489:           method: 'POST',
+1490:           headers: { 'Content-Type': 'application/json' },
+1491:           body: JSON.stringify({ ids: [item.id], status: 'ready_for_design' })
+1492:         });
+1493:         fetchVaultData();
+1494:         fetchApprovedItems();
+1495:       } catch (err) {
+1496:         console.error('Failed to update status on single import:', err);
+1497:       }
+1498:     }
+1499: 
+1500:     setCanvasImportedItems(prev => {
+1501:       if (prev.some(x => x.id === item.id)) return prev;
+1502:       return [...prev, item];
+1503:     });
+1504: 
+1505:     setCanvasSelectedIds(prev => {
+1506:       if (prev.includes(item.id)) return prev;
+1507:       return [...prev, item.id];
+1508:     });
+1509: 
+1510:     setCanvasSelectedItem(item);
+1511:     setActiveTab('canvas');
+1512:   };
+1513: 
+1514:   const handleBatchDelete = async () => {
+1515:     if (vaultSelectedIds.length === 0) return;
+1516:       const data = await res.json();
+1517:       if (data.success) {
+1518:         setApprovedItems(data.data);
+1519:       }
+1520:         method: 'POST',
+1521:         headers: { 'Content-Type': 'application/json' },
+1522:         body: JSON.stringify({ ids: vaultSelectedIds })
+1523:       });
+1524:       const data = await res.json();
+1525:       if (data.success) {
+1526:         setVaultSelectedIds([]);
+1527:         fetchVaultData();
+1528:         fetchApprovedItems();
+1529:       }
+1530:     } catch (err) {
+1531:       console.error('Batch delete failed:', err);
+1532:     }
+1533:   };
+1534: 
+1535:   // Synchronize queue index and ids state to refs to prevent stale closure in SSE streams
+1536:   useEffect(() => {
+1537:     queueIndexRef.current = canvasQueueIndex;
+1538:   }, [canvasQueueIndex]);
+1539: 
+1540:   useEffect(() => {
+1541:     queueIdsRef.current = canvasQueueIds;
+1542:   }, [canvasQueueIds]);
+1543: 
+1544:   const runNextQueueItem = async (idx: number, ids: string[]) => {
+1545:     if (idx >= ids.length) {
+1546:       // Completed all items!
+1547:       setCanvasQueueIndex(null);
+1548:       setCanvasQueueIds([]);
+1549:       // Reload lists
+1550:       fetchVaultData();
+1551:       fetchApprovedItems();
+1552:       // Keep the newly populated batch session graphics active in contentGraphics, do not overwrite them!
+1553:       return;
+1554:     }
+1555: 
+1556:     const currentId = ids[idx];
+1557:     const item = (canvasShowAll ? canvasAllItems : canvasImportedItems).find(i => i.id === currentId);
+1558:     if (!item) {
+1559:       // Skip if not found
+1560:       setCanvasQueueIndex(idx + 1);
+1561:       return;
+1562:     }
+1563: 
+1564:     // Set as selected item to show active logs and preview
+1565:     setCanvasSelectedItem(item);
+1566: 
+1567:     const q = new URLSearchParams();
+1568:     q.append('content_id', item.id);
+1569:     q.append('ratio', canvasRatio);
+1570:     q.append('theme', canvasTheme);
+1571:     // Use manually typed headline if it is the currently selected active item, otherwise use item headline/title
+1572:     let activeHeadline = '';
+1573:     if (canvasSelectedItem && canvasSelectedItem.id === item.id) {
+1574:       if (canvasHeadlineMode === 'triple') {
+1575:         activeHeadline = [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3].filter(Boolean).join('\n');
+1576:       } else {
+1577:         activeHeadline = canvasHeadline;
+1578:       }
+1579:     } else {
+1580:       const h3 = item.metadata?.copywriting?.headline_3line;
+1581:       if (Array.isArray(h3) && h3.filter(Boolean).length > 0) {
+1582:         activeHeadline = h3.filter(Boolean).join('\n');
+1583:       } else {
+1584:         activeHeadline = item.selected_headline || item.title;
+1585:       }
+1586:     }
+1587:     q.append('headline', activeHeadline);
+1588:     
+1589:     // Background image source logic
+1590:     let resolvedBgImage = '';
+1591:     if (canvasBgImage && item.media_paths && item.media_paths.includes(canvasBgImage)) {
+1592:       resolvedBgImage = canvasBgImage;
+1593:     } else if (item.media_paths && item.media_paths.length > 0) {
+1594:       resolvedBgImage = item.media_paths[0];
+1595:     }
+1596: 
+1597:     if (canvasBgSource === 'stock' && stockFolder) {
+1598:       try {
+1599:         const stockRes = await fetch(`${API_BASE}/vault/stock-random?folder=${encodeURIComponent(stockFolder)}`);
+1600:         const stockData = await stockRes.json();
+1601:         if (stockData.success && stockData.absolute_path) {
+1602:           q.append('base_image', stockData.absolute_path);
+1603:         } else {
+1604:           if (resolvedBgImage) q.append('base_image', resolvedBgImage);
+1605:         }
+1606:       } catch {
+1607:         if (resolvedBgImage) q.append('base_image', resolvedBgImage);
+1608:       }
+1609:     } else {
+1610:       if (resolvedBgImage) {
+1611:         q.append('base_image', resolvedBgImage);
+1612:       }
+1613:     }
+1614: 
+1615:     // Keyword Highlight
+1616:     let activeHighlight = '';
+1617:     if (canvasSelectedItem && canvasSelectedItem.id === item.id) {
+1618:       activeHighlight = canvasHighlight;
+1619:     } else {
+1620:       activeHighlight = item.metadata?.copywriting?.highlight || '';
+1621:     }
+1622: 
+1623:     if (activeHighlight) {
+1624:       q.append('keywords', activeHighlight);
+1625:     } else {
+1626:       // Fetch fallback keywords from metadata
+1627:       let keywords: string[] = [];
+1628:       if (item.metadata) {
+1629:         const meta = item.metadata;
+1630:         keywords = meta.keywords || meta.tags || [];
+1631:       }
+1632:       if (keywords.length > 0) {
+1633:         q.append('keywords', keywords.join(','));
+1634:       }
+1635:     }
+1636: 
+1637:     // Append custom branding & overlays parameters
+1638:     appendCustomParams(q);
+1639: 
+1640:     // Call runModule
+1641:     runModule('canvas', q.toString());
+1642:   };
+1643: 
+1644:   useEffect(() => {
+1645:     if (canvasQueueIndex !== null) {
+1646:       runNextQueueItem(canvasQueueIndex, canvasQueueIds);
+1647:     }
+1648:   }, [canvasQueueIndex, canvasQueueIds]);
+1649: 
+1650:   // Fetch only approved items for Canvas tab
+1651:   const fetchApprovedItems = async () => {
+1652:     try {
+1653:       const res = await fetch(`${API_BASE}/vault/contents?status=ready_for_design`);
+1654:       const data = await res.json();
+1655:       if (data.success) {
+1656:         setApprovedItems(data.data);
+1657:       }
+1658:     } catch (err) {
+1659:       console.error('Failed to load approved content:', err);
+1660:     }
+1661:   };
+1662: 
+1663:   // Fetch all items (raw scraped & approved) in SQLite for Canvas
+1664:   const fetchAllCanvasItems = async () => {
+1665:     try {
+1666:       const res = await fetch(`${API_BASE}/vault/contents`);
+1667:       const data = await res.json();
+1668:       if (data.success) {
+1669:         setCanvasAllItems(data.data);
+1670:       }
+1671:     } catch (err) {
+1672:       console.error('Failed to load all canvas items:', err);
+1673:     }
+1674:   };
+1675: 
+1676:   // Fetch graphics for a specific content item
+1677:   const fetchGraphicsForContent = async (id: string) => {
+1678:     setLoadingGraphics(true);
+1679:     try {
+1680:       const res = await fetch(`${API_BASE}/vault/contents/${id}/graphics`);
+1681:       const data = await res.json();
+1682:       if (data.success && data.data.length > 0) {
+1683:         setContentGraphics(data.data);
+1684:         setGraphicIndex(0);
+1685:         setLatestGraphic(data.data[0]);
+1686:       } else {
+1687:         setContentGraphics([]);
+1688:         setGraphicIndex(0);
+1689:         setLatestGraphic(null);
+1690:       }
+1691:     } catch (err) {
+1692:       console.error('Failed to load graphics for content:', err);
+1693:       setContentGraphics([]);
+1694:       setGraphicIndex(0);
+1695:       setLatestGraphic(null);
+1696:     } finally {
+1697:       setLoadingGraphics(false);
+1698:     }
+1699:   };
+1700: 
+1701:   // Fetch only the single newest graphic for an item
+1702:   const fetchNewestGraphic = async (id: string): Promise<GraphicItem | null> => {
+1703:     try {
+1704:       const res = await fetch(`${API_BASE}/vault/contents/${id}/graphics`);
+1705:       const data = await res.json();
+1706:       if (data.success && data.data.length > 0) {
+1707:         return data.data[0];
+1708:       }
+1709:     } catch (err) {
+1710:       console.error('Failed to fetch newest graphic:', err);
+1711:     }
+1712:     return null;
+1713:   };
+1714: 
+1715: 
+1716: 
+1717:   // Initial load
+1718:   useEffect(() => {
+1719:     fetchVaultData();
+1720:     fetchApprovedItems();
+1721:     fetchSavedLogos();
+1722: 
+1723:     // Load remembered logo variables if rememberLogo was active
+1724:     const savedRemember = localStorage.getItem('canvas_remember_logo');
+1725:     if (savedRemember === 'true') {
+1726:       setRememberLogo(true);
+1727:       const savedLogoUrl = localStorage.getItem('canvas_logo_url');
+1728:       if (savedLogoUrl) setCanvasLogoUrl(savedLogoUrl);
+1729:       const savedLogoSize = localStorage.getItem('canvas_logo_size');
+1730:       if (savedLogoSize) setCanvasLogoSize(Number(savedLogoSize));
+1731:       const savedLogoMarginX = localStorage.getItem('canvas_logo_margin_x');
+1732:       if (savedLogoMarginX) setCanvasLogoMarginX(Number(savedLogoMarginX));
+1733:       const savedLogoMarginY = localStorage.getItem('canvas_logo_margin_y');
+1734:       if (savedLogoMarginY) setCanvasLogoMarginY(Number(savedLogoMarginY));
+1735:       const savedShowLogo = localStorage.getItem('canvas_show_page_logo');
+1736:       if (savedShowLogo) setCanvasShowPageLogo(savedShowLogo === 'true');
+1737:     }
+1738:   }, [filterSource, filterStatus, filterMinRating, sortBy]);
+1739: 
+1740:   // Save manually updated copywriting metadata to SQLite
+1741:   const handleSaveManuallyUpdatedMetadata = async (itemId: string, updatedCopywriting: any) => {
+1742:     try {
+1743:       const item = (canvasShowAll ? canvasAllItems : canvasImportedItems).find(i => i.id === itemId);
+1744:       if (!item) return;
+1745: 
+1746:       const updatedMetadata = {
+1747:         ...(item.metadata || {}),
+1748:         copywriting: updatedCopywriting
+1749:       };
+1750: 
+1751:       const res = await fetch(`${API_BASE}/vault/contents/${itemId}/metadata`, {
+1752:         method: 'PUT',
+1753:         headers: { 'Content-Type': 'application/json' },
+1754:         body: JSON.stringify({ metadata: updatedMetadata })
+1755:       });
+1756:       const data = await res.json();
+1757:       if (res.ok && data.success) {
+1758:         const updateList = (list: VaultContent[]) => list.map(i => i.id === itemId ? { ...i, metadata: updatedMetadata } : i);
+1759:         setCanvasImportedItems(updateList);
+1760:         setCanvasAllItems(updateList);
+1761:         
+1762:         // Update selected item in local state too
+1763:         if (canvasSelectedItem && canvasSelectedItem.id === itemId) {
+1764:           setCanvasSelectedItem({ ...canvasSelectedItem, metadata: updatedMetadata });
+1765:         }
+1766:         
+1767:         alert('💾 บันทึกการแก้ไขคำโฆษณาและพาดหัวเรียบร้อยแล้ว!');
+1768:       } else {
+1769:         alert(`❌ ไม่สามารถบันทึกได้: ${data.error || 'Unknown error'}`);
+1770:         alert(`❌ ไม่สามารถบันทึกได้: ${data.error || 'Unknown error'}`);
+1771:       }
+1772:     } catch (e: any) {
+1773:       alert(`❌ ข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์: ${e.message}`);
+1774:     }
+1775:   };
+1776: 
+1777:   // Select and persist canvas background image selection silently to SQLite
+1778:   const handleSelectCanvasBgImage = async (item: VaultContent, path: string) => {
+1779:     setCanvasBgImage(path);
+1780: 
+1781:     const finalCopywriting = {
+1782:       ...(item.metadata?.copywriting || {}),
+1783:       selected_bg_image: path
+1784:     };
+1785: 
+1786:       ...(item.metadata || {}),
+1787:       copywriting: finalCopywriting
+1788:     };
+1789: 
+1790:     const updateList = (list: VaultContent[]) => list.map(i => i.id === item.id ? { ...i, metadata: updatedMetadata } : i);
+1791:     setCanvasImportedItems(updateList);
+1792:     setCanvasAllItems(updateList);
+1793:     if (canvasSelectedItem && canvasSelectedItem.id === item.id) {
+1794:       setCanvasSelectedItem({ ...canvasSelectedItem, metadata: updatedMetadata });
+1795:     }
+1796: 
+1797:     try {
+1798:       await fetch(`${API_BASE}/vault/contents/${item.id}/metadata`, {
+1799:         method: 'PUT',
+1800:         headers: { 'Content-Type': 'application/json' },
+1801:         body: JSON.stringify({ metadata: updatedMetadata })
+1802:       });
+1803:     } catch (e) {
+1804:       console.error('Failed to auto-save selected canvas background image:', e);
+1805:     }
+1806:   };
+1807: 
+1808:   // Load canvas selection details
+1809:   useEffect(() => {
+1810:       } else {
+1811:         alert(`❌ ไม่สามารถเลือกรูปอัตโนมัติได้: ${data.error || 'เกิดข้อผิดพลาดในการวิเคราะห์'}`);
+1812:       }
+1813:     } catch (error: any) {
+1814:       alert(`❌ ข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์: ${error.message}`);
+1815:     } finally {
+1816:       setIsAutoSelectingBg(false);
+1817:     }
+1818:   };
+1819: 
+1820:   // Select and persist canvas background image selection silently to SQLite
+1821:   const handleSelectCanvasBgImage = async (item: VaultContent, path: string) => {
+1822:     setCanvasBgImage(path);
+1823: 
+1824:     const finalCopywriting = {
+1825:       ...(item.metadata?.copywriting || {}),
+1826:       } else {
+1827:         setCanvasBgImage('');
+1828:       }
+1829:       // ONLY fetch graphics manually or during rendering sessions, do not auto-fetch history to maintain clean session renders!
+1830:     } else {
+1831:       setCanvasHeadline('');
+1832:       setCanvasCaption('');
+1833:       setCanvasHeadlineLine1('');
+1834:       setCanvasHeadlineLine2('');
+1835:       setCanvasHeadlineLine3('');
+1836:       setCanvasHighlight('');
+1837:       setCanvasBgImage('');
+1838:       setContentGraphics([]);
+1839:       setGraphicIndex(0);
+1840:       setLatestGraphic(null);
+1860:             <span>📊 ติดตามงาน (Work Tracking)</span>
+1861:           </button>
+1862: 
+1863:           <button 
+1864:             className={`sidebar-btn ${activeTab === 'settings' ? 'active' : ''}`}
+1865:             onClick={() => setActiveTab('settings')}
+1866:           >
+1867:             <Sliders className="w-5 h-5" />
+1868:             <span>⚙️ ตั้งค่าระบบ (Settings)</span>
+1869:           </button>
+1870:         </nav>
+1871:   
+1872:           <div className="p-4 m-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
+1873:             <div className="flex items-center gap-2 mb-2">
+1874:               <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></div>
+1875:               <span className="text-xs font-semibold text-emerald-400">SERVER ONLINE</span>
+1876:             </div>
+1877:             <p className="text-[11px] text-slate-500">Express Backend running at port 5005. Safe SQLite Pool DB active.</p>
+1878:           </div>
+1879:         </aside>
+1880: 
+1881:       {/* Main Panel Content */}
+1882:       <main className="main-content">
+1883:         <header className="header-bar">
+1884:           <div>
+1885:             <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+1886:               {activeTab === 'discovery' && '🧭 Discovery Portal | ระบบดักจับไอเดียข้ามโซเชียล'}
+1887:               {activeTab === 'vault' && '📂 Vault Manager | คลังวิเคราะห
+1900:               {activeTab === 'settings' && 'ปรับแต่งระดับการสเกลโปรแกรม ขนาดตัวอักษรและปุ่ม จัดการคีย์ API สำหรับ Scrapers / AI และบันทึกโทเคนเพจเฟซบุ๊กออฟไลน์'}
+1901: 
+1902:             </p>
+1903:           </div>
+1904:           <div className="flex items-center gap-3">
+1905:               {activeTab === 'avatar-video' && 'สุ่มฟุตเทจ B-Roll ปิดเสียงซ้อนทับกรีนสกรีนหรือแบ่งหน้าจอ เจนพาดหัว Hook AI และเบิร์นซับไตเติ้ลภาษาไทยเว้นวรรคคำ'}
+1906:               {activeTab === 'podcast-clip' && 'สุ่มหยิบฟุตเทจ B-Roll จากโฟลเดอร์ดิบ มา Concat เรียงซ้อนทับไฟล์เสียงเสียงพากย์ บังคับ Scale/Crop และรักษาระยะเวลาตามความยาวเสียงเป๊ะ'}
+1907:               {activeTab === 'dropbox-csv' && 'เชื่อมต่อ Dropbox → AI Prompt → Google Sheets / CSV อัตโนมัติ ปรับระดับการประมวลผลวิดีโอและรูปภาพ'}
+1908:               {activeTab === 'tracking' && 'เชื่อมต่อ Google Sheets ดึงข้อมูล Stock ของนักตัดต่อและคลังบทความโดยตรง สรุปเปรียบเทียบในรูปแบบแผนภูมิกราฟิก'}
+1909:               {activeTab === 'settings' && 'ปรับแต่งระดับการสเกลโปรแกรม ขนาดตัวอักษรและปุ่ม จัดการคีย์ API สำหรับ Scrapers / AI และบันทึกโทเคนเพจเฟซบุ๊กออฟไลน์'}
+1910: 
+1911:           {/* TAB 1: DISCOVERY PORTAL */}
+1912:           {activeTab === 'discovery' && (
+1913:             <DiscoveryPortal 
+1914:               onApprove={() => {
+1915:                 fetchVaultData();
+1916:                 fetchApprovedItems();
+1917:               }} 
+1918:             />
+1919:           )}
+1920: 
+1921:           {/* TAB 2: VAULT MANAGER */}
+1922:           {activeTab === 'vault' && (
+1923:             <div className="space-y-6">
+1924:               
+1925:               {/* Horizontal Filters Glass Panel */}
+1926:               <div className="glass-panel p-6 flex flex-wrap items-center gap-6 justify-between">
+1927:                 <div className="flex flex-wrap items-center gap-6">
+1928:                   
+1929:                   {/* Filter source */}
+1930:                   <div>
+1970:             return <span key={idx} className="text-white">{part}</span>;
+1971:           });
+1972:         }
+1973:       }
+1974:       return (
+1975:         <span key={lineIdx} style={{ display: 'block', minHeight: line.trim() ? 'auto' : '1.2em' }}>
+1976:           {content}
+1977:         </span>
+1978:       );
+1979:     });
+1980:   };
+1981: 
+1982:   return (
+1983:     <div className="app-container">
+1984:       {/* Sidebar Section */}
+1985:       <aside className="sidebar">
+1986:         <div className="sidebar-logo">
+1987:           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-400 to-pink-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+1988:             <Cpu className="w-4 h-4 text-slate-900" />
+1989:           </div>
+1990:           <span className="sidebar-logo-text font-bold">CONTENT V2</span>
+1995:                 <div className="flex items-center gap-3">
+1996:                   <button 
+1997:                     onClick={() => {
+1998:                       setFilterSource('all');
+1999:                       setFilterStatus('all');
+2000:                       setFilterKeyword('');
+2001:                       setFilterMinRating(0);
+2002:                     }}
+2003:                     className="px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs font-medium text-slate-400 hover:text-white"
+2004:                   >
+2005:                     ล้างการกรอง
+2006:                   </button>
+2007:                   <button 
+2008:                     onClick={fetchVaultData}
+2009:                     className="btn-neon btn-neon-cyan px-3.5 py-2 text-xs"
+2010:                   >
+2011:                     <RefreshCw className="w-3.5 h-3.5" />
+2012:                     <span>รีเฟรชข้อมูล</span>
+2013:                   </button>
+2014:                 </div>
+2015:               </div>
+2016: 
+2017:               {/* Main Content Grid (Full-Width) */}
+2018:               <div className="grid grid-cols-1 gap-8">
+2019:                 
+2020:                 {/* Vault Data Table */}
+2021:                 <div className="glass-panel overflow-hidden">
+2022:                   
+2023:                   {/* Floating / Inline Batch Operations Panel */}
+2024:                   {vaultSelectedIds.length > 0 && (
+2025:                     <div className="p-4 bg-gradient-to-r from-cyan-950/40 to-pink-950/40 border-b border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 backdrop-blur-md transition-all">
+2257:                       {isCheckingCredits ? '⚙️ กำลังตรวจ...' : '💰 เช็คเครดิต API'}
+2258:                     </button>
+2259:                     <button
+2260:                       onClick={async () => {
+2261:                         try {
+2262:                           const openRouterKey = localStorage.getItem('openrouter_key')?.trim();
+2263:                           if (!openRouterKey) {
+2264:                             setCreditCheckResults([{label: 'ไม่พบ API Key', keyPreview: '-', valid: false, balance: '-', usage: '-', error: 'ไม่พบ Key'}]);
+2265:                             return;
+2266:                           }
+2267:                           const testModel = 'google/gemini-2.5-flash';
+2268:                           setCreditCheckResults([{label: `🧪 กำลังทดสอบ ${testModel}...`, keyPreview: String(openRouterKey || '').slice(0,8)+'...'+String(openRouterKey || '').slice(-4), valid: true, balance: 'กำลังทดสอบ...', usage: '-'}]);
+2269:                           const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+2270:                             method: 'POST',
+2271:                             headers: {
+2272:                               'Content-Type': 'application/json',
+2273:                               'Authorization': `Bearer ${openRouterKey}`,
+2274:                               'HTTP-Referer': window.location.origin,
+2275:                             },
+2276:                             body: JSON.stringify({ model: testModel, messages: [{role:'user',content:'ตอบแค่คำว่า "OK"'}], max_tokens: 5 })
+2277:                           });
+2278:                           const data = await res.json();
+2279:                           if (res.ok && !data.error) {
+2320:             </div>
+2321:           )}
+2322:           
+2323:           {/* TAB 3: GRAPHIC CANVAS WORKSPACE */}
+2324:           {activeTab === 'canvas' && (
+2325:             <div className="space-y-6 w-full">
+2326:               
+2327:               {/* ⚙️ ตั้งค่าพื้นฐาน (Basic Configurations) */}
+2328:               <div className="glass-panel p-6">
+2329:                 <div className="flex flex-wrap items-center justify-between gap-4 mb-4 border-b border-slate-850 pb-2.5">
+2330:                   <h2 className="text-md font-bold text-cyan-400 flex items-center gap-2">
+2331:                     ⚙️ ตั้งค่าพื้นฐาน
+2332:                   </h2>
+2333:                   <div className="flex items-center gap-2">
+2334:                     <button
+2335:                       onClick={async () => {
+2336:                         setIsCheckingCredits(true);
+2337:                         setCreditCheckResults([]);
+2338:                         try {
+2339:                           const openRouterKey = localStorage.getItem('openrouter_key')?.trim();
+2340:                           if (!openRouterKey) {
+2341:                             setCreditCheckResults([{
+2342:                               label: 'ไม่พบ API Key',
+2343:                               keyPreview: '-',
+2344:                               valid: false,
+2345:                               balance: '$0',
+2346:                               usage: '$0',
+2347:                               error: 'กรุณาต
+2421:                           <div className={`p-3 rounded-lg border text-xs ${r.valid ? 'bg-emerald-950/20 border-emerald-500/20' : 'bg-red-950/20 border-red-500/20'}`}>
+2422:                           <div className="flex items-center gap-2 font-bold mb-2">
+2423:                             <span>{r.valid ? '✅' : '❌'}</span>
+2424:                             <span className={r.valid ? 'text-emerald-400' : 'text-red-400'}>{r.label}</span>
+2425:                           </div>
+2426:                           <div className="text-[11px] text-slate-400 space-y-1 ml-6">
+2427:                             <div>Key Preview: <span className="text-slate-300 font-mono">{r.keyPreview}</span></div>
+2428:                             {r.valid ? (
+2429:                               <>
+2430:                                 {r.isFreeTier && <div>⚠️ Tier: <span className="text-amber-400 font-bold">Free Tier (จำกัดการเรียกใช้งาน)</span></div>}
+2431:                                 {!r.isFreeTier && <div>Tier: <span className="text-emerald-400 font-semibold">Paid Tier (ใช้งานปกติ)</span></div>}
+2432:                                 <div>ยอดเงินคงเหลือ: <span className="text-emerald-400 font-bold">{r.balance}</span></div>
+2433:                                 <div>ใช้งานไปแล้ว: <span className="text-yellow-400 font-semibold">{r.usage}</span></div>
+2434:                               </>
+2435:                             ) : (
+2436:                               <div className="text-red-400">ข้อผิดพลาด: {r.error}</div>
+2437:                             )}
+2438:                           </div>
+2439:                         </div>
+2440:                       ))}
+3280:                         </div>
+3281:                       )}
+3282:                     </div>
+3283:                     {/* Canvas Item Selector with search filter and imported V1 toggle (Moved to very bottom) */}
+3284:                     <div className="md:col-span-2 space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-850 mt-4">
+3285:                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+3286:                         <label className="text-xs font-semibold text-slate-300">
+3287:                           🎯 เลือกหัวข้อวัตถุดิบมาเขียนรูป (Select Content Idea)
+3288:                         </label>
+3289:                         {canvasSearchFiltered.length > 0 && (
+3290:                           <label className="flex items-center gap-2 cursor-pointer select-none">
+3291:                             <input 
+3292:                               type="checkbox" 
+3293:                               checked={canvasSearchFiltered.length > 0 && canvasSelectedIds.length === canvasSearchFiltered.length}
+3294:                               onChange={() => {
+3295:                                 if (canvasSelectedIds.length === canvasSearchFiltered.length) {
+3296:                                   setCanvasSelectedIds([]);
+3297:                                 } else {
+3298:                                   setCanvasSelectedIds(canvasSearchFiltered.map(i => i.id));
+3299:                                 }
+3300:                         
+3348:                             <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+3349:                               {/* Headline Style */}
+3350:                               </h3>
+3351:                               <span className="ml-auto px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-bold border border-purple-500/30">
+3352:                                 {canvasSelectedIds.length} รายการ
+3353:                               </span>
+3354:                             </div>
+3355: 
+3356:                             {/* Dropdowns Row */}
+3357:                             <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+3358:                               {/* Headline Style */}
+3359:                               <div>
+3360:                                 <label className="block text-[10px] font-bold text-purple-300/80 mb-1 uppercase tracking-wider">
+3361:                                   🎯 สไตล์พาดหัว
+3362:                                 </label>
+3363:                                 <select
+3364:                                   value={canvasHeadlineStyle}
+3365:                                   onChange={(e) => setCanvasHeadlineStyle(e.target.value)}
+3366:                                   className="w-full h-9 text-[11px] rounded-lg border border-purple-500/30 bg-slate-950/80 text-white font-medium cursor-pointer px-2.5 focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-400/30 transition-all"
+3367:                                 >
+3368:                                   <option value="">-- เลือกสไตล์พาดหัว --</option>
+3369:                                
+3370:                                 </label>
+3371:                                 <select
+3372:                                   value={canvasWritingStyle}
+3373:                                   onChange={(e) => setCanvasWritingStyle(e.target.value)}
+3374:                                   className="w-full h-9 text-[11px] rounded-lg border border-purple-500/30 bg-slate-950/80 text-white font-medium cursor-pointer px-2.5 focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-400/30 transition-all"
+3375:                                 >
+3376:                                   <option value="">-- เลือกสไตล์การเขียนโพส --</option>
+3377:                                   {PALETTE_WRITING_STYLES.map(s => (
+3378:                                     <option key={s.id} value={s.id}>{s.name}</option>
+3379:                                   ))}
+3380:                                 </select>
+3381:                               </div>
+3382:                             </div>
+3383: 
+3384:                             {/* Validation hint */}
+3385:                             {(!canvasHeadlineStyle || !canvasWritingStyle) && (
+3386:                               <p className="text-[10px] text-amber-400/80 mb-2 flex items-center gap-1">
+3387:                                 ⚠️ กรุณาเลือกสไตล์พาดหัวและสไตล์การเขียนโพสให้ครบทั้ง 2 ช่องก่อนกดปุ่ม
+3388:                               </p>
+3389:                             )}
+3390:                               </div>
+3391:                             </div>
+3392: 
+3393:                             {/* Validation hint */}
+3394:                             {(!canvasHeadlineStyle || !canvasWritingStyle) && (
+3395:                               <p className="text-[10px] text-amber-400/80 mb-2 flex items-center gap-1">
+3396:                                 ⚠️ กรุณาเลือกสไตล์พาดหัวและสไตล์การเขียนโพสให้ครบทั้ง 2 ช่องก่อนกดปุ่ม
+3397:                               </p>
+3398:                             )}
+3399: 
+3400:                             {/* Big Action Button */}
+3401:                             <button
+3402:                               type="button"
+3403:                               disabled={generatingCopywriting || !canvasHeadlineStyle || !canvasWritingStyle}
+3404:                               onClick={handleBulkGenerateCopywriting}
+3405:                               className="relative w-full rounded-xl font-black text-sm flex items-center justify-center gap-3"
+3406:                               style={{
+3407:                                 background: generatingCopywriting
+3408:                                   ? 'rgba(20, 83, 45, 0.3)'
+3409:                                   : (!canvasHeadlineStyle || !canvasWritingStyle)
+3410:                                     ? 'rgba(30, 41, 59, 0.5)'
+3411:                                     : 'linear-gradient(90deg, #22c55e, #34d399, #22c55e)',
+3412:                                 color: generatingCopywriting
+3413:                                   ? '#4ade80'
+3414:                                   : (!canvasHeadlineStyle || !canvasWritingStyle)
+3415:                                     ? '#64748b'
+3416:                                     : '#0a0a0a',
+3417:                                 border: generatingCopywriting
+3418:                                   ? '2px solid rgba(22, 101, 52, 0.4)'
+3419:                                   : (!canvasHeadlineStyle || !canvasWritingStyle)
+3420:                                     ? '1px solid rgba(51, 65, 85, 0.4)'
+3421:                                     : '2px solid #4ade80',
+3422:                                 padding: '14px 20px',
+3423:                                 borderRadius: '12px',
+3424:                                 boxShadow: generatingCopywriting
+3425:                                   ? 'none'
+3426:                                   : (!canvasHeadlineStyle || !canvasWritingStyle)
+3427:                                     ? 'none'
+3428:                                     : '0 0 25px rgba(34,197,94,0.6), 0 0 50px rgba(34,197,94,0.2)',
+3429:                                 fontWeight: 900,
+3430:                     {/* Canvas Item Selector with search filter and imported V1 toggle (Moved to very bottom) */}
+3431:                     <div className="md:col-span-2 space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-850 mt-4">
+3432:                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+3433:                         <label className="text-xs font-semibold text-slate-300">
+3434:                           🎯 เลือกหัวข้อวัตถุดิบมาเขียนรูป (Select Content Idea)
+3435:                         </label>
+3436:                         {canvasSearchFiltered.length > 0 && (
+3437:                           <label className="flex items-center gap-2 cursor-pointer select-none">
+3438:                             <input 
+3439:                               type="checkbox" 
+3440:                               checked={canvasSearchFiltered.length > 0 && canvasSelectedIds.length === canvasSearchFiltered.length}
+3441:                               onChange={() => {
+3442:                                 if (canvasSelectedIds.length === canvasSearchFiltered.length) {
+3443:                                   setCanvasSelectedIds([]);
+3444:                                 } else {
+3445:                                   setCanvasSelectedIds(canvasSearchFiltered.map(i => i.id));
+3446:                                 }
+3447:                               }}
+3448:                               className="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-slate-900 bg-slate-950/80 cursor-pointer accent-cyan-400"
+3449:                             />
+3450:                             )}
+3451:                           </div>
+3452:                           {stockFolderLog && (
+3453:                             <p className="text-[9px] text-slate-400 text-center font-medium mt-1">
+3454:                               {stockFolderLog}
+3455:                             </p>
+3456:                           )}
+3457:                           {!stockFolder && (
+3458:                             <p className="text-[9px] text-amber-500 text-center font-semibold mt-1">
+3459:                               ⚠️ กรุณาเลือกโฟลเดอร์ Stock ก่อนเรนเดอร์
+3460:                             </p>
+3461:                           )}
+3462:                         </div>
+3463:                       )}
+3464:                     </div>
+3465:                             >
+3466:                               <FolderOpen className="w-3.5 h-3.5 shrink-0" />
+3467:                               <span className="truncate">
+3468:                                 {stockFolder ? `📂 Stock: ${stockFolderName}` : '📂 เลือกโฟลเดอร์ Stock...'}
+3469:                               </span>
+3470:                             </button>
+3471:                             {stockFolder && (
+3472:                               <button
+3473:                                 type="button"
+3474:                                 onClick={async () => {
+3475:                                   try {
+3476:                                     const stockRes = await fetch(`${API_BASE}/vault/stock-random?folder=${encodeURIComponent(stockFolder)}`);
+3477:                                     const stockData = await stockRes.json();
+3478:                                     if (stockData.success && stockData.absolute_path) {
+3479:                                       setCanvasBgImage(stockData.absolute_path);
+3480:                                       setStockFolderLog(`🎲 สุ่มภาพสำเร็จ! ${stockData.absolute_path.split('/').pop()}`);
+3481:                                     } else {
+3482:                                       alert(`⚠️ ${stockData.error || 'ไม่สามารถดึงรูปภาพสุ่มได้'}`);
+3483:                                     }
+3484:                                   } catch (err: any) {
+3485:                                     alert(`❌ ไม่สามารถเชื่อมต่อระบบสุ่มภาพได้: ${err.message}`);
+3486:                                   }
+3487:                                 }}
+3488:                                 className="flex items-center justify-center gap-1 px-3 py-1.5 border border-cyan-500/40 bg-cyan-500/5 text-cyan-400 rounded-lg text-[10px] font-bold hover:bg-cyan-500/10 active:scale-98 transition-all cursor-pointer shrink-0"
+3489:                               >
+3490:                                 <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+3491:                                 <span>สุ่มใหม่</span>
+3492:                               </button>
+3493:                             )}
+3494:                           </div>
+3495:                           {stockFolderLog && (
+3496:                             <p className="text-[9px] text-slate-400 text-center font-medium mt-1">
+3497:                               {stockFolderLog}
+3498:                             </p>
+3499:                           )}
+3500:                           {!stockFolder && (
+3501:                             <p className="text-[9px] text-amber-500 text-center font-semibold mt-1">
+3502:                               ⚠️ กรุณาเลือกโฟลเดอร์ Stock ก่อนเรนเดอร์
+3503:                             </p>
+3504:                           )}
+3505:                         </div>
+3506:                       )}
+3507:                     </div>
+3508:                     {/* Canvas Item Selector with search filter and imported V1 toggle (Moved to very bottom) */}
+3509:                     <div className="md:col-span-2 space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-850 mt-4">
+3510:                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+3511:                         <label className="text-xs font-semibold text-slate-300">
+3512:                           🎯 เลือกหัวข้อวัตถุดิบมาเขียนรูป (Select Content Idea)
+3513:                         </label>
+3514:                         {canvasSearchFiltered.length > 0 && (
+3515:                           <label className="flex items-center gap-2 cursor-pointer select-none">
+3516:                             <input 
+3517:                               type="checkbox" 
+3518:                               checked={canvasSearchFiltered.length > 0 && canvasSelectedIds.length === canvasSearchFiltered.length}
+3519:                               onChange={() => {
+3520:                                 if (canvasSelectedIds.length === canvasSearchFiltered.length) {
+3521:                                   setCanvasSelectedIds([]);
+3522:                                 } else {
+3523:                                   setCanvasSelectedIds(canvasSearchFiltered.map(i => i.id));
+3524:                                 }
+3525:                               }}
+3526:                               className="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-slate-900 bg-slate-950/80 cursor-pointer accent-cyan-400"
+3527:                             />
+3528:                             <span className="text-[10px] font-bold text-slate-400">เลือกทั้งหมดเพื่อสร้างโพสรูป ({canvasSearchFiltered.length} รายการ)</span>
+3529:                           </label>
+3530:                         )}
+3531:                       </div>
+3532: 
+3533:                       <div className="flex gap-2">
+3534:                         <div className="relative flex-1">
+3535:                           <input 
+3536:                             type="text" 
+3537:                             value={canvasSearchQuery}
+3538:                             onChange={e => setCanvasSearchQuery(e.target.value)}
+3539:                             placeholder="🔍 พิมพ์คำค้นหาโพสต์ เช่น TechFeed, Llama, AI..."
+3540:                             className="glass-input py-2 text-xs pl-8 bg-black/40"
+3541:                           />
+3542:                           <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-3" />
+3543:                         </div>
+3544:                         {canvasSearchQuery && (
+3545:                           <button 
+3546:                             onClick={() => setCanvasSearchQuery('')}
+3547:                             className="px-2.5 py-2 text-xs bg-slate-900 border border-slate-800 text-slate-400 rounded-lg hover:text-white"
+3548:                           >
+3549:                             ล้าง
+3550:                           </button>
+3551:                         )}
+3552:                       </div>
+3553: 
+3554:                       {/* Bulk AI Copywriting Generation — Prominent Card */}
+3555:                       {canvasSelectedIds.length > 0 && (
+3556:                         <div className="pt-1.5 pb-2 animate-fade-in w-full">
+3557:                           <div className="relative overflow-hidden rounded-2xl border-2 border-purple-500/40 bg-gradient-to-br from-purple-950/60 via-slate-950/80 to-indigo-950/60 p-4 shadow-2xl shadow-purple-500/10">
+3558:                             {/* Glow effect */}
+3559:                             <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-fuchsia-500/10 to-indigo-500/5 pointer-events-none" />
+3560:                             
+3561:                             {/* Header */}
+3562:                             <div className="relative flex items-center gap-2 mb-3 pb-2 border-b border-purple-500/20">
+3563:                               <Sparkles className="w-5 h-5 text-fuchsia-400 animate-pulse" />
+3564:                               <h3 className="text-sm font-black text-white tracking-tight">
+3565:                                 ✍️ สั่ง AI เขียนบทความและพาดหัว
+3566:                               </h3>
+3567:                               <span className="ml-auto px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-bold border border-purple-500/30">
+3568:                                 {canvasSelectedIds.length} รายการ
+3569:                               </span>
+3570:                             </div>
+3571: 
+3572:                             {/* Dropdowns Row */}
+3573:                             <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+3574:                               {/* Headline Style */}
+3575:                               <div>
+3576:                                 <label className="block text-[10px] font-bold text-purple-300/80 mb-1 uppercase tracking-wider">
+3577:                                   🎯 สไตล์พาดหัว
+3578:                                 </label>
+3579:                                 <select
+3580:                                   value={canvasHeadlineStyle}
+3581:                                   onChange={(e) => setCanvasHeadlineStyle(e.target.value)}
+3582:                                   className="w-full h-9 text-[11px] rounded-lg border border-purple-500/30 bg-slate-950/80 text-white font-medium cursor-pointer px-2.5 focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-400/30 transition-all"
+3583:                                 >
+3584:                                   <option value="">-- เลือกสไตล์พาดหัว --</option>
+3585:                                   {PALETTE_HEADLINE_STYLES.map(h => (
+3586:                                     <option key={h.id} value={h.id}>{h.name}</option>
+3587:                                   ))}
+3588:                                 </select>
+3589:                               </div>
+3590:                               
+3591:                               {/* Writing Style */}
+3592:                
+3593:                       padding: '10px 12px',
+3594:                       borderRadius: '10px',
+3595:                       border: '1px solid rgba(63, 63, 70, 0.5)',
+3596:                       background: 'rgba(15, 23, 42, 0.4)',
+3597:                     }}>
+3598:                       <div className="flex items-center gap-2" style={{ marginBottom: '8px' }}>
+3599:                         <ImageIcon className="w-3.5 h-3.5" style={{ color: '#94a3b8' }} />
+3600:                         <span style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+3626:                                     ? 'rgba(30, 41, 59, 0.5)'
+3627:                                     : 'linear-gradient(90deg, #22c55e, #34d399, #22c55e)',
+3628:                                 color: generatingCopywriting
+3629:                                   ? '#4ade80'
+3630:                                   : (!canvasHeadlineStyle || !canvasWritingStyle)
+3631:                                     ? '#64748b'
+3632:                                     : '#0a0a0a',
+3633:                                 border: generatingCopywriting
+3634:                                   ? '2px solid rgba(22, 101, 52, 0.4)'
+3635:                                   : (!canvasHeadlineStyle || !canvasWritingStyle)
+3636:                                     ? '1px solid rgba(51, 65, 85, 0.4)'
+3637:                                     : '2px solid #4ade80',
+3638:                                 padding: '14px 20px',
+3639:                                 borderRadius: '12px',
+3640:                                 boxShadow: generatingCopywriting
+3641:                                   ? 'none'
+3642:                                   : (!canvasHeadlineStyle || !canvasWritingStyle)
+3643:                                     ? 'none'
+3644:                                     : '0 0 25px rgba(34,197,94,0.6), 0 0 50px rgba(34,197,94,0.2)',
+3645:                                 fontWeight: 900,
+3646:                                 fontSize: '0.875rem',
+3647:                                 cursor: generatingCopywriting ? 'wait' : (!canvasHeadlineStyle || !canvasWritingStyle) ? 'not-allowed' : 'pointer',
+3648:                                 transition: 'all 0.3s ease',
+3649:                                 opacity: (generatingCopywriting || !canvasHeadlineStyle || !canvasWritingStyle) ? 0.85 : 1,
+3650:                               }}
+3651:                             >
+3652:                               {generatingCopywriting ? (
+3653:                                 <>
+3654:                                   <RefreshCw className="w-5 h-5 animate-spin" style={{ color: '#86efac' }} />
+3655:                                   <span>กำลังใช้ AI เขียนบทความแบบกลุ่ม... ({canvasSelectedIds.length} รายการ)</span>
+3656:                                 </>
+3657:                               ) : (
+3658:                                 <>
+3659:                                   <Sparkles className="w-5 h-5" />
+3660:                                   <span>🚀 เริ่มสั่ง AI เขียนบทความและพาดหัวทั้งหมด ({canvasSelectedIds.length} รายการ)</span>
+3661:                                 </>
+3662:                               )}
+3663:                             </button>
+3664: 
+3665:                             {/* Toggle Logs and Detailed Terminal Panel */}
+3666:                             <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-800/80">
+3667:                               <span className="text-[10px] text-slate-400 font-bold">📜 AI Copywriting Logs</span>
+3668:                               <button
+3669:                                 type="button"
+3670:                                 onClick={() => setShowCanvasLogs(!showCanvasLogs)}
+3671:                                 className="px-2.5 py-0.5 r
+3672:                                   <div className="mt-4 pt-3 border-t border-slate-800/80 text-left w-full" onClick={(e) => e.stopPropagation()}>
+3673:                                     {/* Collapsible Header Bar */}
+3674:                                     <button
+3675:                                       type="button"
+3676:                                       onClick={() => setShowCanvasCardDetails(prev => !prev)}
+3677:                                       style={{
+3678:                                         width: '100%',
+3679:                                         display: 'flex',
+3680:                                         alignItems: 'center',
+3681:                                         justifyContent: 'space-between',
+3682:                                         gap: '8px',
+3683:                                         padding: '6px 10px',
+3684:                                         borderRadius: '8px',
+3685:                                         border: '1px solid rgba(51, 65, 85, 0.4)',
+3686:                                         background: showCanvasCardDetails ? 'rgba(6, 182, 212, 0.06)' : 'rgba(15, 23, 42, 0.4)',
+3687:                                         cursor: 'pointer',
+3688:                                         transition: 'all 0.2s ease',
+3689:                                         marginBottom: showCanvasCardDetails ? '12px' : '0',
+3690:                                       }}
+3691:                                     >
+3692:      
+3698:                                       {logLine}
+3699:                                     </div>
+3700:                                   );
+3701:                                 })}
+3702:                                 <div ref={terminalBottoms.canvas} />
+3703:                               </div>
+3704:                             )}
+3705:                           </div>
+3706:                         </div>
+3707:                       )}
+3708: 
+3709:                     {/* === Background Image Source Dropdown === */}
+3710:                     <div style={{
+3711:                       marginTop: '10px',
+3712:                       padding: '10px 12px',
+3713:                       borderRadius: '10px',
+3714:                       border: '1px solid rgba(63, 63, 70, 0.5)',
+3715:                       background: 'rgba(15, 23, 42, 0.4)',
+3716:                     }}>
+3717:                       <div className="flex items-center gap-2" style={{ marginBottom: '8px' }}>
+3718:                         <ImageIcon className="w-3.5 h-3.5" style={{ color: '#94a3b8' }} />
+3719:                         <span style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+3720:                           🖼️ แหล่งภาพพื้นหลัง (Background Source)
+3721:                         </span>
+3722:                       </div>
+3723:                       <select
+3724:                         value={canvasBgSource}
+3725:                         onChange={(e) => {
+3726:                           const v = e.target.value as 'default' | 'stock';
+3727:                           setCanvasBgSource(v);
+3728:                           localStorage.setItem('canvas_bg_source', v);
+3729:                         }}
+3730:                         style={{
+3731:                                     </button>
+3732: 
+3733:                                     {/* Collapsible Body */}
+3734:                                     {showCanvasCardDetails && (
+3735:                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+3736: 
+3737:                                     {/* 0. Captured Frame Thumbnails Selector (Collapsible, fixed pixel sizes) */}
+3738:                                     {canvasBgSource === 'default' && showCanvasItemMedia && item.media_paths && item.media_paths.length > 0 && (
+3739:                                       <div style={{
+3740:                                         padding: '8px 10px',
+3744:                                                 key={pathIdx}
+3745:                                                 onClick={() => setCanvasBgImage(path)}
+3746:                                                 style={{
+3747:                                                   position: 'relative',
+3748:                                                   cursor: 'pointer',
+3749:                                                   flexShrink: 0,
+3750:                                                   width: '48px',
+3751:                                                   height: '32px',
+3752:                                                   borderRadius: '4px',
+3753:                                                   overflow: 'hidden',
+3754:                                                   border: isPathSelected ? '2px solid #22d3ee' : '1px solid rgba(51, 65, 85, 0.6)',
+3755:                                                   boxShadow: isPathSelected ? '0 0 6px rgba(34, 211, 238, 0.3)' : 'none',
+3756:                                                   transition: 'all 0.15s ease',
+3757:                                                 }}
+3758:                                               >
+3759:                                                 <img
+3760:                                                   src={`${API_BASE}/vault/media?path=${encodeURIComponent(path)}`}
+3761:                                                   alt={`Frame ${pathIdx + 1}`}
+3762:                                                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+3763:                                                 />
+3764:                                                 {isPathSelected && (
+3765:                                                   <div style={{
+3766:                                                     position: 'absolute',
+3767:                                                     inset: 0,
+3768:                                                     background: 'rgba(34, 211, 238, 0.15)',
+3769:                                                     display: 'flex',
+3770:                                       setStockFolderLog(`✅ พบ ${data.total} รูปในโฟลเดอร์ Stock`);
+3771:                                     } else {
+3772:                                       setStockFolderLog(`⚠️ ${data.error}`);
+3773:                                     }
+3774:                                   } catch {
+3775:                                     setStockFolderLog('⚠️ ไม่สามารถตรวจสอบโฟลเดอร์กับ Backend ได้');
+3776:                                   }
+3777:                                 }
+3778:                               } catch (e: any) {
+3779:                                 if (e.name === 'AbortError') return;
+3780:                                 console.error('Stock folder picker error:', e);
+3781:                               }
+3782:                             }}
+3783:                             className="w-full flex items-center justify-center gap-2"
+3784:                             style={{
+3785:                               padding: '8px 12px',
+3786:                               borderRadius: '8px',
+3787:                               border: stockFolder
+3788:                                 ? '1px solid rgba(139, 92, 246, 0.4)'
+3789:                                 : '1px dashed rgba(139, 92, 246, 0.6)',
+3790:                               background: stockFolder
+3791:                                 ? 'rgba(139, 92, 246, 0.08)'
+3792:                                 : 'rgba(139, 92, 246, 0.05)',
+3793:  
+3800:                                       </div>
+3801:                                     )}
+3802: 
+3803:                                     {/* 1. Post Caption Editor */}
+3804:                                     <div className="space-y-1.5">
+3805:                                       <div className="flex items-center justify-between gap-4">
+3806:                                         <label className="text-[11px] font-bold text-slate-300 block">
+3807:                                           ✍️ แก้ไขตัวโพส (Post Caption / แคปชั่น)
+3808:                                         </label>
+3809:                                         <button
+3810:                                           type="button"
+3811:                                           disabled={generatingCopywriting}
+3812:                                           onClick={() => handleGenerateCopywritingForItem(item)}
+3813:                                           className="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white text-[9px] font-black transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 shadow-md shadow-purple-500/10"
+3814:                                         >
+3815:                                           {generatingCopywriting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3 animate-pulse text-purple-200" />}
+3816:                                           <span>✨ AI เขียนโพสต์ใหม่</span>
+3817:                           
+3823:                                 }
+3824:                               }}
+3825:                               className="w-full flex items-center justify-center gap-2"
+3826:                               style={{
+3827:                                 marginTop: '6px',
+3828:                                 padding: '6px 12px',
+3829:                                 borderRadius: '8px',
+3830:                                 border: '1px solid rgba(6, 182, 212, 0.4)',
+3831:                                 background: 'rgba(6, 182, 212, 0.08)',
+3832:                                 color: '#22d3ee',
+3833:                                 fontSize: '11px',
+3834:                                 fontWeight: 700,
+3835:                                 cursor: 'pointer',
+3836:                                 transition: 'all 0.2s ease',
+3837:                               }}
+3838:                             >
+3839:                               <RefreshCw className="w-3.5 h-3.5" />
+3840:                               <span>🎲 สุ่มภาพพื้นหลังใหม่ (Randomize Background)</span>
+3841:                             </button>
+3842:                           )}
+3843:                           {stockFolderLog && (
+3844:                             <p style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', textAlign: 'center' }}>
+3845:                               {stockFolderLog}
+3846:                             </p>
+3847:                           )}
+3848:                           {canvasBgSource === 'stock' && !stockFolder && (
+3849:                             <p style={{ fontSize: '10px', color: '#f59e0b', marginTop: '4px', textAlign: 'center' }}>
+3850:                               ⚠️ กรุณาเลือกโฟลเดอร์ Stock ก่อนเรนเดอร์
+3851:                             </p>
+3852:                           )}
+3853:                         </div>
+3854:                       )}
+3855:                     </div>
+3856: 
+3857: 
+3858: 
+3859:                       {/* Interactive Card Grid */}
+3860:                       {canvasSearchFiltered.length === 0 ? (
+3861:                         <div className="text-center py-12 text-slate-500 border border-dashed border-slate-850 rounded-xl bg-slate-950/20">
+3862:                           <Info className="w-10 h-10 mx-auto mb-3 text-slate-700" />
+3863:                           <p className="text-xs font-bold text-slate-400">ยังไม่มีคอนเทนต์ที่นำเข้ามาในห้องควบคุมดีไซน์</p>
+3864:                           <p className="text-[10px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+3865:                             กรุณาไปที่แท็บ <span className="text-cyan-400 font-bold">คลังวัตถุดิบคุณภาพ</span> และกดปุ่ม <span className="text-cyan-400 font-bold">📥 นำเข้าทำรูป</span> หรือใช้คำสั่งอนุมัติกลุ่มเพื่อส่งไอเดียเข้ามาทำงานที่นี่
+3866:                           </p>
+3867:                         </div>
+3868:                       ) : (
+3869:                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-
+3870:                                         gap: '8px',
+3871:                    
+3880:                                 }`}>
+3881:                                   {item.title}
+3882:                                 </p>
+3883: 
+3884:                                 {/* Footer: Date & author */}
+3885:                                 <div className="flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-850/60 pt-2 mt-auto">
+3886:                                   <span className="truncate max-w-[120px] font-medium text-slate-400">
+3887:                                     👤 {item.author_name || 'ไม่ระบุผู้แต่ง'}
+3888:                                   </span>
+3889:                                     ? 'bg-cyan-500/10 border-cyan-400/80 shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-400/30 sm:col-span-2' 
+3890:                                     : isChecked
+3891:                                       ? 'bg-slate-900/60 border-slate-700/60'
+3892:                                       : 'bg-slate-900/40 border-slate-800/80 hover:bg-slate-900/70 hover:border-slate-700/80'
+3893:                                 }`}
+3894:                                 onClick={() => setCanvasSelectedItem(item)}
+3895:                               >
+3896:                                 <div className="flex items-center justify-between gap-2 mb-2">
+3897:                                   <span className={`px-2 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wider ${badgeStyle}`}>
+3898:                                     {item.source_type}
+3899:                                   </span>
+3900:                                   <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+3901:                                     <input 
+3902:                                       type="checkbox"
+3903:                                       checked={isChecked}
+3904:                                       onChange={() => {
+3905:                                         setCanvasSelectedIds(prev => 
+3906:                                           prev.includes(item.id) ? prev.filter(x => x !== item.id) : [...prev, item.id]
+3907:                                         );
+3908:                                       }}
+3909:                                       className="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-slate-900 bg-slate-950/80 cursor-pointer accent-cyan-400 shrink-0"
+3910:                                     />
+3911: 
+3912:                                     {/* Collapsible Body */}
+3913:                                     {showCanvasCardDetails && (
+3914:                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+3915: 
+3916:                                     {/* 0. Captured Frame Thumbnails Selector (Collapsible, fixed pixel sizes) */}
+3917:                                     {canvasBgSource === 'default' && showCanvasItemMedia && item.media_paths && item.media_paths.length > 0 && (
+3918:                                       <div style={{
+3919:                                         padding: '8px 10px',
+3920:                                         background: 'rgba(2, 6, 23, 0.5)',
+3921:                                         borderRadius: '8px',
+3922:                                         border: '1px solid rgba(51, 65, 85, 0.4)',
+3923:                                       }}>
+3924:                                         <span style={{ fontSize: '9px', fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: '6px' }}>
+3925:                                           🖼️ กดเลือกเฟรมที่ต้องการใช้เป็นฉากหลัง:
+3926:                                         </span>
+3927:                                               borderRadius: '4px',
+3928:                                               border: showCanvasItemMedia ? '1px solid rgba(34,211,238,0.3)' : '1px solid rgba(71,85,105,0.5)',
+3929:                                               background: showCanvasItemMedia ? 'rgba(34,211,238,0.08)' : 'rgba(30,41,59,0.5)',
+3930:                                               color: showCanvasItemMedia ? '#67e8f9' : '#94a3b8',
+3931:                                               cursor: 'pointer',
+3932:                                               transition: 'all 0.15s ease',
+3933:                                             }}
+3934:                                           >
+3935:                                             {showCanvasItemMedia ? '🙈 ซ่อนรูป' : '🖼️ ดูรูป'} {item.media_paths.length}
+3936:                                           </span>
+3937:                                         )}
+3938:                                         <span style={{
+3939:                                           fontSize: '10px',
+3940:                                           color: showCanvasCardDetails ? '#67e8f9' : '#64748b',
+3941:                                           transition: 'transform 0.2s ease',
+3942:                                           transform: showCanvasCardDetails ? 'rotate(180deg)' : 'rotate(0deg)',
+3943:                                         }}>▼</span>
+3944:                                       </span>
+3945:                                     </button>
+3946: 
+3947:                                     {/* Collapsible Body */}
+3948:                                     {showCanvasCardDetails && (
+3949:                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+3950: 
+3951:                         fontSize: '0.75rem',
+3952:                         cursor: (runningModule.canvas || (!canvasSelectedItem && canvasSelectedIds.length === 0)) ? 'not-allowed' : 'pointer',
+3953:                         opacity: (runningModule.canvas || (!canvasSelectedItem && canvasSelectedIds.length === 0)) ? 0.5 : 1,
+3954:                         pointerEvents: (runningModule.canvas || (!canvasSelectedItem && canvasSelectedIds.length === 0)) ? 'none' as any : 'auto' as any,
+3955:                                         background: 'rgba(2, 6, 23, 0.5)',
+3956:                                         borderRadius: '8px',
+3957:                                         border: '1px solid rgba(51, 65, 85, 0.4)',
+3958:                                       }}>
+3959:                                         <span style={{ fontSize: '9px', fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: '6px' }}>
+3960:                                           🖼️ กดเลือกเฟรมที่ต้องการใช้เป็นฉากหลัง:
+3961:                                         </span>
+3962:                                         <div style={{ display: 'flex', gap: '5px', overflowX: 'auto', paddingBottom: '2px' }}>
+3963:                                           {item.media_paths.map((path, pathIdx) => {
+3964:                                             const isPathSelected = canvasBgImage === path;
+3965:                                             return (
+3966:                                               <div
+3967:                                                 key={pathIdx}
+3968:                                                 onClick={() => setCanvasBgImage(path)}
+3969:                                                 style={{
+3970:                                                   position: 'relative',
+3971:                                                   cursor: 'pointer',
+3972:                                                   flexShrink: 0,
+3973:                                                   width: '48px',
+3974:                                                   height: '32px',
+3975:                                                   borderRadius: '4px',
+3976:                                                   overflow: 'hidden',
+3977:                                                   border: isPathSelected ? '2px solid #22d3ee' : '1px solid rgba(51, 65, 85, 0.6)',
+3978:                                                   boxShadow: isPathSelected ? '0 0 6px rgba(34, 211, 238, 0.3)' : 'none',
+3979:                                                   transition: 'all 0.15s ease',
+3980:                                                 }}
+3981:                         if (canvasSelectedItem && canvasSelectedItem.id === item.id) {
+3982:                           if (canvasHeadlineMode === 'triple') {
+3983:                             activeHeadline = [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3].filter(Boolean).join('\n');
+3984:                           } else {
+3985:                             activeHeadline = canvasHeadline;
+3986:                           }
+3987:                         } else {
+3988:                           const h3 = item.metadata?.copywriting?.headline_3line;
+3989:                           if (Array.isArray(h3) && h3.filter(Boolean).length > 0) {
+3990:                             activeHeadline = h3.filter(Boolean).join('\n');
+3991:                           } else {
+3992:                             activeHeadline = item.selected_headline || item.title;
+3993:                           }
+3994:                         }
+3995:                         q.append('headline', activeHeadline);
+3996: 
+3997:                         // Background image source logic
+3998:                         if (canvasBgSource === 'stock' && canvasBgImage && canvasBgImage.includes(stockFolder)) {
+3999:                           q.append('base_image', canvasBgImage);
+4000:                           } else {
+4001:                             activeHeadline = item.selected_headline || item.title;
+4002:                           }
+4003:                         }
+4004:                         q.append('headline', activeHeadline);
+4005: 
+4006:                         // Background image source logic
+4007:                         if (canvasBgSource === 'stock' && canvasBgImage && canvasBgImage.includes(stockFolder)) {
+4008:                           q.append('base_image', canvasBgImage);
+4009:                         } else if (canvasBgSource === 'stock' && stockFolder) {
+4010:                           // Fetch random stock image from backend if not randomized in preview yet
+4011:                           try {
+4012:                             const stockRes = await fetch(`${API_BASE}/vault/stock-random?folder=${encodeURIComponent(stockFolder)}`);
+4013:                             const stockData = await stockRes.json();
+4014:                             if (stockData.success && stockData.absolute_path) {
+4015:                               q.append('base_image', stockData.absolute_path);
+4016:                             } else {
+4017:                               if (canvasBgImage && canvasSelectedItem?.id === item.id) q.append('base_image', canvasBgImage);
+4018:                               else if (item.media_paths && item.media_paths.length > 0) q.append('base_image', item.media_paths[0]);
+4019:                             }
+4020:                           } catch {
+4021:                             if (can
+4022:                           activeHighlight = canvasHighlight;
+4023:                         } else {
+4024:                           activeHighlight = item.metadata?.copywriting?.highlight || '';
+4025:                         }
+4026: 
+4027:                         if (activeHighlight) {
+4028:                           q.append('keywords', activeHighlight);
+4029:                         } else {
+4030:                           let keywords: string[] = [];
+4031:                           if (item.metadata) {
+4032:                             const meta = item.metadata;
+4033:                             keywords = meta.keywords || meta.tags || [];
+4034:                           }
+4035:                           if (keywords.length > 0) {
+4036:                             q.append('keywords', keywords.join(','));
+4037:                           }
+4038:                         }
+4039:                         
+4040:                         // Append branding logos & advanced overlays parameters
+4041:                         appendCustomParams(q);
+4042:                         
+4043:                         runModule('canvas', q.toString());
+4044:                       }}
+4045:                     >
+4046:                       {runningModule.canvas ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+4047:                     <span className="font-semibold">
+4048:                       {canvasQueueIndex !== null 
+4049:                         ? `กำลังสร้างโพสรูปที่ ${canvasQueueIndex + 1}/${canvasQueueIds.length} ...`
+4050:                         : runningModule.canvas 
+4051:                           ? 'กำลังเขียนภาพและคำนวณสัดส่วน...' 
+4052:                           : canvasSelectedIds.length > 1
+4053:                             ? `สั่งเรนเดอร์โพสรูปกลุ่มจำนวน ${ca
+4060:                   <div className="space-y-4 bg-slate-900/30 p-4 rounded-xl border border-slate-800 shadow-xl mt-4">
+4061:                     <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
+4062:                       <Download className="w-4 h-4 text-green-400" />
+4063:                       <span className="text-xs font-bold text-white">💾 ส่งออกข้อมูลและบันทึกรูปลง Local (Export Data & Images)</span>
+4064:                     </div>
+4065:                     <p className="text-[10px] text-slate-400 leading-snug">ตั้งค่าโฟลเดอร์ที่ต้องการจัดเก็บไฟล์ข้อมูล (.csv) และภาพที่ Render เสร็จสิ้น</p>
+4066:                     
+4067:                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+4068:                       {/* Folder Selector Button */}
+4069:                       <button
+4070:                         type="button"
+4071:                         onClick={async () => {
+4072:                           try {
+4073:                             const dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+4074:                             setExportDirHandle(dirHandle);
+4075:                     
+4076:                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+4077:                       {/* Folder Selector Button */}
+4078:                       <button
+4079:                         type="button"
+4080:                                         onClick={() => {
+4081:                                           // Update preview state instantly
+4082:                                           setCanvasHeadline(canvasHeadlineMode === 'triple' ? [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3].filter(Boolean).join('\n') : canvasHeadline);
+4083:                                           setCanvasHighlight(canvasHighlight);
+4084:                                           // Trigger alert to let user know preview is updated
+4085:                                           alert("👁️ อัปเดตการแสดงผลในหน้าจอพรีวิวด้านบนเรียบร้อยแล้ว!");
+4086:                                         }}
+4087:                                         className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold transition-all flex items-center gap-1"
+4088:                                       >
+4089:                                         <span>👁️ แสดงตัวอย่างในพรีวิวด้านบน</span>
+4090:                                       </button>
+4091: 
+4092:                                       <button
+4093:                                         type="button"
+4094:                                         onClick={() => {
+4095:                                           const finalCopywriting = {
+4096:                                             ...(item.metadata?.copywriting || {}),
+4097:                                             caption: canvasCaption,
+4098:                                             headline_3line: [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3],
+4099:                                             highlight: canvasHighlight,
+4100:                                             headlines: item.metadata?.copywriting?.headlines || [canvasHeadline]
+4101:                                           };
+4102:                                           handleSaveManuallyUpdatedMetadata(item.id, finalCopywriting);
+4103:                                         }}
+4104:                                         className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] font-bold transition-all flex items-center gap-1"
+4105:                                       >
+4106:                                         <span>💾 บันทึกการแก้ไข</span>
+4107:                                       </button>
+4108:                                     </div>
+4109:                                     </div>
+4110:                                     )}{/* end collapsible body */}
+4111:                                   </div>
+4112:                                 )}
+4113:                               </div>
+4114:                             );
+4115:                           })}
+4116:                         </div>
+4117:                       )}
+4118:                     </div>
+4119: 
+4120:                     <button
+4125:                                       </button>
+4126: 
+4127:                                       <button
+4128:                                         type="button"
+4129:                                         onClick={() => {
+4130:                                           const finalCopywriting = {
+4131:                                             ...(item.metadata?.copywriting || {}),
+4132:                                             caption: canvasCaption,
+4133:                                             headline_3line: [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3],
+4134:                                             highlight: canvasHighlight,
+4135:                                             headlines: item.metadata?.copywriting?.headlines || [canvasHeadline]
+4136:                                           };
+4137:                                           handleSaveManuallyUpdatedMetadata(item.id, finalCopywriting);
+4138:                                         }}
+4139:                                         className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] font-bold transition-all flex items-center gap-1"
+4140:                                       >
+4141:                                         <span>💾 บันทึกการแก้ไข</span>
+4142:                                       </button>
+4143:                                     </div>
+4144:                                     </div>
+4145:                                     )}{/* end collapsible body */}
+4180:                             activeHeadline = item.selected_headline || item.title;
+4181:                           }
+4182:                         }
+4183:                         q.append('headline', activeHeadline);
+4184: 
+4185:                         // Background image source logic
+4186:                         if (canvasBgSource === 'stock' && canvasBgImage && canvasBgImage.includes(stockFolder)) {
+4187:                           q.append('base_image', canvasBgImage);
+4188:                         } else if (canvasBgSource === 'stock' && stockFolder) {
+4189:                           // Fetch random stock image from backend if not randomized in preview yet
+4190:                           try {
+4191:                             const stockRes = await fetch(`${API_BASE}/vault/stock-random?folder=${encodeURIComponent(stockFolder)}`);
+4192:                             const stockData = await stockRes.json();
+4193:                             if (stockData.success && stockData.absolute_path) {
+4194:                               q.append('base_image', stockData.absolute_path);
+4195:                             } else {
+4196:                               if (canvasBgImage && canvasSelectedItem?.id === item.id) q.append('base_image', canvasBgImage);
+4197:                               else if (item.media_paths && item.media_paths.length > 0) q.append('base_image', item.media_paths[0]);
+4198:                             }
+4199:                           } catch {
+4200:                             if (canvasBgImage && canvasSelectedItem?.id === 
+4204:                           highlight: "100 Prompt"
+4205:                         };
+4206:                         
+4207:                     const displayHeadline = (canvasHeadlineMode === 'triple'
+4208:                       ? [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3].filter(Boolean).join('\n')
+4209:                       : canvasHeadline) || defaultContent.headline;
+4210:                           activeHighlight = canvasHighlight;
+4211:                         } else {
+4212:                           activeHighlight = item.metadata?.copywriting?.highlight || '';
+4213:                         }
+4214: 
+4215:                         if (activeHighlight) {
+4216:                           q.append('keywords', activeHighlight);
+4217:                         } else {
+4218:                           let keywords: string[] = [];
+4219:                           if (item.metadata) {
+4220:                             const meta = item.metadata;
+4221:                             keywords = meta.keywords || meta.tags || [];
+4222:                           }
+4223:                           if (keywords.length > 0) {
+4224:                             q.append('keywords', keywords.join(','));
+4225:                           }
+4226:                         }
+4227:                         
+4228:                         // Append branding logos & advanced overlays parameters
+4229:                         appendCustomParams(q);
+4230:                         
+4231:                         runModule('canvas', q.toString());
+4232:                       }}
+4233:                     >
+4234:                       {runningModule.canvas ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+4235:                     <span className="font-semibold">
+4236:                       {canvasQueueIndex !== null 
+4237:                         ? `กำลังสร้างโพสรูปที่ ${canvasQueueIndex + 1}/${canvasQueueIds.length} ...`
+4238:                         : runningModule.canvas 
+4239:                           ? 'กำลังเขียนภาพและคำนวณสัดส่วน...' 
+4240:                           : canvasSelectedIds.length > 1
+4480:                                     bottom: '14cqw',
+4481:                                     fontSize: '18cqw',
+4482:                                     color: activeTheme.highlight,
+4483:                                     opacity: 0.3,
+4484:                                     lineHeight: 1
+4485:                                   }}
+4486:                                 >
+4487:                                   ”
+4488:                                 </span>
+4489:                               </>
+4490:                             )}
+4491: 
+4492:                             {/* Backdrop Image Cycler Controls */}
+4493:                             {canvasSelectedItem && canvasSelectedItem.media_paths && canvasSelectedItem.media_paths.length > 1 && (
+4494:                               <>
+4495:                                 <button
+4496:                                   type="button"
+4497:                                   onClick={(e) => {
+4498:                                     e.stopPropagation();
+4499:                                     const paths = canvasSelectedItem.media_paths;
+4500:                           className={`preview-canvas-container relative overflow-hidden rounded-xl border border-slate-800 shadow-2xl ${
+4501:                             canvasRatio === '16:9' 
+4502:                               ? 'aspect-[16/9] w-full' 
+4503:                               : canvasRatio === '4:3'
+4504:                                 ? 'aspect-[4/3] w-full'
+4505:                                 : canvasRatio === '9:16'
+4506:                                   ? 'aspect-[9/16] h-[400px]'
+4507:                                   : canvasRatio === '4:5'
+4508:                                     ? 'aspect-[4/5] h-[400px]'
+4509:                                     : 'aspect-square w-full'
+4510:                           }`}
+4511:                           style={{ maxWidth: '380px', margin: '0 auto' }}
+4512:                         >
+4513:                           {/* Upper Background Split region / Full Background region */}
+4514:                           <div 
+4515:                             className="absolute top-0 left-0 right-0 overflow-hidden"
+4516:                             style={{ 
+4517:                                                 <button
+4518:                                       type="button"
+4519:                                       disabled={isUploadingDropbox}
+4520:                                       onClick={async () => {
+4521:                                         if (!dropboxToken) {
+4522:                                           alert('กรุณากรอก Dropbox Access Token ในส่วนตั้งค่าพื้นฐานก่อน');
+4523:                                           return;
+4524:                                         }
+4525:                                         if (contentGraphics.length === 0) return;
+4526:                                         
+4527:                                         const addLog = (msg: string) => {
+4528:                                           setLogs(prev => ({
+4529:                                             ...prev,
+4530:                                             canvas: [...prev.canvas, msg]
+4531:                                           }));
+4532:                                           scrollTerminal('canvas'
+4533:                                         };
+4534: 
+4535:                                         setIsUploadingDropbox(true);
+4536:                                         setShowCanvasLogs(true);
+4537:                                         setDropboxUploadProgress('กำลังเริ่มอัพโหลด...');
+4538:                                         
+4539:                                         addLog('[PROCESS] ☁️ เริ่มกระบวนการอัพโหลดไฟล์ไปยัง Dropbox และส่งออกไฟล์ CSV...');
+4540:                                         try {
+4541:                                           const filePaths = contentGraphics.map((g: any) => g.file_path);
+4542:                                           setDropboxUploadProgress(`อัพโหลด ${filePaths.length} ไฟล์ไปยัง Dropbox...`);
+4543:                                           addLog(`[PROCESS] 📦 เตรียมไฟล์สำหรับอัพโหลดจำนวน ${filePaths.length} รายการ...`);
+4544:                                           addLog('[PROCESS] ☁️ กำลังเชื่อมต่อ API และส่งไฟล์ขึ้นระบบคลาวด์ของ Dropbox...');
+4545:                                           
+4546:                                           const res = await fetch(`${API_BASE}/vault/dropbox/batch-upload`, {
+4547:                                             method: 'POST',
+4548:                                             headers: { 'Content-Type': 'application/json' },
+4549:                                             body: JSON.stringify({
+4550:                                               file_paths: filePaths,
+4551:                                      setCanvasBgImage(paths[nextIdx]);
+4552:                                    }}
+4553:                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full bg-slate-950/80 border border-slate-850 text-slate-300 hover:text-white flex items-center justify-center transition-all hover:bg-slate-900 active:scale-95 hover:scale-105 shadow-md shadow-black/40 font-black text-xs select-none pointer-events-auto"
+4554:                                    title="ดูรูปพื้นหลังถัดไป"
+4555:                                  >
+4556:                                    ▶
+4557:                                  </button>
+4558:                                 <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-2 py-0.5 rounded bg-slate-950/70 border border-slate-800/40 text-[9px] font-black text-slate-300 tracking-wider">
+4559:                                   🖼️ ฉากคลังภาพที่ {(canvasSelectedItem.media_paths.indexOf(canvasBgImage) !== -1 ? canvasSelectedItem.media_paths.indexOf(canvasBgImage) : 0) + 1}/{canvasSelectedItem.media_paths.length}
+4560:                                 </div>
+4561:                               </>
+4562:                             )}
+4563: 
+4564:                             {/* Category Badge overlay */}
+4565:                             {canvasShowBadge && (
+4653:                                     <img
+4654:                                       src={`${API_BASE}/vault/media?path=${encodeURIComponent(canvasSelectedItem.author_avatar_url)}`}
+4655:                                       alt="channel"
+4656:                                       style={{
+4657:                                         width: '5cqw',
+4658:                                         height: '5cqw',
+4659:                                         borderRadius: '50%',
+4660:                                         border: '0.25cqw solid rgba(255,255,255,0.3)',
+4661:                                         objectFit: 'cover',
+4662:                                         flexShrink: 0,
+4663:                                       }}
+4664:                                     />
+4665:                                   ) : (
+4666:                                     <div style={{
+4667:                                       width: '5cqw',
+4668:                                       height: '5cqw',
+4669:                                       borderRadius: '50%',
+4670:                                       background: '#ef4444',
+4671:                                       display: 'flex',
+4672:                                       alignItems: 'center',
+4673:                                       justifyContent: 'center',
+4674:                                       fontSize: '2.5cqw',
+4675:                                       fontWeight: 900,
+4676:                                       color: 'white',
+4677:                                       flexShrink: 0,
+4678:                                     }}>▶</div>
+4679:                                   )}
+4680:                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2cqw', minWidth: 0 }}>
+4750:                               >
+4751:                                 <p 
+4752:                                   className="w-full font-black tracking-wide leading-snug"
+4753:                                   style={{ textAlign: canvasHeadlineAlign }}
+4754:                                 >
+4755:                                   {renderHeadlineWithHighlights(displayHeadline, displayHighlight)}
+4756:                                 </p>
+4757:                               </div>
+4758: 
+4759:                               <div className="live-credit-text border-t border-slate-900 pt-3 text-slate-400">
+4760:                                 เครดิต: {canvasCreditText || 'Coinpulse Content Lab'}
+4761:                               </div>
+4762:                             </div>
+4763:                           ) : (
+4764:                             /* Full Overlay text layout */
+4765:                             <div 
+4766:                               className="absolute inset-x-0 bottom-0 top-0 flex flex-col justify-between p-6 z-20"
+4767:                               style={{ 
+4768:                                 fontFamily: canvasFontFamily,
+4769:                                 pointerEvents: 'none'
+4770:                               }}
+4771:                             >
+4772:                               {/* Top spacer */}
+4773:                               <div className="h-12" />
+4774: 
+4775:                               {/* Center aligned title */}
+4776:                               <div 
+4777:                      
+4859:                                           return;
+4860:                                         }
+4861:                                         if (contentGraphics.length === 0) return;
+4862:                                         
+4863:                                         setIsUploadingDropbox(true);
+4864:                                         setDropboxUploadProgress('กำลังเริ่มอัพโหลด...');
+4865:                                         
+4866:                                         try {
+4867:                                           const filePaths = contentGraphics.map((g: any) => g.file_path);
+4868:                                           setDropboxUploadProgress(`อัพโหลด ${filePaths.length} ไฟล์ไปยัง Dropbox...`);
+4869:                                           
+4870:                                           const res = await fetch(`${API_BASE}/vault/dropbox/batch-upload`, {
+4871:                                             method: 'POST',
+4872:                                             headers: { 'Content-Type': 'application/json' },
+4873:                                             body: JSON.stringify({
+4874:                                               file_paths: filePaths,
+4875:                                               dropbox_token: dropboxToken,
+4876:                                               dropbox_folder: dropboxFolder,
+4877:                                             }),
+4878:                                           });
+4879:                                           
+4880:                                           const data = await res.json();
+4881:                                           
+4882:                                           if (!data.success) {
+4883:                                             throw new Error(data.error || 'Upload failed');
+4884:                                           }
+4885: 
+4886:                                           // Check for specific upload errors inside results
+4887:                                           const failedCount = data.results.filter((r: any) => r.error).length;
+4888:                                           if (failedCount > 0) {
+4889:                                             const firstError = data.results.find((r: any) => r.error)?.error || 'Unknown error';
+4890:                                             if (failedCount === data.results.length) {
+4891:                                               throw new Error(firstError);
+4892:                                             } else {
+4893:                                               alert(`การอัพโหลดบางส่วนล้มเหลว (${failedCount}/${data.results.length} ไฟล์): ${firstError}`);
+4894:                                             }
+4895:                                           }
+4896:                                           
+4897:                                           setDropboxUploadProgress('สร้างไฟล์ CSV...');
+4898:                                           
+4899:                                           // Build CSV content
+4900:                             <div className="flex items-center justify-between mb-3 text-left w-full">
+4901:                               <div className="flex items-center gap-2">
+4902:                                 <CheckCircle className="w-4 h-4 text-emerald-400" />
+4903:                                 <span className="text-xs font-black text-emerald-400 uppercase tracking-wider text-left">🎯 ผลลัพธ์ (Pillow Output)</span>
+4904:                               </div>
+4905:                               <div className="flex items-center gap-2">
+4906:                                 {contentGraphics.length > 0 && (
+4907:                                   <>
+4908:                                     <button
+4909:                                       type="button"
+4910:                                       onClick={() => {
+4911:                                         setContentGraphics([]);
+4912:                                         setLatestGraphic(null);
+4913:                                       }}
+4914:                                       className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-pink-400 bg-slate-900 hover:bg-pink-950/20 px-2.5 py-1 rounded border border-slate-800 hover:border-pink-900 transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+4915:                                     >
+4916:                                       <Trash2 className="w-3.5 h-3.5" />
+4917:                                       เคลียร์รูปภาพ
+4918:       
+4919:                                           const url = URL.createObjectURL(blob);
+4920:                                     </button>
+4921:                                     <button
+4922:                                       type="button"
+4923:                                       disabled={isUploadingDropbox}
+4924:                                       onClick={async () => {
+4925:                                         if (!dropboxToken) {
+4926:                                           alert('กรุณากรอก Dropbox Access Token ในส่วนตั้งค่าพื้นฐานก่อน');
+4927:                                           return;
+4928:                                         }
+4929:                                         if (contentGraphics.length === 0) return;
+4930:                                         
+4931:                                         setIsUploadingDropbox(true);
+4932:                                         setDropboxUploadProgress('กำลังเริ่มอัพโหลด...');
+4933:                                         
+4934:                                         try {
+4935:                                           const filePaths = contentGraphics.map((g: any) => g.file_path);
+4936:                                           setDropboxUploadProgress(`อัพโหลด ${filePaths.length} ไฟล์ไปยัง Dropbox...`);
+4937:                                           
+4938:                                           const res = await fetch(`${API_BASE}/vault/dropbox/batch-upload`, {
+4939:                                           
+4940:                                               file_paths: filePaths,
+4941:                                               dropbox_token: dropboxToken,
+4942:                                               dropbox_folder: dropboxFolder,
+4943:                                             }),
+4944:                                           });
+4945:                                           
+4946:                                           const data = await res.json();
+4947:                                           
+4948:                                           if (!data.success) {
+4949:                                             throw new Error(data.error || 'Upload failed');
+4950:                                           }
+4951: 
+4952:                                           // Check for specific upload errors inside results
+4953:                                           const failedCount = data.results.filter((r: any) => r.error).length;
+4954:                                           if (failedCount > 0) {
+4955:                                             const firstError = data.results.find((r: any) => r.error)?.error || 'Unknown error';
+4956:                                             if (failedCount === data.results.length) {
+4957:                                               throw new Error(firstError);
+4958:                                             } else {
+4959:                                               alert(`การอัพโหลดบางส่วนล้มเหลว (${failedCount}/${data.results.length} ไฟล์): ${firstError}`);
+4960:                                             }
+4961:                                           }
+4962:                                           
+4963:                                           setDropboxUploadProgress('สร้างไฟล์ CSV...');
+4964:                                           
+4965:                                           // Build CSV content
+4966:                                           const csvRows = [['พาดหัว', 'บทความโพส', 'Dropbox Link'].join(',')];
+4967:                                           
+4968:                                           // Only export successful ones in CSV
+4969:                                           const successfulResults = data.results.filter((r: any) => !r.error);
+4970:                                           for (const result of successfulResults) {
+4971:                                             // Find the corresponding graphic from contentGraphics to get the correct content_id
+4972:                                             const matchingGraphic = contentGraphics.find((g: any) => g.file_path === result.file_path);
+4973:                                             
+4974:                                             let headline = '';
+4975:                                             let caption = '';
+4976:                                             
+4977:                                             if (matchingGraphic) {
+4978:                                               const itemId = matchingGraphic.content_id;
+4979:                                               // Find the original
+4990:                 )}
+4991:               </div>
+4992:             </div>
+4993:           )}
+4994: 
+4995:           {/* TAB 4: SYSTEM SETTINGS PORTAL */}
+4996:           {activeTab === 'settings' && (
+4997:             <div className="glass-panel p-6">
+4998:               <SettingsPortal appScale={appScale} setAppScale={setAppScale} />
+4999:             </div>
+5000:           )}
+5001: 
+5002:           {/* TAB 11: WORK TRACKING SYSTEM */}
+5003:           {activeTab === 'tracking' && (
+5004:             <iframe 
+5005:               src="/tracking-dashboard.html" 
+5006:               style={{
+5007:                 width: '100%',
+5008:                 height: 'calc(100vh - 150px)',
+5009:                 border: 'none',
+5010:                 ) : (
+5011:                   <div className="w-full flex flex-col items-center justify-start p-4 bg-slate-950/40 rounded-xl border border-slate-850/80 mb-4 relative overflow-hidden min-h-[300px]">
+5012:                     {loadingGraphics ? (
+5013:                       <div className="flex flex-col items-center text-slate-500 gap-2">
+5014:                         <RefreshCw className="w-8 h-8 animate-spin text-cyan-400" />
+5015:                         <span className="text-xs">กำลังโหลดไฟล์รูปภาพ...</span>
+5016:                                         } catch (err: any) {
+5017:                                           console.error('Dropbox upload error:', err);
+5018:                                           const errMsg = err.message || '';
+5019:                                           let friendlyMsg = errMsg;
+5020:                                           if (errMsg.includes('invalid_access_token') || errMsg.includes('401')) {
+5021:                                             friendlyMsg = 'Dropbox Access Token ไม่ถูกต้องหรือหมดอายุการใช้งานแล้ว (Access Token ของ Dropbox แบบสั้นจะหมดอายุทุกๆ 4 ชั่วโมง) กรุณาตรวจสอบหรือสร้าง Token ใหม่';
+5022:                                           }
+5023:                                           setDropboxUploadProgress(`❌ เกิดข้อผิดพลาด: ${friendlyMsg}`);
+5024:                                           setTimeout(() => setDropboxUploadProgress(''), 10000);
+5025:                                         }
+5026:                                         setIsUploadingDropbox(false);
+5027:                                       }}
+5028:                                       style={{
+5029:                                         display: 'flex',
+5030:                                         alignItems: 'center',
+5031:                                         gap: '5px',
+5032:                                         fontSize: '10px',
+5033:                                         fontWeight: 900,
+5034:                                         padding: '5px 12px',
+5035:                                         borderRadius: '8px',
+5036:                                         color: isUploadingDropbox ? '#7dd3fc' : '#38bdf8',
+5037:                                         cursor: isUploadingDropbox ? 'not-allowed' : 'pointer',
+5038:                                         opacity: !dropboxToken ? 0.6 : 1,
+5039:                                         transition: 'all 0.2s ease',
+5040:                                         setContentGraphics([]);
+5041:                                         setLatestGraphic(null);
+5042:                                       }}
+5043:                                       className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-pink-400 bg-slate-900 hover:bg-pink-950/20 px-2.5 py-1 rounded border border-slate-800 hover:border-pink-900 transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+5044:                                     >
+5045:                                       <Trash2 className="w-3.5 h-3.5" />
+5046:                                       เคลียร์รูปภาพ
+5047:                                     </button>
+5048:                                     <button
+5049:                                       type="button"
+5050:                                       disabled={isUploadingDropbox}
+5051:                                       onClick={async () => {
+5052:                                         if (!dropboxToken) {
+5053:                                           alert('กรุณากรอก Dropbox Access Token ในส่วนตั้งค่าพื้นฐานก่อน');
+5054:                                           return;
+5055:                                         }
+5056:                                         if (contentGraphics.length === 0) return;
+5057:                                         
+5058:                                         setIsUploadingDropbox(true);
+5059:                                         setDropboxUploadProgress('กำลังเริ่มอัพโหลด...');
+5060:                                         
+5061:                                         try {
+5062:                                           const filePaths = contentGraphics.map((g: any) => g.file_path);
+5063:                                           setDropboxUploadProgress(`อัพโหลด ${filePaths.length} ไฟล์ไปยัง Dropbox...`);
+5064:                                           
+5065:                                           const res = await fetch(`${API_BASE}/vault/dropbox/batch-upload`, {
+5066:                                             method: 'POST',
+5067:                             
+5068:                                 gap: '12px',
+5069:                                 width: '100%'
+5070:                               }}
+5071:                             >
+5072:                               {contentGraphics.map((g, idx) => (
+5073:                                 <div 
+5074:                                   key={g.id} 
+5075:                                   className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50 p-1.5 shadow-lg group hover:border-emerald-400/80 transition-all duration-350 cursor-zoom-in"
+5076:                                   onClick={() => setLightboxImage(`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`)}
+5077:                                 >
+5078:                                   <img 
+5079:                                     src={`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`}
+5080:                                     alt={`Poster Output ${idx + 1}`}
+5081:                                     className="w-full h-auto rounded-lg object-contain border border-slate-900 group-hover:scale-[1.03] transition-all duration-305"
+5082:                                   />
+5083:                                   <div className="absolute top-2.5 right-2.5 bg-slate-950/80 backdrop-blur-sm text-slate-300 border border-slate-800 font-mono text-[8px] px-1.5 py-0.5 rounded-md shadow z-10">
+5084:                                     #{idx + 1}
+5085:                                   </div>
+5086:                                     <Eye className="w-5 h-5 text-emerald-400 filter drop-shadow" />
+5087:                                   </div>
+5088:                                 </div>
+5089:                               ))}
+5090:                             </div>
+5091:                 type="button"
+5092:                 onClick={() => setQuickViewTab('headlines')}
+5093:                 className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+5094:                   quickViewTab === 'headlines'
+5095:                     ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+5096:                     : 'text-slate-400 hover:text-slate-200 border border-transparent'
+5097:                 }`}
+5098:               >
+5099:                 📢 พาดหัว 3 บรรทัด (3-Line Headlines)
+5100:               </button>
+5104:                                        const a = document.createElement('a');
+5105:                                        a.href = url;
+5106:                                        a.download = `content_export_${new Date().toISOString().slice(0,10)}.csv`;
+5107:                                        a.click();
+5108:                                        URL.revokeObjectURL(url);
+5109:                                        
+5110:                                        setDropboxUploadProgress(`✅ อัพโหลดสำเร็จ ${successfulResults.length} ไฟล์ + บันทึก CSV แล้ว!`);
+5111:                             {contentGraphics.length > 0 && (
+5112:                               <>
+5113:                                 <button
+5114:                                   type="button"
+5115:                                   onClick={() => {
+5116:                                     setContentGraphics([]);
+5117:                                     setLatestGraphic(null);
+5118:                                   }}
+5119:                                   className="flex items-center gap-1 text-[9px] font-black text-slate-400 hover:text-pink-400 bg-slate-900 hover:bg-pink-950/20 px-2 py-0.5 rounded border border-slate-800 hover:border-pink-900 transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+5120:                                 >
+5121:                                   <Trash2 className="w-2.5 h-2.5" />
+5122:                                   เคลียร์รูปภาพ
+5123:                                 </button>
+5124:                                 <button
+5125:                                   type="button"
+5126:                                   disabled={isUploadingDropbox}
+5127:                                    onClick={async () => {
+5128:                                      if (!dropboxToken) {
+5129:                                        alert('กรุณากรอก Dropbox Access Token ในส่วนตั้งค่าพื้นฐานก่อน');
+5130:                                        return;
+5131:                                      }
+5132:          
+5140:                                           
+5141:                                           setDropboxUploadProgress(`✅ อัพโหลดสำเร็จ ${successfulResults.length} ไฟล์ + บันทึก CSV แล้ว!`);
+5142:                                           setTimeout(() => setDropboxUploadProgress(''), 5000);
+5143:                                         } catch (err: any) {
+5144:                                           console.error('Dropbox upload error:', err);
+5145:                                           const errMsg = err.message || '';
+5146:                                           let friendlyMsg = errMsg;
+5147:                                           if (errMsg.includes('invalid_access_token') || errMsg.includes('401')) {
+5148:                                             friendlyMsg = 'Dropbox Access Token ไม่ถูกต้องหรือหมดอายุการใช้งานแล้ว (Access Token ของ Dropbox แบบสั้นจะหมดอายุทุกๆ 4 ชั่วโมง) กรุณาตรวจสอบหรือสร้าง Token ใหม่';
+5149:                                           }
+5150:                                           setDropboxUploadProgress(`❌ เกิดข้อผิดพลาด: ${friendlyMsg}`);
+5151:                                           setTimeout(() => setDropboxUploadProgress(''), 10000);
+5152:                                         }
+5153:                                         setIsUploadingDropbox(false);
+5154:                                       }}
+5155:                                       style={{
+5156:                                         display: 'flex',
+5157:                                         alignItems: 'center',
+5158:                                         gap: '5px',
+5159:                                         fontSize: '10px',
+5160:                                         fontWeight: 900,
+5161:                                         padding: '5px 12px',
+5162:                                         borderRadius: '8px',
+5163:                                         border: '1.5px solid rgba(56,189,248,0.4)',
+5164:                                         background: isUploadingDropbox ? 'rgba(56,189,248,0.08)' : 'linear-gradient(90deg, rgba(14,165,233,0.2), rgba(56,189,248,0.15))',
+5165:                                         color: isUploadingDropbox ? '#7dd3fc' : '#38bdf8',
+5188:                                              caption = copywriting?.caption || '';
+5189:                                            }
+5190:                                          }
+5191:                                          
+5192:                                          // Fallback to currently selected item if not found
+5193:                                          if (!headline) {
+5194:                                            const copywriting = canvasSelectedItem?.metadata?.copywriting;
+5195:                                            headline = copywriting?.headline_3line?.join(' ') || canvasSelectedItem?.selected_headline || canvasSelectedItem?.title || '';
+5196:                                            caption = copywriting?.caption || '';
+5197:                                          }
+5198:                                          
+5199:                                          const escapeCsv = (val: string) => `"${(val || '').replace(/"/g, '""').replace(/\n/g, '\\n')}"`;
+5200:                                          csvRows.push([
+5201:                                            escapeCsv(headline),
+5202:                                            escapeCsv(caption),
+5203:                                            escapeCsv(result.shared_link || ''),
+5204:                                          ].join(','));
+5205:                                        }
+5206:                                        
+5207:                                        const csvContent = '\uFEFF' + csvRows.join('\n');
+5208:                                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+5209:                                        const url = URL.createObjectURL(blob);
+5210:                                        const a = document.createElement('a');
+5250:                                     setLatestGraphic(null);
+5251:                                   }}
+5252:                                   className="flex items-center gap-1 text-[9px] font-black text-slate-400 hover:text-pink-400 bg-slate-900 hover:bg-pink-950/20 px-2 py-0.5 rounded border border-slate-800 hover:border-pink-900 transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+5253:                                 >
+5254:                                   <Trash2 className="w-2.5 h-2.5" />
+5255:                                   เคลียร์รูปภาพ
+5256:                                 </button>
+5257:                                 <button
+5258:                                   type="button"
+5259:                                   disabled={isUploadingDropbox}
+5260:                                    onClick={async () => {
+5261:                                      if (!dropboxToken) {
+5262:                                        alert('กรุณากรอก Dropbox Access Token ในส่วนตั้งค่าพื้นฐานก่อน');
+5263:                                        return;
+5264:                                      }
+5265:                                      if (contentGraphics.length === 0) return;
+5266:                                      
+5267:                                      setIsUploadingDropbox(true);
+5268:                                      setDropboxUploadProgress('กำลังเริ่มอัพโหลด...');
+5269:           
+5270:                             gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+5271:                             gap: '12px',
+5272:                             width: '100%'
+5273:                           }}
+5274:                         >
+5275:                             gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+5276:                             gap: '12px',
+5277:                             width: '100%'
+5278:                           }}
+5279:                         >
+5280:                           {contentGraphics.map((g, idx) => (
+5281:                             <div 
+5282:                               key={g.id} 
+5283:                               className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50 p-1.5 shadow-lg group hover:border-emerald-400/80 transition-all duration-350 cursor-zoom-in"
+5284:                               onClick={() => setLightboxImage(`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`)}
+5285:                             >
+5286:                               <img 
+5287:                                 src={`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`}
+5288:                                 alt={`Poster Output ${idx + 1}`}
+5289:                                 className="w-full h-auto rounded-lg object-contain border border-slate-900 group-hover:scale-[1.03] transition-all duration-300"
+5290:                               />
+5291:                               <div className="absolute top-2.5 right-2.5 bg-slate-950/80 backdrop-blur-sm text-slate-300 border border-slate-800 font-mono text-[8px] px-1.5 py-0.5 rounded-md shadow z-10">
+5292:                                 #{idx + 1}
+5293:                               </div>
+5294:                               <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
+5295:                                 <Eye className="w-5 h-5 text-emerald-400 filter drop-shadow" />
+5329:                                            caption = copywriting?.caption || '';
+5330:                                          }
+5331:                                          
+5332:                                          const escapeCsv = (val: string) => `"${(val || '').replace(/"/g, '""').replace(/\n/g, '\\n')}"`;
+5333:                                          csvRows.push([
+5334:                                            escapeCsv(headline),
+5335:                                            escapeCsv(caption),
+5336:                                            escapeCsv(result.shared_link || ''),
+5337:                                          ].join(','));
+5338:                                        }
+5339:                                        
+5340:                                        const csvContent = '\uFEFF' + csvRows.join('\n');
+5341:                                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+5342:                                        const url = URL.createObjectURL(blob);
+5343:                                        const a = document.createElement('a');
+5344:                                        a.href = url;
+5345:                                        a.download = `content_export_${new Date().toISOString().slice(0,10)}.csv`;
+5346:                                        a.click();
+5347:                                        URL.revokeObjectURL(url);
+5348:                                        
+5349:                                        setDropboxUploadProgress(`✅ อัพโหลดสำเร็จ ${successfulResults.length} ไฟล์ + บันทึก CSV แล้ว!`);
+5350:                                        setTimeout(() => setDropboxUploadProgress(''), 5000);
+5500:                             <span>{line}</span>
+5501:                           </div>
+5502:                         ))}
+5503:                       </div>
+5504:                     </div>
+5505:                   ) : (
+5506:                     <div className="text-center py-8 text-slate-500 border border-dashed border-slate-850 rounded-xl bg-slate-950/20">
+5507:                       <p className="text-xs font-bold text-slate-400">ไม่พบข้อมูลพาดหัว 3 บรรทัดสำหรับรายการนี้</p>
+5508:                     </div>
+5509:                   )}
+5510:                 </div>
+5511:               )}
+5512:             </div>
+5513: 
+5514:             {/* Footer */}
+5515:             <div className="p-4 border-t border-slate-850/80 flex justify-end bg-slate-950/20">
+5516:               <button
+5517:                 type="button"
+5518:                 onClick={() => setQuickViewCopywriting(null)}
+5519:                 className="btn-neon btn-neon-cyan px-6 py-2 text-xs"
+5520:               >
+5521:                 ปิดหน้าต่าง
+5522:               </button>
+5523:             </div>
+5524:           </div>
+5525:         </div>
+5526:       )}
+5527: 
+5528:       {/* 🔍 Premium Popup Card for Render Result Preview */}
+5529:       {lightboxImage && (
+5530:                 ปิดหน้าต่าง
+5531:               </button>
+5532:             </div>
+5533:           </div>
+5534:         </div>
+5535:       )}
+5536: 
+5537:       {/* 🔍 Premium Popup Card for Render Result Preview */}
+5538:       {lightboxImage && (
+5539:         <div 
+5540:           className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-fade-in"
+5541:           style={{ background: 'rgba(2,6,23,0.92)', backdropFilter: 'blur(12px)' }}
+5542:           onClick={() => setLightboxImage(null)}
+5543:         >
+5544:           <div 
+5545:             style={{
+5546:               maxWidth: '1100px',
+5547:               width: '100%',
+5548:               maxHeight: '90vh',
+5549:               background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.95) 100%)',
+5550:               border: '1px solid rgba(51,65,85,0.5)',
+5551:               borderRadius: '20px',
+5552:               boxShadow: '0 25px 80px rgba(0,0,0,0.7), 0 0 40px rgba(6,182,212,0.08)',
+5553:               display: 'flex',
+5554:               overflow: 'hidden',
+5555:             }}
+5556:             onClick={(e) => e.stopPropagation()}
+5557:           >
+5558:             {/* Left: Image */}
+5559:             <div style={{
+5560:               flex: '0 0 55%',
+5561:               maxWidth: '55%',
+5562:               background: 'rgba(0,0,0,0.4)',
+5563:               display: 'flex',
+5564:               alignItems: 'center',
+5565:               justifyContent: 'center',
+5593:                   borderRadius: '50%',
+5594:                   background: 'rgba(15,23,42,0.8)',
+5595:                   border: '1px solid rgba(51,65,85,0.6)',
+5596:                   color: '#94a3b8',
+5597:                   display: 'flex',
+5598:                   alignItems: 'center',
+5599:                   justifyContent: 'center',
+5600:                   cursor: 'pointer',
+5601:                   transition: 'all 0.2s ease',
+5602:                   zIndex: 10,
+5603:                 }}
+5604:                 title="ปิดหน้าต่าง"
+5605:               >
+5606:                 <X className="w-4 h-4" />
+5607:               </button>
+5608: 
+5609:               {/* Header tag */}
+5610:               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+5611:                 <div style={{
+5612:                   background: 'linear-gradient(90deg, #06b6d4, #22d3ee)',
+5613:                   color: '#0a0a0a',
+5614:                   padding: '4px 12px',
+5615:                   borderRadius: '8px',
+5616:                   fontSize: '10px',
+5617:                   fontWeight: 900,
+5618:                   letterSpacing: '0.5px',
+5619:                 }}>
+5620:               {/* Header tag */}
+5621:               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+5622:                 <div style={{
+5623:                   background: 'linear-gradient(90deg, #06b6d4, #22d3ee)',
+5624:                   color: '#0a0a0a',
+5625:                   padding: '4px 12px',
+5626:                   borderRadius: '8px',
+5627:                   fontSize: '10px',
+5628:                   fontWeight: 900,
+5629:                   letterSpacing: '0.5px',
+5630:                 }}>
+5631:                   ✨ ผลงานสำเร็จ
+5632:                 </div>
+5633:                 <span style={{ fontSize: '10px', color: '#475569' }}>
+5634:                   {canvasSelectedItem?.source_type === 'youtube' ? '▶️ YouTube' : '📰 Content'}
+5635:                 </span>
+5636:               </div>
+5637: 
+5638:               {/* Headline section */}
+5639:               <div>
+5640:                 <p style={{ fontSize: '9px', fontWeight: 700, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+5641:                   📌 พาดหัว
+5642:                 </p>
+5643:                 <div style={{
+5644:                   background: 'rgba(6,182,212,0.06)',
+5645:                   border: '1px solid rgba(34,211,238,0.15)',
+5646:                   borderRadius: '10px',
+5647:                   padding: '12px 14px',
+5648:                 }}>
+5649:                   {canvasSelectedItem?.metadata?.copywriting?.headline_3line?.length > 0 ? (
+5650:            
+5651:                     </div>
+5652:                   ) : (
+5653:                     <p style={{ fontSize: '14px', fontWeight: 700, color: '#e2e8f0', margin: 0, lineHeight: 1.4 }}>
+5654:                       {canvasSelectedItem?.selected_headline || canvasSelectedItem?.title || 'ไม่มีพาดหัว'}
+5655:                     </p>
+5656:                   )}
+5657:                 </div>
+5658:               </div>
+5659: 
+5660:               {/* Ca
+5666:                     </p>
+5667:                   )}
+5668:                 </div>
+5669:               </div>
+5670: 
+5671:               {/* Caption / Post Article */}
+5672:               <div style={{ flex: 1, minHeight: 0 }}>
+5673:                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+5674:                   <p style={{ fontSize: '9px', fontWeight: 700, color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>
+5675:                     📝 บทความโพส
+5676:                   </p>
+5677:                   {canvasSelectedItem?.metadata?.copywriting?.caption && (
+5678:                     <button
+5679:                       type="button"
+5680:                       onClick={() => {
+5681:                         navigator.clipboard.writeText(canvasSelectedItem.metadata.copywriting.caption);
+5682:                       }}
+5683:                       style={{
+5684:                         background: 'rgba(34,197,94,0.1)',
+5685:                         border: '1px solid rgba(34,197,94,0.3)',
+5686:                         color: '#4ade80',
+5687:                         fontSize: '9px',
+5688:                         fontWeight: 700,
+5689:                         padding: '3px 10px',
+5690:                         borderRadius: '6px',
+5691:                         cursor: 'pointer',
+5692:                         transition: 'all 0.15s ease',
+5693:                         display: 'flex',
+5694:                         alignItems: 'center',
+5695:                         gap: '4px',
+5696:                       }}
+5697:                     >
+5698:                       📋 คัดลอก
+5699:                     </button>
+5700:                   )}
+5701:                 </div>
+5702:                 <div style={{
+5703:                   background: 'rgba(15,23,42,0.5)',
+5704:                   border: '1px solid rgba(51,65,85,0.4)',
+5705:                   borderRadius: '10px',
+5706:                   padding: '14px',
+5707:                   maxHeight: '280px',
+5708:                   overflowY: 'auto',
+5709:                 }}>
+5710:                   {canvasSelectedItem?.metadata?.copywriting?.caption ? (
+5711:                     <p style={{
+5712:                       fontSize: '12px',
+5713:                       color: '#cbd5e1',
+5714:                       lineHeight: 1.7,
+5715:                       margin: 0,
+5716:                       whiteSpace: 'pre-wrap',
+5717:                       wordBreak: 'break-word',
+5718:                     }}>
+5719:                       {canvasSelectedItem.metadata.copywriting.caption}
+5720:                     </p>
+5721:                   ) : (
+5722:                     <p style={{ fontSize: '11px', color: '#475569', margin: 0, fontStyle: 'italic' }}>
+5723:                       ⚠️ ยังไม่มีบทความโพส — กรุณากดเขียนบทความก่อน
+5724:                     </p>
+5725:                   )}
+5726:                 </div>
+5727:               </div>
+5728: 
+5729:               {/* Footer info */}
+5730:               {canvasSelectedItem && (
+5731:                 <div style={{
+5732:                   display: 'flex',
+5733:                   alignItems: 'center',
+5734:                   gap: '10px',
+5735:                   paddingTop: '10px',
+5736:                   borderTop: '1px solid rgba(51,65,85,0.3)',
+5737:                 }}>
+5738:                   {canvasSelectedItem.author_avatar_url && (
+5739:                     <img
+5740:                       src={`${API_BASE}/vault/media?path=${encodeURIComponent(canvasSelectedItem.author_avatar_url)}`}
+5741:                       alt=""
+5742:                       style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid rgba(51,65,85,0.5)' }}
+5743:                     />
+5744:                   )}
+5745:                   <div>
+5746:                     <p style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', margin: 0 }}>
+5747:                       {canvasSelectedItem.author_name || 'Unknown'}
+5748:                     </p>
+5749:                     {canvasSelectedItem.author_followers && (
+5750:                       <p style={{ fontSize: '8px', color: '#475569', margin: 0 }}>
+5751:                         {canvasSelectedItem.metadata?.subscribers_formatted || canvasSelectedItem.author_followers} ผู้ติดตาม
+5752:                       </p>
+5753:                     )}
+5754:                   </div>
+5755:                 </div>
+5756:               )}
+5757:             </div>
+5758:           </div>
+5759:         </div>
+5760:       )}
+5761:     </div>
+5762:   );

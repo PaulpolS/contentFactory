@@ -1,0 +1,10 @@
+{
+  "CaseInsensitive": "false",
+  "Includes": "[\"VerticalVideoSuitePortal.tsx\"]",
+  "IsRegex": "false",
+  "MatchPerLine": "true",
+  "Query": "\"ผู้ช่วยสร้างคิวตอนซีรีส์\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components\"",
+  "toolAction": "\"Searching for series generator helper in VerticalVideoSuitePortal.tsx\"",
+  "toolSummary": "\"Search for series helper\""
+}

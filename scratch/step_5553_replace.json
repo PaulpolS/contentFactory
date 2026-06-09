@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Expand the canvasRatio state type to include 4:3 and 4:5 aspect ratios\\\"\"",
+  "EndLine": "393",
+  "Instruction": "\"Update canvasRatio state type to include new ratios\"",
+  "ReplacementContent": "\"  const [canvasRatio, setCanvasRatio] = useState<'1:1' | '4:5' | '4:3' | '16:9' | '9:16'>('1:1');\"",
+  "StartLine": "393",
+  "TargetContent": "\"  const [canvasRatio, setCanvasRatio] = useState<'1:1' | '16:9' | '9:16'>('1:1');\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Updating state type\"",
+  "toolSummary": "\"State type update\""
+}

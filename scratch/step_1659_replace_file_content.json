@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Set voiceId default state to Adam\"",
+  "EndLine": "740",
+  "Instruction": "\"Update voiceId state default to 'Adam' instead of mac_Kanya (Enhanced)\"",
+  "ReplacementContent": "\"  // TTS State\\n  const [voiceId, setVoiceId] = useState('Adam');\"",
+  "StartLine": "737",
+  "TargetContent": "\"  // TTS State\\n  const [voiceId, setVoiceId] = useState('mac_Kanya (Enhanced)');\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Updating voiceId state hook\"",
+  "toolSummary": "\"Edit file content\""
+}

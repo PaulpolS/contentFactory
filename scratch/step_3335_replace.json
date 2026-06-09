@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Add quickViewCopywriting and quickViewTab state declarations in App.tsx.\"",
+  "EndLine": "349",
+  "Instruction": "\"Add quickViewCopywriting and quickViewTab states.\"",
+  "ReplacementContent": "\"  const [generatingCopywriting, setGeneratingCopywriting] = useState(false);\\n  const [quickViewCopywriting, setQuickViewCopywriting] = useState<VaultContent | null>(null);\\n  const [quickViewTab, setQuickViewTab] = useState<'post' | 'headlines'>('post');\\n  const [canvasHighlight, setCanvasHighlight] = useState('');\"",
+  "StartLine": "345",
+  "TargetContent": "\"  const [generatingCopywriting, setGeneratingCopywriting] = useState(false);\\n  const [canvasHighlight, setCanvasHighlight] = useState('');\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Adding copywriting viewer states to React app\"",
+  "toolSummary": "\"React state variables update\""
+}

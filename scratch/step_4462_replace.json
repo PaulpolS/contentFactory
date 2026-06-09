@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Restore the logs state declaration to support SSE logging.\"",
+  "EndLine": "360",
+  "Instruction": "\"Restore the logs state declaration to support SSE logging.\"",
+  "ReplacementContent": "\"  // Active Terminal log states for SSE streams\\n  const [logs, setLogs] = useState<{\\n    canvas: string[];\\n  }>({\\n    canvas: ['[SYSTEM] Terminal ready. Select an item and click \\\"Draw Poster\\\" to start...'],\\n  });\\n\\n  const [runningModule, setRunningModule] = useState<{\"",
+  "StartLine": "357",
+  "TargetContent": "\"\\n\\n\\n  const [runningModule, setRunningModule] = useState<{\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Restoring logs state variable\"",
+  "toolSummary": "\"Edit App.tsx\""
+}

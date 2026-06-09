@@ -1,0 +1,13 @@
+{
+  "name": "write_to_file",
+  "args": {
+    "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Python script to extract first read of SettingsPortal.tsx from previous log to reconstruct original uncorrupted file.\"}",
+    "CodeContent": "\"import json\\n\\nlog_path = \\\"/Users/paulpolsulintaboon/.gemini/antigravity/brain/59119761-b490-421b-b15d-46f12f5c4158/.system_generated/logs/transcript.jsonl\\\"\\n\\nwith open(log_path, 'r', encoding='utf-8') as f:\\n    for idx, line in enumerate(f):\\n        if idx == 877:\\n            data = json.loads(line)\\n            content = data.get('content', '')\\n            print(f\\\"Index 877 content length: {len(content)}\\\")\\n            print(\\\"First 500 chars:\\\")\\n            print(content[:500])\\n            print(\\\"Last 500 chars:\\\")\\n            print(content[-500:])\\n            # Save it to a file\\n            with open(\\\"SettingsPortal.tsx.extracted\\\", \\\"w\\\", encoding=\\\"utf-8\\\") as out:\\n                out.write(content)\\n            print(\\\"Saved to SettingsPortal.tsx.extracted\\\")\\n            break\\n\"",
+    "Description": "\"Write python script to extract the first view of SettingsPortal from logs\"",
+    "IsArtifact": "false",
+    "Overwrite": "true",
+    "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/SettingsPortal.tsx.get_first.py\"",
+    "toolAction": "\"Writing python extractor script\"",
+    "toolSummary": "\"Create file extractor script\""
+  }
+}

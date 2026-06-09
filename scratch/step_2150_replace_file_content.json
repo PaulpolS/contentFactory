@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Add explicit OpenRouter error reporting to script generator\"",
+  "EndLine": "1350",
+  "Instruction": "\"Parse data.error if present and report its message, otherwise raise an informative error detailing data payload.\"",
+  "ReplacementContent": "\"      });\\n      const data = await response.json();\\n      if (data?.error) {\\n        throw new Error(`OpenRouter Error: ${data.error.message || JSON.stringify(data.error)}`);\\n      }\\n      const aiResponse = data?.choices?.[0]?.message?.content;\\n      if (!aiResponse) {\\n        throw new Error(`AI ส่งบทสคริปต์ว่างกลับมา (Response data: ${JSON.stringify(data)})`);\\n      }\"",
+  "StartLine": "1345",
+  "TargetContent": "\"      });\\n\\n      const data = await response.json();\\n      const aiResponse = data?.choices?.[0]?.message?.content;\\n      if (!aiResponse) throw new Error('AI ส่งบทสคริปต์ว่างกลับมา');\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Injecting error handling into script generator\"",
+  "toolSummary": "\"Update VerticalVideoSuitePortal.tsx\""
+}

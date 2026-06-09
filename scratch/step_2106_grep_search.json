@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"setAssembledVideoPath\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Searching for video path state changes\"",
+  "toolSummary": "\"Grep search setAssembledVideoPath\""
+}

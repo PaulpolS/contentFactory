@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Simplify video assembly render button without silentMode\"",
+  "EndLine": "3363",
+  "Instruction": "\"Simplify video assembly render button disabled condition without silentMode\"",
+  "ReplacementContent": "\"              <button\\n                onClick={triggerManualAssembleAndRender}\\n                disabled={isAssembling || !audioUrl || !srtContent}\\n                className=\\\"w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-40\\\"\\n              >\\n                {isAssembling ? '🎬 กำลังตัดต่อสุ่มฟุตเทจและเรนเดอร์...' : '💥 ประกอบฟุตเทจ + ซ้อนบีจีเอ็ม + เรนเดอร์วิดีโอเดี่ยว'}\\n              </button>\"",
+  "StartLine": "3356",
+  "TargetContent": "\"              <button\\n                onClick={triggerManualAssembleAndRender}\\n                disabled={isAssembling || (!silentMode && !audioUrl) || !srtContent}\\n                className=\\\"w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-40\\\"\\n              >\\n                {isAssembling ? '🎬 กำลังตัดต่อสุ่มฟุตเทจและเรนเดอร์...' : '💥 ประกอบฟุตเทจ + ซ้อนบีจีเอ็ม + เรนเดอร์วิดีโอเดี่ยว'}\\n              </button>\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Simplifying video assembly render button\"",
+  "toolSummary": "\"Edit file content\""
+}

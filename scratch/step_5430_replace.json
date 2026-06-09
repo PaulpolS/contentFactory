@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Change queue runner highlight query parameter key to keywords to match the Python script CLI parser.\"",
+  "EndLine": "1186",
+  "Instruction": "\"Change q.append('highlight', ...) to q.append('keywords', ...) in both branches of the conditional block.\"",
+  "ReplacementContent": "\"    // Keyword Highlight\\n    const activeHighlight = (canvasSelectedItem?.id === item.id) ? canvasHighlight : '';\\n    if (activeHighlight) {\\n      q.append('keywords', activeHighlight);\\n    } else {\\n      // Fetch fallback keywords from metadata\\n      let keywords: string[] = [];\\n      if (item.metadata) {\\n        const meta = item.metadata;\\n        keywords = meta.keywords || meta.tags || [];\\n      }\\n      if (keywords.length > 0) {\\n        q.append('keywords', keywords.join(','));\\n      }\\n    }\"",
+  "StartLine": "1171",
+  "TargetContent": "\"    // Keyword Highlight\\n    const activeHighlight = (canvasSelectedItem?.id === item.id) ? canvasHighlight : '';\\n    if (activeHighlight) {\\n      q.append('highlight', activeHighlight);\\n    } else {\\n      // Fetch fallback keywords from metadata\\n      let keywords: string[] = [];\\n      if (item.metadata) {\\n        const meta = item.metadata;\\n        keywords = meta.keywords || meta.tags || [];\\n      }\\n      if (keywords.length > 0) {\\n        q.append('highlight', keywords.join(','));\\n      }\\n    }\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/App.tsx\"",
+  "toolAction": "\"Renaming highlight query param to keywords in queue runner\"",
+  "toolSummary": "\"App.tsx edit\""
+}

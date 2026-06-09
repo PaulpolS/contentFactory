@@ -1,0 +1,12 @@
+{
+  "AllowMultiple": "false",
+  "Description": "\"Set silentMode and silentDuration to constant false and 10\"",
+  "EndLine": "832",
+  "Instruction": "\"Replace state hooks for silentMode and silentDuration with constant definitions\"",
+  "ReplacementContent": "\"  const silentMode = false;\\n  const silentDuration = 10;\"",
+  "StartLine": "817",
+  "TargetContent": "\"  const [silentMode, setSilentMode] = useState<boolean>(() => {\\n    const saved = localStorage.getItem('auto_video_silent_mode');\\n    return saved !== null ? saved === 'true' : true; // Default to true as per spec\\n  });\\n  useEffect(() => {\\n    localStorage.setItem('auto_video_silent_mode', String(silentMode));\\n  }, [silentMode]);\\n\\n  const [silentDuration, setSilentDuration] = useState<number>(() => {\\n    const saved = localStorage.getItem('auto_video_silent_duration');\\n    return saved ? Number(saved) : 10;\\n  });\\n  useEffect(() => {\\n    localStorage.setItem('auto_video_silent_duration', String(silentDuration));\\n  }, [silentDuration]);\"",
+  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Updating silentMode state definition\"",
+  "toolSummary": "\"Edit file content\""
+}

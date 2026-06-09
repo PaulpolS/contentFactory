@@ -1,0 +1,7 @@
+{
+  "MatchPerLine": "true",
+  "Query": "\"generateAutoAlignSubtitles\"",
+  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
+  "toolAction": "\"Searching for generateAutoAlignSubtitles function\"",
+  "toolSummary": "\"Grep search generateAutoAlignSubtitles\""
+}
