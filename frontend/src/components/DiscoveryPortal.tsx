@@ -318,11 +318,15 @@ const DISCOVERY_MODES = [
 ];
 
 const POPULAR_RSS_SITES = [
-  { name: 'TechCrunch', url: 'https://techcrunch.com/feed/', icon: '🗞️' },
-  { name: 'CNBC Technology', url: 'https://search.cnbc.com/rs/search/view/xml/contents.xml?partnerId=2000&keywords=technology', icon: '💰' },
-  { name: 'Bloomberg Tech', url: 'https://www.bloomberg.com/technology', icon: '📊' },
-  { name: 'Blognone (Thai)', url: 'https://www.blognone.com/node/feed', icon: '🇹🇭' },
-  { name: 'Techfeed (Thai)', url: 'https://www.facebook.com/techfeedthailand', icon: '📱' }
+  { name: 'National Geographic Thai', url: 'https://ngthai.com/feed/', icon: '🌍' },
+  { name: 'Brand Inside (Business)', url: 'https://brandinside.asia/feed/', icon: '💡' },
+  { name: 'The Standard (Lifestyle)', url: 'https://thestandard.co/category/lifestyle/feed/', icon: '🛋️' },
+  { name: 'ไทยรัฐ (ไลฟ์สไตล์)', url: 'https://www.thairath.co.th/rss/lifestyle', icon: '☕️' },
+  { name: 'ไทยรัฐ (ข่าวเด่น)', url: 'https://www.thairath.co.th/rss/news', icon: '📰' },
+  { name: 'มติชน (Matichon)', url: 'https://www.matichon.co.th/feed', icon: '🗞️' },
+  { name: 'ข่าวสด (Khaosod)', url: 'https://www.khaosod.co.th/feed', icon: '🇹🇭' },
+  { name: 'Blognone (IT)', url: 'https://www.blognone.com/node/feed', icon: '💻' },
+  { name: 'TechCrunch', url: 'https://techcrunch.com/feed/', icon: '🚀' }
 ];
 
 const STOCK_VISUAL_TONES = [
@@ -437,7 +441,7 @@ const YOUTUBE_PREDEFINED_CATEGORIES = [
   }
 ];
 
-export default function DiscoveryPortal({ onApprove }: { onApprove?: () => void }) {
+export default function DiscoveryPortal({ onApprove, onSendToVideoSuite }: { onApprove?: () => void; onSendToVideoSuite?: () => void }) {
   // Main Tab Switcher: 'radar' (Watchlist Radar) | 'content' (RSS/YT/GH Content Scrapers)
   const [activeMainTab, setActiveMainTab] = useState<'radar' | 'content'>('radar');
 
@@ -476,6 +480,115 @@ export default function DiscoveryPortal({ onApprove }: { onApprove?: () => void 
   // Content Scrapers Input States
   const [rssUrl, setRssUrl] = useState('https://techcrunch.com/feed/');
   const [rssLimit, setRssLimit] = useState(10);
+
+  // ── News-to-Video: Image scraping state (NEW) ──
+  const [newsScrapedImages, setNewsScrapedImages] = useState<Record<string, string[]>>({});
+  const [scrapingImageId, setScrapingImageId] = useState<string | null>(null);
+  const [isBatchScraping, setIsBatchScraping] = useState<boolean>(false);
+  const [selectedRssIds, setSelectedRssIds] = useState<Set<string>>(new Set());
+
+  // ── News-to-Video: Scrape images from article URL (NEW) ──
+  const handleScrapeNewsImages = async (item: VaultContent) => {
+    if (!item.source_url) return;
+    setScrapingImageId(item.id);
+    try {
+      const res = await fetch('http://localhost:5005/api/news/scrape-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: item.source_url }),
+      });
+      const data = await res.json();
+      if (data.success && data.images) {
+        setNewsScrapedImages(prev => ({ ...prev, [item.id]: data.images }));
+      }
+    } catch (err: any) {
+      console.error('Failed to scrape images:', err);
+    }
+    setScrapingImageId(null);
+  };
+
+  const handleOneClickVideo = async (item: VaultContent) => {
+    if (!item.source_url) return;
+    setScrapingImageId(item.id);
+    try {
+      const res = await fetch('http://localhost:5005/api/news/scrape-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: item.source_url }),
+      });
+      const data = await res.json();
+      if (data.success && data.images) {
+        setNewsScrapedImages(prev => ({ ...prev, [item.id]: data.images }));
+        if (data.images.length >= 3) {
+          handleSendToVideoSuite(item, data.images);
+        } else {
+          alert(`รูปภาพน้อยเกินไป (พบแค่ ${data.images.length} รูป) ต้องใช้ขั้นต่ำ 3 รูปในการทำคลิป`);
+        }
+      } else {
+        alert('ไม่พบรูปภาพในข่าวนี้');
+      }
+    } catch (err: any) {
+      console.error('Failed to scrape images:', err);
+      alert('ดึงรูปภาพไม่สำเร็จ');
+    }
+    setScrapingImageId(null);
+  };
+
+  const handleBulkOneClickVideo = async () => {
+    const selectedItems = scrapedResults.filter(r => r.source_type === 'rss' && selectedRssIds.has(r.id));
+    if (selectedItems.length === 0) return;
+
+    setIsBatchScraping(true);
+    const validPayloads: any[] = [];
+    
+    for (const item of selectedItems) {
+      if (!item.source_url) continue;
+      
+      try {
+        const res = await fetch('http://localhost:5005/api/news/scrape-images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: item.source_url }),
+        });
+        const data = await res.json();
+        if (data.success && data.images && data.images.length >= 3) {
+          validPayloads.push({
+            title: item.title,
+            content: item.raw_content,
+            headline: item.selected_headline || item.title,
+            images: data.images,
+            sourceUrl: item.source_url,
+            source: item.author_name || 'RSS News',
+            timestamp: Date.now(),
+          });
+        }
+      } catch (err) {
+        console.error('Failed to scrape images for batch item:', err);
+      }
+    }
+    
+    setIsBatchScraping(false);
+    
+    if (validPayloads.length > 0) {
+      localStorage.setItem('batch_news_to_video_payloads', JSON.stringify(validPayloads));
+      if (onSendToVideoSuite) onSendToVideoSuite();
+    } else {
+      alert('ดึงรูปไม่สำเร็จ หรือรูปมีไม่ถึง 3 รูปสำหรับข่าวทั้งหมดที่เลือกเลยครับ');
+    }
+  };
+
+  const handleSendToVideoSuite = (item: VaultContent, images: string[]) => {
+    localStorage.setItem('news_to_video_payload', JSON.stringify({
+      title: item.title,
+      content: item.raw_content,
+      headline: item.selected_headline || item.title,
+      images,
+      sourceUrl: item.source_url,
+      source: item.author_name || 'RSS News',
+      timestamp: Date.now(),
+    }));
+    if (onSendToVideoSuite) onSendToVideoSuite();
+  };
   
   const [ytUrl, setYtUrl] = useState('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
   const [ytLimit, setYtLimit] = useState(5);
@@ -2750,7 +2863,7 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
   useEffect(() => {
     // Dummy log to silence TS6133 strict unused warnings elegantly
   if (false) {
-    console.log(resultsViewMode, setResultsViewMode, scrapedResults, loadingResults, runAiScoringForPost, handleInstantApprove, CopyHeadlineBtn);
+    console.log(resultsViewMode, setResultsViewMode, scrapedResults, loadingResults, runAiScoringForPost, handleInstantApprove, CopyHeadlineBtn, newsScrapedImages, scrapingImageId, handleScrapeNewsImages, handleSendToVideoSuite);
   }
 
   return () => {
@@ -3201,7 +3314,7 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
 
             {/* Sub-tab Configuration layouts */}
             {/* Sub-tab Configuration layouts */}
-            {contentActiveSubTab === 'rss' && (
+            {contentActiveSubTab === 'rss' && (<>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* Left Config Panel */}
@@ -3294,7 +3407,201 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
                   </div>
                 </div>
               </div>
-            )}
+
+              {/* ── RSS Scraped Results with News-to-Video (NEW) ── */}
+              {scrapedResults.filter(item => item.source_type === 'rss').length > 0 && (
+                <div className="mt-6 p-5 rounded-xl border border-slate-900 bg-slate-950/40">
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+                    📰 ข่าว RSS ที่ดึงเข้าคลังแล้ว ({scrapedResults.filter(i => i.source_type === 'rss').length} รายการ)
+                    <span style={{
+                      background: 'linear-gradient(135deg, #a855f7, #ec4899)',
+                      color: '#fff',
+                      fontSize: 9,
+                      fontWeight: 800,
+                      padding: '1px 6px',
+                      borderRadius: 6,
+                      letterSpacing: 0.5,
+                    }}>✨ NEW</span>
+                  </h4>
+                  {/* Bulk action toolbar */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <button
+                      onClick={() => {
+                        const rssIds = scrapedResults.filter(i => i.source_type === 'rss').map(i => i.id);
+                        setSelectedRssIds(prev => prev.size === rssIds.length ? new Set() : new Set(rssIds));
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-bold text-slate-300 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+                    >
+                      {selectedRssIds.size === scrapedResults.filter(i => i.source_type === 'rss').length && selectedRssIds.size > 0 ? '☑️ ยกเลิกทั้งหมด' : '☐ เลือกทั้งหมด'}
+                    </button>
+                    {selectedRssIds.size > 0 && (
+                      <>
+                        <button
+                          onClick={() => {
+                            if (confirm(`คุณต้องการลบข่าวที่เลือกจำนวน ${selectedRssIds.size} รายการหรือไม่?`)) {
+                              setScrapedResults(prev => prev.filter(r => !selectedRssIds.has(r.id)));
+                              setSelectedRssIds(new Set());
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-[10px] font-bold text-rose-400 hover:bg-rose-500/25 transition-all cursor-pointer"
+                        >
+                          🗑️ ลบที่เลือก ({selectedRssIds.size})
+                        </button>
+                        <button
+                          onClick={handleBulkOneClickVideo}
+                          disabled={isBatchScraping}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/50 text-[10px] font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all cursor-pointer flex items-center gap-1"
+                        >
+                          {isBatchScraping ? '⏳ กำลังดึงรูป...' : `⚡ ดึงรูปและคิวทำคลิป (${selectedRssIds.size})`}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+                    {scrapedResults.filter(item => item.source_type === 'rss').map(item => (
+                      <div key={item.id} className={`p-4 rounded-xl border transition-all ${selectedRssIds.has(item.id) ? 'border-rose-500/40 bg-rose-950/20' : 'border-slate-900 bg-slate-950/60 hover:border-slate-800'}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedRssIds.has(item.id)}
+                            onChange={() => setSelectedRssIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
+                              return next;
+                            })}
+                            style={{ width: 16, height: 16, accentColor: '#f43f5e', cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h5 className="text-xs font-bold text-slate-200 leading-snug">{item.title}</h5>
+                            {item.selected_headline && (
+                              <p className="text-[10px] text-pink-400 mt-1 font-bold">🇹🇭 {item.selected_headline}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-500">
+                              {item.author_name && <span>✍️ {item.author_name}</span>}
+                              <span>📰 News: {item.rating_news}/10</span>
+                              <span>🌲 Evergreen: {item.rating_evergreen}/10</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              onClick={() => handleInstantApprove(item)}
+                              className="px-2.5 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/25 hover:bg-cyan-500/20 text-[10px] font-bold text-cyan-400 transition-all cursor-pointer"
+                            >
+                              ✅ อนุมัติ
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setScrapedResults(prev => prev.filter(r => r.id !== item.id)); }}
+                              className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/25 hover:bg-rose-500/20 text-[10px] font-bold text-rose-400 transition-all cursor-pointer"
+                            >
+                              🗑️ ลบ
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* ── News-to-Video Buttons (NEW) ── */}
+                        {item.source_type === 'rss' && (
+                          <div style={{ marginTop: 8 }}>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleOneClickVideo(item); }}
+                              disabled={scrapingImageId === item.id}
+                              style={{
+                                padding: '5px 12px',
+                                borderRadius: 8,
+                                border: '1px solid rgba(16,185,129,0.5)',
+                                background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.15))',
+                                color: '#34d399',
+                                fontSize: 11,
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                position: 'relative' as const,
+                                transition: 'all 0.2s',
+                              }}
+                            >
+                              {scrapingImageId === item.id ? '⏳ กำลังวิเคราะห์และดูดข้อมูล...' : '⚡ ดึงรูปพร้อมส่งทำคลิป (1-Click)'}
+                              <span style={{
+                                background: 'linear-gradient(135deg, #10b981, #06b6d4)',
+                                color: '#fff',
+                                fontSize: 9,
+                                fontWeight: 800,
+                                padding: '1px 6px',
+                                borderRadius: 6,
+                                marginLeft: 4,
+                                letterSpacing: 0.5,
+                              }}>Auto</span>
+                            </button>
+
+                            {/* Scraped images gallery */}
+                            {newsScrapedImages[item.id] && newsScrapedImages[item.id].length > 0 && (
+                              <div style={{ marginTop: 8 }}>
+                                <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4, fontWeight: 600 }}>
+                                  📸 พบรูปข่าว {newsScrapedImages[item.id].length} รูป
+                                </div>
+                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+                                  {newsScrapedImages[item.id].slice(0, 8).map((img, idx) => (
+                                    <img
+                                      key={idx}
+                                      src={img}
+                                      alt={`news-${idx}`}
+                                      style={{
+                                        width: 56,
+                                        height: 56,
+                                        objectFit: 'cover' as const,
+                                        borderRadius: 6,
+                                        border: '1px solid rgba(100,116,139,0.3)',
+                                      }}
+                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                  ))}
+                                </div>
+                                {newsScrapedImages[item.id].length >= 3 && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleSendToVideoSuite(item, newsScrapedImages[item.id]); }}
+                                    style={{
+                                      marginTop: 6,
+                                      padding: '6px 14px',
+                                      borderRadius: 8,
+                                      border: '1px solid rgba(16,185,129,0.5)',
+                                      background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.15))',
+                                      color: '#34d399',
+                                      fontSize: 12,
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 6,
+                                      transition: 'all 0.2s',
+                                    }}
+                                  >
+                                    🎬 ส่งทำคลิปข่าว ({newsScrapedImages[item.id].length} รูป)
+                                    <span style={{
+                                      background: 'linear-gradient(135deg, #10b981, #06b6d4)',
+                                      color: '#fff',
+                                      fontSize: 9,
+                                      fontWeight: 800,
+                                      padding: '1px 6px',
+                                      borderRadius: 6,
+                                      letterSpacing: 0.5,
+                                    }}>✨ NEW</span>
+                                  </button>
+                                )}
+                                {newsScrapedImages[item.id].length > 0 && newsScrapedImages[item.id].length < 3 && (
+                                  <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 4, fontWeight: 600 }}>
+                                    ⚠️ ต้องการอย่างน้อย 3 รูปเพื่อส่งทำคลิป (พบ {newsScrapedImages[item.id].length} รูป)
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>)}
 
             {contentActiveSubTab === 'youtube' && (
               <div className="space-y-6">

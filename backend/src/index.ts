@@ -2968,6 +2968,282 @@ app.post('/api/youtube-keyword-search', async (req, res) => {
   }
 });
 
+// ── News-to-Video Pipeline APIs (NEW) ──
+
+app.post('/api/news/scrape-images', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'Missing url' });
+
+    // Fetch the actual article page HTML
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      redirect: 'follow',
+    });
+    const html = await response.text();
+
+    // Extract title from <title> or og:title
+    const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']*)["']/i);
+    const titleTagMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+    const title = ogTitleMatch?.[1] || titleTagMatch?.[1] || '';
+
+    // Extract images
+    const images: string[] = [];
+    const seen = new Set<string>();
+
+    const addImage = (imgUrl: string) => {
+      if (!imgUrl || seen.has(imgUrl)) return;
+      // Skip tiny images, icons, tracking pixels, base64, SVGs
+      if (imgUrl.startsWith('data:')) return;
+      if (imgUrl.endsWith('.svg')) return;
+      if (/logo|icon|avatar|badge|button|pixel|tracking|ads|banner-ad/i.test(imgUrl)) return;
+      if (imgUrl.length < 10) return;
+      // Make absolute URL
+      let absoluteUrl = imgUrl;
+      if (imgUrl.startsWith('//')) absoluteUrl = 'https:' + imgUrl;
+      else if (imgUrl.startsWith('/')) {
+        const base = new URL(url);
+        absoluteUrl = base.origin + imgUrl;
+      } else if (!imgUrl.startsWith('http')) return;
+      seen.add(absoluteUrl);
+      images.push(absoluteUrl);
+    };
+
+    // 1. Open Graph image
+    const ogImgMatches = html.matchAll(/<meta[^>]*property=["']og:image[^"']*["'][^>]*content=["']([^"']*)["']/gi);
+    for (const m of ogImgMatches) addImage(m[1]);
+
+    // 2. Twitter card image
+    const twitterImgMatch = html.match(/<meta[^>]*name=["']twitter:image[^"']*["'][^>]*content=["']([^"']*)["']/i);
+    if (twitterImgMatch) addImage(twitterImgMatch[1]);
+
+    // 3. All <img> tags in article/main content
+    // First try to find article content area
+    const articleMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i)
+      || html.match(/<main[^>]*>([\s\S]*?)<\/main>/i)
+      || html.match(/<div[^>]*class=["'][^"']*content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
+    const contentHtml = articleMatch?.[1] || html;
+
+    const imgMatches = contentHtml.matchAll(/<img[^>]*(?:src|data-src|data-lazy-src)=["']([^"']+)["'][^>]*>/gi);
+    for (const m of imgMatches) addImage(m[1]);
+
+    // 4. <figure> with <img>
+    const figureMatches = contentHtml.matchAll(/<figure[^>]*>[\s\S]*?<img[^>]*src=["']([^"']+)["'][^>]*>[\s\S]*?<\/figure>/gi);
+    for (const m of figureMatches) addImage(m[1]);
+
+    // 5. <picture> source
+    const pictureMatches = contentHtml.matchAll(/<source[^>]*srcset=["']([^"'\s]+)/gi);
+    for (const m of pictureMatches) addImage(m[1]);
+
+    res.json({ success: true, images, title, imageCount: images.length });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+app.post('/api/news/download-images', async (req, res) => {
+  try {
+    const { images, articleId } = req.body;
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      return res.status(400).json({ error: 'Missing images array' });
+    }
+    const safeId = (articleId || `news_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const outputDir = path.resolve(__dirname, `../../public/Image_stock/${safeId}`);
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+
+    const localPaths: string[] = [];
+    const https = require('https');
+    const http = require('http');
+
+    for (let i = 0; i < images.length; i++) {
+      try {
+        const imgUrl = images[i];
+        const ext = (imgUrl.match(/\.(jpg|jpeg|png|webp|gif)/i)?.[0] || '.jpg').toLowerCase();
+        const fileName = `img_${String(i + 1).padStart(3, '0')}${ext}`;
+        const filePath = path.join(outputDir, fileName);
+
+        await new Promise<void>((resolve, reject) => {
+          const protocol = imgUrl.startsWith('https') ? https : http;
+          const makeRequest = (requestUrl: string, redirectCount = 0) => {
+            if (redirectCount > 5) { reject(new Error('Too many redirects')); return; }
+            protocol.get(requestUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                'Accept': 'image/*',
+              },
+              timeout: 15000,
+            }, (response: any) => {
+              if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                makeRequest(response.headers.location, redirectCount + 1);
+                return;
+              }
+              if (response.statusCode !== 200) { reject(new Error(`HTTP ${response.statusCode}`)); return; }
+              const fileStream = fs.createWriteStream(filePath);
+              response.pipe(fileStream);
+              fileStream.on('finish', () => { fileStream.close(); resolve(); });
+              fileStream.on('error', reject);
+            }).on('error', reject);
+          };
+          makeRequest(imgUrl);
+        });
+
+        localPaths.push(`/Image_stock/${safeId}/${fileName}`);
+      } catch (imgErr: any) {
+        console.warn(`Failed to download image ${i}: ${imgErr.message}`);
+      }
+    }
+
+    res.json({ success: true, localPaths, outputDir });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+app.post('/api/news/build-image-slideshow', (req, res) => {
+  try {
+    req.setTimeout(0);
+    res.setTimeout(0);
+
+    const { imagePaths, targetDuration, outputPath } = req.body;
+    if (!imagePaths || !Array.isArray(imagePaths) || imagePaths.length === 0) {
+      return res.status(400).json({ error: 'Missing imagePaths array' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const send = (data: any) => {
+      if (!res.writableEnded) {
+        try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {}
+      }
+    };
+
+    (async () => {
+      const tempDir = path.join(path.resolve(__dirname, '../../public/temp_render'), `news_slideshow_${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      try {
+        const ffmpegPath = getFFmpegPath();
+        const { execFileSync: localExecFileSync, spawn: spawnProcess } = require('child_process');
+        const duration = Number(targetDuration) || 60;
+        const OUT_W = 1080;
+        const OUT_H = 1920;
+        const FPS = 30;
+
+        // Resolve absolute image paths
+        const resolvedPaths = imagePaths.map((p: string) => {
+          if (path.isAbsolute(p)) return p;
+          return path.resolve(__dirname, '../../public', p.replace(/^\//, ''));
+        }).filter((p: string) => fs.existsSync(p));
+
+        if (resolvedPaths.length === 0) {
+          send({ error: 'ไม่พบไฟล์รูปภาพที่ระบุ' });
+          if (!res.writableEnded) res.end();
+          return;
+        }
+
+        // Calculate per-image duration and loop images if needed
+        const minDurationPerImage = 3; // minimum 3 seconds per image
+        let perImageDuration = duration / resolvedPaths.length;
+        let imagesToUse = [...resolvedPaths];
+
+        if (perImageDuration < minDurationPerImage) {
+          // Loop images to fill duration
+          const neededCount = Math.ceil(duration / minDurationPerImage);
+          imagesToUse = [];
+          for (let i = 0; i < neededCount; i++) {
+            imagesToUse.push(resolvedPaths[i % resolvedPaths.length]);
+          }
+          perImageDuration = duration / imagesToUse.length;
+        }
+
+        send({ log: `สร้าง slideshow จากรูป ${resolvedPaths.length} รูป (ใช้ ${imagesToUse.length} ช่อง) ความยาว ${duration} วินาที` });
+
+        // Build each image segment with Ken Burns zoom
+        const segmentPaths: string[] = [];
+        for (let i = 0; i < imagesToUse.length; i++) {
+          const imgPath = imagesToUse[i];
+          const segPath = path.join(tempDir, `seg_${String(i).padStart(3, '0')}.mp4`);
+          segmentPaths.push(segPath);
+
+          const totalFrames = Math.ceil(perImageDuration * FPS);
+          // Alternate between zoom-in and zoom-out for visual variety
+          const isZoomIn = i % 2 === 0;
+          const zpFilter = isZoomIn
+            ? `zoompan=z='min(zoom+0.001,1.3)':d=${totalFrames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${OUT_W}x${OUT_H}:fps=${FPS}`
+            : `zoompan=z='if(eq(on,1),1.3,max(zoom-0.001,1.0))':d=${totalFrames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${OUT_W}x${OUT_H}:fps=${FPS}`;
+
+          const vf = `scale=${OUT_W * 2}:${OUT_H * 2}:force_original_aspect_ratio=increase,crop=${OUT_W * 2}:${OUT_H * 2},${zpFilter},format=yuv420p`;
+
+          send({ log: `เตรียมรูป ${i + 1}/${imagesToUse.length}: ${path.basename(imgPath)} (${isZoomIn ? 'zoom-in' : 'zoom-out'})` });
+
+          localExecFileSync(ffmpegPath, [
+            '-y',
+            '-loop', '1',
+            '-i', imgPath,
+            '-t', perImageDuration.toFixed(2),
+            '-vf', vf,
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-crf', '20',
+            '-pix_fmt', 'yuv420p',
+            '-an',
+            segPath,
+          ], { timeout: 120000, maxBuffer: 1024 * 1024 * 50 });
+        }
+
+        // Concatenate segments with xfade transitions
+        send({ log: 'รวมรูปทั้งหมดเข้าด้วยกัน (fade transitions)...' });
+
+        const finalOutput = outputPath || path.join(tempDir, 'slideshow_output.mp4');
+        const finalDir = path.dirname(finalOutput);
+        if (!fs.existsSync(finalDir)) fs.mkdirSync(finalDir, { recursive: true });
+
+        if (segmentPaths.length === 1) {
+          // Single segment, just copy
+          fs.copyFileSync(segmentPaths[0], finalOutput);
+        } else {
+          // Use concat for simplicity and reliability (xfade can be fragile with many segments)
+          const concatListPath = path.join(tempDir, 'concat_list.txt');
+          const concatContent = segmentPaths.map(p => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');
+          fs.writeFileSync(concatListPath, concatContent);
+
+          localExecFileSync(ffmpegPath, [
+            '-y',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', concatListPath,
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-crf', '20',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            '-an',
+            finalOutput,
+          ], { timeout: 600000, maxBuffer: 1024 * 1024 * 100 });
+        }
+
+        send({ log: `✅ สร้าง slideshow สำเร็จ: ${finalOutput}` });
+        send({ success: true, filePath: finalOutput, duration });
+        if (!res.writableEnded) res.end();
+      } catch (e: any) {
+        send({ error: e.message || String(e) });
+        if (!res.writableEnded) res.end();
+      } finally {
+        // Clean up temp segments
+        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+      }
+    })();
+  } catch (e: any) {
+    res.statusCode = 500;
+    res.end(JSON.stringify({ error: e.message }));
+  }
+});
+
 // Start listening
 const PORT = process.env.PORT || 5005;
 app.listen(PORT, () => {

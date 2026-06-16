@@ -58,7 +58,6 @@ __pycache__/
 public/models/
 public/temp_render/
 
-<<<<<<< HEAD
 # Stock media files (generated/downloaded at runtime)
 public/Voice_stock/*.mp3
 public/Video_stock/
@@ -71,47 +70,33 @@ public/Avatar_stock/
 !public/Voice_stock/sfx_catalog.json
 !public/Sound_stock/sfx_catalog.json
 
-# Scratch/temp files
-scratch/
-
-# Export files
-*.csv
-=======
 # ============================================================
 # Content Vault - Runtime Generated Files (DO NOT COMMIT)
 # ============================================================
-# รูปภาพ, วิดีโอ, และไฟล์ที่โปรแกรมดาวน์โหลด/สร้างขึ้นเอง
-# ไม่ต้องส่งไปกับ Git เพราะโปรแกรมจะสร้างใหม่เองอัตโนมัติ
-
-# Downloaded Media (รูปที่ดาวน์โหลดมา)
 content_vault/downloaded_media/**
 !content_vault/downloaded_media/**/.gitkeep
 
-# Generated Graphics (รูปที่โปรแกรมสร้าง)
 content_vault/generated_graphics/**
 !content_vault/generated_graphics/**/.gitkeep
 
-# Logos (โลโก้ที่ดาวน์โหลด)
 content_vault/logos/**
 !content_vault/logos/.gitkeep
 
-# Databases (ฐานข้อมูล SQLite)
 content_vault/databases/**
 !content_vault/databases/.gitkeep
 
-# Exports CSV (ไฟล์ export)
 content_vault/exports_csv/**
 !content_vault/exports_csv/.gitkeep
 !content_vault/exports_csv/deep_research/.gitkeep
 
-# Scratch / Temp files
 content_vault/scratch/**
 !content_vault/scratch/.gitkeep
 
+# Scratch / Temp files
 scratch/**
 !scratch/.gitkeep
 
-# CSV exports at root level (ไฟล์ข้อมูลที่ generate)
+# CSV exports at root level
 success.csv
 content_export_*.csv
 
@@ -127,7 +112,7 @@ content_export_*.csv
 *.webm
 *.mov
 *.avi
-# ยกเว้น: รูปที่อยู่ใน frontend/public (UI assets ที่จำเป็น)
+# Exceptions: UI assets
 !frontend/public/**/*.png
 !frontend/public/**/*.jpg
 !frontend/public/**/*.jpeg
@@ -137,4 +122,3 @@ content_export_*.csv
 !public/**/*.jpg
 !public/**/*.ico
 !public/**/*.svg
->>>>>>> 0f69003152b94e918816e2701de223a71cc0ff7c
