@@ -480,6 +480,12 @@ export default function DiscoveryPortal({ onApprove, onSendToVideoSuite }: { onA
   // Content Scrapers Input States
   const [rssUrl, setRssUrl] = useState('https://techcrunch.com/feed/');
   const [rssLimit, setRssLimit] = useState(10);
+  const [minImages, setMinImages] = useState<number>(() => {
+    return Number(localStorage.getItem('discovery_min_images') || '3');
+  });
+  useEffect(() => {
+    localStorage.setItem('discovery_min_images', String(minImages));
+  }, [minImages]);
 
   // ── News-to-Video: Image scraping state (NEW) ──
   const [newsScrapedImages, setNewsScrapedImages] = useState<Record<string, string[]>>({});
@@ -551,7 +557,7 @@ export default function DiscoveryPortal({ onApprove, onSendToVideoSuite }: { onA
           body: JSON.stringify({ url: item.source_url }),
         });
         const data = await res.json();
-        if (data.success && data.images && data.images.length >= 3) {
+        if (data.success && data.images && data.images.length >= minImages) {
           validPayloads.push({
             title: item.title,
             content: item.raw_content,
@@ -573,7 +579,7 @@ export default function DiscoveryPortal({ onApprove, onSendToVideoSuite }: { onA
       localStorage.setItem('batch_news_to_video_payloads', JSON.stringify(validPayloads));
       if (onSendToVideoSuite) onSendToVideoSuite();
     } else {
-      alert('ดึงรูปไม่สำเร็จ หรือรูปมีไม่ถึง 3 รูปสำหรับข่าวทั้งหมดที่เลือกเลยครับ');
+      alert(`ดึงรูปไม่สำเร็จ หรือรูปมีไม่ถึง ${minImages} รูปสำหรับข่าวทั้งหมดที่เลือกเลยครับ`);
     }
   };
 
@@ -3350,15 +3356,27 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
                           onChange={e => setRssUrl(e.target.value)}
                         />
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 mb-1">จำกัดข่าวย้อนหลัง (Limit)</label>
-                        <input 
-                          type="number" 
-                          className="glass-input text-xs w-full" 
-                          value={rssLimit}
-                          onChange={e => setRssLimit(Number(e.target.value))}
-                          min={1} max={50}
-                        />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">จำกัดข่าวย้อนหลัง (Limit)</label>
+                          <input 
+                            type="number" 
+                            className="glass-input text-xs w-full" 
+                            value={rssLimit}
+                            onChange={e => setRssLimit(Number(e.target.value))}
+                            min={1} max={50}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">จำนวนรูปขั้นต่ำ (Min Images)</label>
+                          <input 
+                            type="number" 
+                            className="glass-input text-xs w-full" 
+                            value={minImages}
+                            onChange={e => setMinImages(Number(e.target.value))}
+                            min={1} max={20}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -3556,7 +3574,7 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
                                     />
                                   ))}
                                 </div>
-                                {newsScrapedImages[item.id].length >= 3 && (
+                                {newsScrapedImages[item.id].length >= minImages && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); handleSendToVideoSuite(item, newsScrapedImages[item.id]); }}
                                     style={{
@@ -3587,9 +3605,9 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
                                     }}>✨ NEW</span>
                                   </button>
                                 )}
-                                {newsScrapedImages[item.id].length > 0 && newsScrapedImages[item.id].length < 3 && (
+                                {newsScrapedImages[item.id].length > 0 && newsScrapedImages[item.id].length < minImages && (
                                   <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 4, fontWeight: 600 }}>
-                                    ⚠️ ต้องการอย่างน้อย 3 รูปเพื่อส่งทำคลิป (พบ {newsScrapedImages[item.id].length} รูป)
+                                    ⚠️ ต้องการอย่างน้อย {minImages} รูปเพื่อส่งทำคลิป (พบ {newsScrapedImages[item.id].length} รูป)
                                   </div>
                                 )}
                               </div>

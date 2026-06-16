@@ -7,15 +7,27 @@ echo "=========================================================="
 echo " 🚀 กำลังเริ่มระบบ Content Factory V2..."
 echo "=========================================================="
 
-# 🔪 ปิด process เก่าที่ค้างอยู่บน port ที่ใช้งาน (ป้องกัน port ชน)
+# 🔪 ปิด process เก่าที่ค้างอยู่บน port ที่ใช้งาน และ process ที่เกี่ยวข้องทั้งหมด (ป้องกัน port ชน)
 echo "🧹 กำลังล้าง process เก่าบน port 5005 และ 5173..."
+
+# 1. ค้นหาและปิด parent process ของ process ที่จอง port 5005 และ 5173 (เช่น nodemon, npm)
 OLD_PIDS=$(lsof -ti :5005,5173)
 if [ ! -z "$OLD_PIDS" ]; then
+    for pid in $OLD_PIDS; do
+        ppid=$(ps -o ppid= -p "$pid" | tr -d ' ')
+        if [ ! -z "$ppid" ] && [ "$ppid" -ne 1 ]; then
+            kill -9 "$ppid" 2>/dev/null
+        fi
+    done
+    # ปิดตัวลูกที่จองพอร์ตอยู่
     echo "$OLD_PIDS" | xargs kill -9 2>/dev/null
-    echo "   ✅ ปิด process เก่าเรียบร้อยแล้ว"
-else
-    echo "   ℹ️  ไม่มี process เก่าค้างอยู่"
 fi
+
+# 2. ค้นหาและปิด process อื่นๆ ที่เกี่ยวข้องกับ backend และ frontend ของโครงการนี้เพิ่มเติม
+pgrep -f "contentFactory/backend" | xargs kill -9 2>/dev/null
+pgrep -f "contentFactory/frontend" | xargs kill -9 2>/dev/null
+
+echo "   ✅ ล้างระบบและปิด process เก่าเรียบร้อยแล้ว"
 
 # ตรวจสอบการติดตั้ง Node modules ของ Backend
 if [ ! -d "backend/node_modules" ]; then

@@ -24,6 +24,19 @@ const safeParseJSON = (jsonStr: string): any => {
   }
   return JSON.parse(cleaned);
 };
+const safeCleanAndParseJSON = (jsonStr: string): any => {
+  try {
+    const start = jsonStr.indexOf('{');
+    const end = jsonStr.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && start < end) {
+      jsonStr = jsonStr.substring(start, end + 1);
+    }
+    return safeParseJSON(jsonStr);
+  } catch (err) {
+    console.error('Failed to clean and parse JSON:', err, 'Original String:', jsonStr);
+    throw err;
+  }
+};
 const getActiveOpenRouterKey = () => localStorage.getItem('openrouter_key')?.trim() || '';
 const getActiveKieKey = () => localStorage.getItem('kie_api_key')?.trim() || '';
 
@@ -68,26 +81,42 @@ const callAICompletions = async (apiKey: string, systemPrompt: string, userPromp
     }
     messages.push({ role: 'user', content: userPrompt });
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages
-      })
-    });
-    const data = await response.json();
-    if (data?.error) {
-      throw new Error(`OpenRouter Error: ${data.error.message || JSON.stringify(data.error)}`);
+    const models = [
+      'google/gemini-2.5-flash',
+      'google/gemini-2.5-flash:free',
+      'meta-llama/llama-3.1-8b-instruct:free',
+      'qwen/qwen3-8b:free'
+    ];
+
+    let lastError = null;
+    for (const model of models) {
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages
+          })
+        });
+        const data = await response.json();
+        if (data?.error) {
+          throw new Error(data.error.message || JSON.stringify(data.error));
+        }
+        const txt = data?.choices?.[0]?.message?.content;
+        if (!txt) {
+          throw new Error('Empty response');
+        }
+        return txt;
+      } catch (err: any) {
+        console.warn(`[AI Completion] Model ${model} failed:`, err);
+        lastError = err;
+      }
     }
-    const txt = data?.choices?.[0]?.message?.content;
-    if (!txt) {
-      throw new Error(`OpenRouter ส่งผลลัพธ์ว่างเปล่า (Response data: ${JSON.stringify(data)})`);
-    }
-    return txt;
+    throw new Error(`OpenRouter Error: ${lastError?.message || String(lastError)}`);
   }
 };
 
@@ -755,6 +784,16 @@ const SCRIPT_LENGTHS = [
 ];
 
 
+interface NewsPayload {
+  title: string;
+  content: string;
+  headline: string;
+  images: string[];
+  sourceUrl: string;
+  source: string;
+  timestamp: number;
+}
+
 interface BatchItem {
   topic: string;
   status: 'pending' | 'scripting' | 'voicing' | 'subtitling' | 'assembling' | 'rendering' | 'completed' | 'failed';
@@ -782,7 +821,7 @@ const getVisualLength = (str: string): number => {
   return str.replace(/[\u0E31\u0E34-\u0E3A\u0E47-\u0E4C]/g, '').length;
 };
 
-const wrapText = (text: string, maxCharsPerLine = 22): string => {
+const wrapText = (text: string, maxCharsPerLine = 22, maxLines = 0): string => {
   if (!text) return '';
   const lines = text.split(/\r?\n/);
   const resultLines: string[] = [];
@@ -882,7 +921,12 @@ const wrapText = (text: string, maxCharsPerLine = 22): string => {
     }
   }
   
-  return resultLines.map(l => l.trim()).filter(Boolean).join('\n');
+  let finalLines = resultLines.map(l => l.trim()).filter(Boolean);
+  // Enforce max lines limit (e.g., 2 for headlines)
+  if (maxLines > 0 && finalLines.length > maxLines) {
+    finalLines = finalLines.slice(0, maxLines);
+  }
+  return finalLines.join('\n');
 };
 
 
@@ -897,6 +941,14 @@ const BACKEND_BASE = window.location.port !== '5005' ? 'http://localhost:5005' :
 export default function VerticalVideoSuitePortal() {
   const { generateAudio } = useKieTTS();
 
+  // --- OpenRouter Profile States ---
+  const [dbProfiles, setDbProfiles] = useState<any[]>([]);
+  const [selectedOpenRouterProfileId, setSelectedOpenRouterProfileId] = useState<string>('default');
+  const [manualOpenRouterKey, setManualOpenRouterKey] = useState<string>(() => localStorage.getItem('openrouter_key') || '');
+  const [openRouterKey, setOpenRouterKey] = useState(() => localStorage.getItem('openrouter_key') || '');
+
+  const getActiveOpenRouterKey = () => openRouterKey?.trim() || '';
+
   // Auto-sync active API Keys from SQLite DB to localStorage on mount for zero-configuration startup
   useEffect(() => {
     const syncApiKeysFromDb = async () => {
@@ -905,6 +957,17 @@ export default function VerticalVideoSuitePortal() {
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.data)) {
+            // Store active keys for dropdown
+            const activeOnly = data.data.filter((p: any) => p.is_active === 1);
+            setDbProfiles(activeOnly);
+
+            // Auto-select active openrouter profile
+            const activeOR = activeOnly.find((p: any) => p.service_name === 'openrouter');
+            if (activeOR) {
+              setSelectedOpenRouterProfileId(String(activeOR.id));
+              setOpenRouterKey(activeOR.credential_key.trim());
+            }
+
             data.data.forEach((row: any) => {
               const service = row.service_name;
               const key = row.credential_key.trim();
@@ -929,6 +992,20 @@ export default function VerticalVideoSuitePortal() {
     };
     syncApiKeysFromDb();
   }, []);
+
+  // Update openRouterKey state when dropdown profile or manual input changes
+  useEffect(() => {
+    if (selectedOpenRouterProfileId === 'manual') {
+      setOpenRouterKey(manualOpenRouterKey);
+    } else if (selectedOpenRouterProfileId === 'default') {
+      setOpenRouterKey(localStorage.getItem('openrouter_key') || '');
+    } else {
+      const prof = dbProfiles.find(p => String(p.id) === selectedOpenRouterProfileId);
+      if (prof) {
+        setOpenRouterKey(prof.credential_key);
+      }
+    }
+  }, [selectedOpenRouterProfileId, dbProfiles, manualOpenRouterKey]);
   // --- States ---
   const [resumingHistoryId, setResumingHistoryId] = useState<string | null>(null);
   const [isResumingAllHistory, setIsResumingAllHistory] = useState(false);
@@ -1127,7 +1204,17 @@ export default function VerticalVideoSuitePortal() {
 
   // Batch Queue & Running Engine
   const [batchTopicInput, setBatchTopicInput] = useState('');
-  const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
+  const [batchItems, setBatchItems] = useState<BatchItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('vertical_video_batch_items');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  useEffect(() => {
+    localStorage.setItem('vertical_video_batch_items', JSON.stringify(batchItems));
+  }, [batchItems]);
   const [currentBatchIndex, setCurrentBatchIndex] = useState(-1);
   const [batchStatus, setBatchStatus] = useState<'idle' | 'running' | 'paused' | 'stopped'>('idle');
   const [logs, setLogs] = useState<string[]>([]);
@@ -1157,15 +1244,6 @@ export default function VerticalVideoSuitePortal() {
   const [isAnalyzingInlineBrain, setIsAnalyzingInlineBrain] = useState(false);
 
   // ── News-to-Video Mode (NEW) ──
-  interface NewsPayload {
-    title: string;
-    content: string;
-    headline: string;
-    images: string[];
-    sourceUrl: string;
-    source: string;
-    timestamp: number;
-  }
   const [newsMode, setNewsMode] = useState(false);
   const [newsPayload, setNewsPayload] = useState<NewsPayload | null>(null);
   const [newsTargetDuration, setNewsTargetDuration] = useState(60);
@@ -1326,6 +1404,19 @@ export default function VerticalVideoSuitePortal() {
   useEffect(() => {
     batchStatusRef.current = batchStatus;
   }, [batchStatus]);
+
+  // Prevent accidental page reload/close during batch processing
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (batchStatusRef.current === 'running') {
+        e.preventDefault();
+        e.returnValue = 'กำลังตัดต่ออยู่! ถ้าปิดหน้านี้งานจะหายหมดเลยนะครับบอส';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   // Save folder/settings changes
   useEffect(() => {
@@ -1520,6 +1611,7 @@ export default function VerticalVideoSuitePortal() {
     srtSegments?: any[];
     srtContent?: string;
     videoUrl?: string;
+    newsPayload?: NewsPayload;
   }) => {
     let savedId = item.id;
     setScriptHistory(prev => {
@@ -1691,15 +1783,17 @@ ${brain.content}
 5. ความยาวบทสคริปต์พูด: ให้เขียนความยาวระดับ "${activeLength.label}" (${activeLength.description})
 
 
-นอกจากนี้ช่วยสร้าง "Headline พาดหัวแนวตั้ง" ที่สั้น กระชับ แปะบนปก/หัววิดีโอแล้วโคตรน่าดึงดูดมาให้ด้วย 1 ประโยค
+นอกจากนี้ช่วยสร้าง "Headline พาดหัวแนวตั้ง" ที่สั้นมากๆ กระชับ แปะบนปก/หัววิดีโอแล้วโคตรน่าดึงดูดมาให้ด้วย 1 ประโยค
+* กฎเหล็ก: พาดหัวต้องมีไม่เกิน 2 บรรทัด และไม่เกิน 8 คำ (ห้ามเกิน 2 บรรทัดเด็ดขาด!)
 * สำคัญมาก: คุณต้องช่วยแบ่งวรรคตอนคำบรรทัดของพาดหัวให้สวยงามเป็นคำๆ อย่างมีระดับ โดยใช้เครื่องหมายขึ้นบรรทัดใหม่ (\\n) ห้ามหักครึ่งคำเด็ดขาด (เช่น คำว่า 'เศรษฐี' หรือ 'ขี้เกียจ' ต้องอยู่บรรทัดเดียวกัน ห้ามแยกตัวสะกดหรือสระแยกบรรทัดกัน)
-* ตัวอย่างการแบ่งบรรทัดพาดหัวที่สวยงาม:
-  "เคล็ดลับโบราณ\\nเปลี่ยนคนขี้เกียจเป็นเศรษฐี!"
-  "กฎ 3 ข้อ\\nที่จะช่วยให้คุณรวยเร็วขึ้น"
+* ตัวอย่างพาดหัว 2 บรรทัดที่สวยงาม:
+  "เคล็ดลับโบราณ\\nเปลี่ยนขี้เกียจเป็นเศรษฐี!"
+  "กฎ 3 ข้อ\\nรวยเร็วขึ้น 10 เท่า"
+  "พระเครื่องแตก\\nลางร้ายจริงหรือ?"
 
 ส่งผลลัพธ์กลับมาในรูปแบบ JSON Object นี้เท่านั้น (ห้ามมีคำนำหรือมาร์กดาวน์ใดๆ):
 {
-  "headline": "คำพาดหัวคลิปสั้นๆ ที่ใส่เครื่องหมาย \\n แบ่งบรรทัดให้สวยงามตามคำของภาษาไทย",
+  "headline": "พาดหัวสั้นมาก ไม่เกิน 2 บรรทัด\\nแบ่งด้วยเครื่องหมายนี้",
   "script": "บทสคริปต์สำหรับพูดเพียวๆ ไร้วงเล็บ ไร้เครื่องหมายขัดจังหวะการอ่าน"
 }${brainContext}${seriesContext}`;
 
@@ -1758,13 +1852,15 @@ ${brain.content}
     if (!apiKey || !script) return;
     setIsGeneratingHeadline(true);
     try {
-      const systemPrompt = `คุณคือครีเอเตอร์คลิปสั้นผู้เชี่ยวชาญการคิดพาดหัวคลิป (Headline Banner) ภาษาไทย แปะบนแถบหัววิดีโอเพื่อหยุดนิ้วคนดู หน้าที่ของคุณคือเสนอพาดหัวสั้นกระชับ (ไม่เกิน 10 คำ) โดนใจ 1 ประโยค 
-* สำคัญมาก: คุณต้องช่วยแบ่งวรรคตอนคำบรรทัดของพาดหัวให้สวยงามเป็นคำๆ อย่างมีระดับ โดยใช้เครื่องหมายขึ้นบรรทัดใหม่ (\\n) ห้ามหักครึ่งคำเด็ดขาด (เช่น คำว่า 'เศรษฐี' หรือ 'ขี้เกียจ' ต้องอยู่บรรทัดเดียวกัน ห้ามแยกตัวสะกดหรือสระแยกบรรทัดกัน)
-* ตัวอย่างการแบ่งบรรทัดพาดหัวที่สวยงาม:
-  "เคล็ดลับโบราณ\\nเปลี่ยนคนขี้เกียจเป็นเศรษฐี!"
-  "กฎ 3 ข้อ\\nที่จะช่วยให้คุณรวยเร็วขึ้น"
+      const systemPrompt = `คุณคือครีเอเตอร์คลิปสั้นผู้เชี่ยวชาญการคิดพาดหัวคลิป (Headline Banner) ภาษาไทย แปะบนแถบหัววิดีโอเพื่อหยุดนิ้วคนดู หน้าที่ของคุณคือเสนอพาดหัวสั้นกระชับมากๆ โดนใจ 1 ประโยค
+* กฎเหล็ก: พาดหัวต้องมีไม่เกิน 2 บรรทัด และไม่เกิน 8 คำ (ห้ามเกิน 2 บรรทัดเด็ดขาด!)
+* ต้องแบ่งบรรทัดด้วย \\n ให้สวยงาม ห้ามหักครึ่งคำเด็ดขาด
+* ตัวอย่างพาดหัว 2 บรรทัดที่สวยงาม:
+  "เคล็ดลับโบราณ\\nเปลี่ยนขี้เกียจเป็นเศรษฐี!"
+  "กฎ 3 ข้อ\\nรวยเร็วขึ้น 10 เท่า"
+  "พระเครื่องแตก\\nลางร้ายจริงหรือ?"
 
-ส่งกลับมาเฉพาะพาดหัวตรงๆ (ที่มีเครื่องหมาย \\n แบ่งบรรทัดให้เรียบร้อย) ไม่มีคำอธิบายใดๆ ทั้งสิ้น`;
+ส่งกลับมาเฉพาะพาดหัวตรงๆ (สั้นมาก ไม่เกิน 2 บรรทัด มีเครื่องหมาย \\n แบ่งบรรทัดให้เรียบร้อย) ไม่มีคำอธิบายใดๆ ทั้งสิ้น`;
       
       const userPrompt = `คิดพาดหัวคลิปจากบทพูดนี้:\n"${script}"`;
 
@@ -2359,18 +2455,31 @@ Instructions for you:
 1. Output ONLY the raw System Prompt text.
 2. Do not include conversational filler like "Here is the prompt" or "Understood".`;
 
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [{ role: 'user', content: prompt }]
-        })
-      });
-      
-      const data = await res.json();
-      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-      const content = data.choices[0].message.content.trim().replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
+      let content = '';
+      const models = ['google/gemini-2.5-flash', 'google/gemini-2.5-flash:free'];
+      let lastError = null;
+      for (const model of models) {
+        try {
+          const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model,
+              messages: [{ role: 'user', content: prompt }]
+            })
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+          const txt = data.choices?.[0]?.message?.content;
+          if (txt) {
+            content = txt.trim().replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
+            break;
+          }
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      if (!content) throw lastError || new Error('Failed to generate brain content');
 
       const newBrain = {
         id: Date.now().toString(),
@@ -2475,19 +2584,84 @@ Instructions for you:
     subContent: string,
     hlText: string,
     overrideBgmFile?: string,
-    overrideBackgroundVideoPath?: string
+    overrideBackgroundVideoPath?: string,
+    newsPayload?: NewsPayload
   ): Promise<string | null> => {
-    if (!overrideBackgroundVideoPath && (!sourceFolder || !outputFolder)) {
-      alert('กรุณาเลือกโฟลเดอร์ต้นทางคลิปดิกและโฟลเดอร์บันทึกปลายทางก่อนครับบอส');
-      return null;
-    }
-
-    addLog('ขั้นตอนที่ 5: สุ่มหยิบฟุตเทจมาต่อให้เข้ากับความยาวคลิปเสียงอัตโนมัติ...', 'info');
-
     // 1. Build and concatenate background clips matching exactly the voice duration
     let assembledVoiceoverVideo: string | null = overrideBackgroundVideoPath || null;
-    
+
+    // Build news slideshow B-Roll if it has newsPayload and no override video
+    if (!assembledVoiceoverVideo && newsPayload && newsPayload.images && newsPayload.images.length > 0) {
+      addLog(`🖼️ [Render] กำลังสร้างภาพประกอบข่าว (Slideshow) สำหรับหัวข้อ: "${targetTopic}"...`, 'info');
+      try {
+        const dlRes = await fetch(`${BACKEND_BASE}/api/news/download-images`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            images: newsPayload.images, 
+            articleId: `render_${Date.now()}` 
+          }),
+        });
+        const dlData = await dlRes.json();
+        if (dlData.success && dlData.localPaths?.length > 0) {
+          const slideshowRes = await fetch(`${BACKEND_BASE}/api/news/build-image-slideshow`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imagePaths: dlData.localPaths,
+              targetDuration: duration + 1,
+              outputPath: `${outputFolder}/.temp_assembly/news_slideshow_render_${Date.now()}.mp4`,
+            }),
+          });
+
+          if (slideshowRes.body) {
+            const reader = slideshowRes.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let slideshowPath = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() ?? '';
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                  const payload = JSON.parse(line.slice(6));
+                  if (payload.log) addLog(`  [slideshow] ${payload.log}`, 'info');
+                  if (payload.success && payload.filePath) slideshowPath = payload.filePath;
+                  if (payload.error) throw new Error(payload.error);
+                } catch (e: any) {
+                  if (e.message && !e.message.includes('JSON')) throw e;
+                }
+              }
+            }
+            if (slideshowPath) {
+              assembledVoiceoverVideo = slideshowPath;
+            }
+          }
+        }
+      } catch (e: any) {
+        addLog(`ล้มเหลวในการสร้างภาพข่าว: ${e.message}`, 'error');
+        return null;
+      }
+    }
+
     if (!assembledVoiceoverVideo) {
+      if (newsPayload) {
+        alert('❌ ไม่สามารถสร้างวิดีโอสไลด์โชว์ข่าวได้ กรุณาตรวจสอบประวัติการดึงรูปภาพของข่าวดังกล่าวครับบอส');
+        return null;
+      }
+
+      if (!sourceFolder || !outputFolder) {
+        alert('กรุณาเลือกโฟลเดอร์ต้นทางคลิปดิกและโฟลเดอร์บันทึกปลายทางก่อนครับบอส');
+        return null;
+      }
+
+      addLog('ขั้นตอนที่ 5: สุ่มหยิบฟุตเทจมาต่อให้เข้ากับความยาวคลิปเสียงอัตโนมัติ...', 'info');
+
       try {
         const response = await fetch(`${BACKEND_BASE}/api/build-random-clip-assembly`, {
           method: 'POST',
@@ -2527,11 +2701,11 @@ Instructions for you:
           }
         }
       }
-      } // close if(!assembledVoiceoverVideo)
-    } catch (e: any) {
-      addLog(`ขั้นตอนสุ่มประกอบฉากผิดพลาด: ${e.message}`, 'error');
-      return null;
-    }
+      } catch (e: any) {
+        addLog(`ขั้นตอนสุ่มประกอบฉากผิดพลาด: ${e.message}`, 'error');
+        return null;
+      }
+    } // close if(!assembledVoiceoverVideo)
 
     if (!assembledVoiceoverVideo) {
       addLog('ไม่พบเส้นทางของฟุตเทจที่ประกอบเสร็จชั่วคราว', 'error');
@@ -2726,11 +2900,6 @@ Instructions for you:
   };
 
   const handleAllInOneLaunch = async () => {
-    if (!sourceFolder || !sourceFolder.trim() || !outputFolder || !outputFolder.trim()) {
-      alert('⚠️ โปรดกรอกหรือเลือกโฟลเดอร์ต้นทาง (Footage) และโฟลเดอร์ผลลัพธ์ (Output) ในขั้นตอนที่ 1 ให้เรียบร้อยก่อนครับบอส');
-      return;
-    }
-
     const list = batchTopicInput
       .split('\n')
       .map(x => x.trim())
@@ -2751,6 +2920,18 @@ Instructions for you:
 
     if (itemsToRun.length === 0) {
       alert('⚠️ โปรดระบุหัวข้อในช่องกรอกข้อความ หรือนำเข้าตารางคิวงานเตรียมรันก่อนกดปุ่มนี้ครับบอส');
+      return;
+    }
+
+    // Dynamic folder validation based on item needs
+    const needsSourceFolder = itemsToRun.some(item => !item.newsPayload);
+    if (needsSourceFolder && (!sourceFolder || !sourceFolder.trim())) {
+      alert('⚠️ โปรดกรอกหรือเลือกโฟลเดอร์ต้นทาง (Footage) ในขั้นตอนที่ 1 ให้เรียบร้อยสำหรับวิดีโอทั่วไปครับบอส');
+      return;
+    }
+
+    if (!outputFolder || !outputFolder.trim()) {
+      alert('⚠️ โปรดกรอกหรือเลือกโฟลเดอร์ผลลัพธ์ (Output) ในขั้นตอนที่ 1 ให้เรียบร้อยก่อนครับบอส');
       return;
     }
 
@@ -2775,13 +2956,14 @@ Instructions for you:
 - ขึ้นต้นด้วย Hook ที่ดึงความสนใจ
 - สรุปประเด็นสำคัญให้ครบ กระชับ
 - จบด้วยข้อคิดหรือ Call to Action สั้นๆ
-- ส่งกลับ JSON: { "script": "...", "headline": "พาดหัวสั้นๆ 2-3 บรรทัด" }`;
+- headline ต้องสั้นมากๆ ไม่เกิน 8 คำ ไม่เกิน 2 บรรทัด (ใช้ \\n แบ่งบรรทัด) เช่น "ข่าวด่วน!\\nมรดกเงินล้านลึกลับ"
+- ส่งกลับ JSON: { "script": "...", "headline": "พาดหัวไม่เกิน 2 บรรทัด" }`;
 
     const aiResponse = await callAICompletions(apiKey, 
       'คุณคือผู้เชี่ยวชาญเขียน Script ข่าวสำหรับวิดีโอสั้น ส่งกลับเฉพาะ JSON ไม่มีข้อความอื่น',
       prompt, true);
 
-    const parsed = safeParseJSON(aiResponse);
+    const parsed = safeCleanAndParseJSON(aiResponse);
     if (!parsed || !parsed.script) throw new Error('AI ไม่สามารถเขียน Script ข่าวได้');
     return parsed;
   };
@@ -2831,7 +3013,7 @@ Instructions for you:
         if (currentItem.newsPayload) {
           addLog(`[${i+1}/${activeItems.length}] 📰 สรุปข่าวหัวข้อ: "${currentItem.topic}"...`, 'info');
           try {
-            generated = await handleGenerateNewsScriptBatch(currentItem.newsPayload, 60); // default to 60s
+            generated = await handleGenerateNewsScriptBatch(currentItem.newsPayload, newsTargetDuration);
           } catch (e: any) {
             addLog(`ล้มเหลวในการสรุปข่าว: ${e.message}`, 'error');
           }
@@ -2848,7 +3030,8 @@ Instructions for you:
         saveToHistory({
           topic: currentItem.topic,
           headline: scriptResult.headline,
-          script: scriptResult.script
+          script: scriptResult.script,
+          newsPayload: currentItem.newsPayload
         });
 
         setBatchItems(prev => {
@@ -2896,7 +3079,8 @@ Instructions for you:
         script: scriptResult.script,
         voiceId: voiceId,
         audioUrl: voiceResult.audioUrl,
-        duration: voiceResult.duration
+        duration: voiceResult.duration,
+        newsPayload: currentItem.newsPayload
       });
 
       currentItemAudioUrl = voiceResult.audioUrl;
@@ -2931,7 +3115,8 @@ Instructions for you:
         audioUrl: voiceResult.audioUrl,
         duration: voiceResult.duration,
         srtSegments: srtSegments,
-        srtContent: currentItemSrtContent
+        srtContent: currentItemSrtContent,
+        newsPayload: currentItem.newsPayload
       });
 
       setBatchItems(prev => {
@@ -2953,8 +3138,8 @@ Instructions for you:
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-              imageUrls: currentItem.newsPayload.images, 
-              sourceId: `batch_${Date.now()}` 
+              images: currentItem.newsPayload.images, 
+              articleId: `batch_${Date.now()}` 
             }),
           });
           const dlData = await dlRes.json();
@@ -2968,9 +3153,34 @@ Instructions for you:
                 outputPath: `${outputFolder}/.temp_assembly/news_slideshow_batch_${Date.now()}.mp4`,
               }),
             });
-            const slideshowData = await slideshowRes.json();
-            if (slideshowData.success) {
-              backgroundVideoToUse = slideshowData.outputPath;
+
+            if (slideshowRes.body) {
+              const reader = slideshowRes.body.getReader();
+              const decoder = new TextDecoder();
+              let buffer = '';
+              let slideshowPath = '';
+
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() ?? '';
+                for (const line of lines) {
+                  if (!line.startsWith('data: ')) continue;
+                  try {
+                    const payload = JSON.parse(line.slice(6));
+                    if (payload.log) addLog(`  [slideshow] ${payload.log}`, 'info');
+                    if (payload.success && payload.filePath) slideshowPath = payload.filePath;
+                    if (payload.error) throw new Error(payload.error);
+                  } catch (e: any) {
+                    if (e.message && !e.message.includes('JSON')) throw e;
+                  }
+                }
+              }
+              if (slideshowPath) {
+                backgroundVideoToUse = slideshowPath;
+              }
             }
           }
         } catch (e: any) {
@@ -3013,7 +3223,8 @@ Instructions for you:
         audioUrl: currentItemAudioUrl,
         duration: currentItemDuration,
         srtContent: currentItemSrtContent,
-        videoUrl: renderPath
+        videoUrl: renderPath,
+        newsPayload: currentItem.newsPayload
       });
 
       addLog(`✨ สำเร็จ! สร้างคลิปอัตโนมัติหัวข้อ [${currentItem.topic}] เรียบร้อย`, 'success');
@@ -3101,13 +3312,14 @@ Instructions for you:
 - ขึ้นต้นด้วย Hook ที่ดึงความสนใจ
 - สรุปประเด็นสำคัญให้ครบ กระชับ
 - จบด้วยข้อคิดหรือ Call to Action สั้นๆ
-- ส่งกลับ JSON: { "script": "...", "headline": "พาดหัวสั้นๆ 2-3 บรรทัด" }`;
+- headline ต้องสั้นมากๆ ไม่เกิน 8 คำ ไม่เกิน 2 บรรทัด (ใช้ \\n แบ่งบรรทัด) เช่น "ข่าวด่วน!\\nมรดกเงินล้านลึกลับ"
+- ส่งกลับ JSON: { "script": "...", "headline": "พาดหัวไม่เกิน 2 บรรทัด" }`;
 
       const aiResponse = await callAICompletions(apiKey, 
         'คุณคือผู้เชี่ยวชาญเขียน Script ข่าวสำหรับวิดีโอสั้น ส่งกลับเฉพาะ JSON ไม่มีข้อความอื่น',
         newsScriptPrompt, true);
 
-      const parsed = safeParseJSON(aiResponse);
+      const parsed = safeCleanAndParseJSON(aiResponse);
       if (!parsed || !parsed.script) {
         throw new Error('AI ไม่สามารถเขียน Script ข่าวได้');
       }
@@ -3234,7 +3446,7 @@ Instructions for you:
           outlineColor: subStyle.outlineColor,
           shadowColor: subStyle.shadowColor,
         },
-        headline: wrapText(parsed.headline || newsPayload.title),
+        headline: wrapText(parsed.headline || newsPayload.title, 22, 2),
         headlineStyle: {
           fontName: headlineFontName,
           fontSize: headlineFontSize,
@@ -3320,6 +3532,72 @@ Instructions for you:
     }
   };
 
+  const tryRecoverNewsPayload = async (item: any): Promise<NewsPayload | null> => {
+    if (item.newsPayload) return item.newsPayload;
+    try {
+      addLog(`🔍 [News Recovery] กำลังพยายามกู้คืนภาพประกอบข่าวจากหัวข้อ: "${item.topic}"...`, 'info');
+      
+      const words = item.topic
+        .replace(/[^\u0E00-\u0E7Fa-zA-Z0-9\s-]/g, ' ')
+        .split(/\s+/)
+        .filter((w: string) => w.length > 2);
+
+      const searchRes = await fetch(`${BACKEND_BASE}/api/vault/contents?source_type=rss`);
+      if (searchRes.ok) {
+        const rows = await searchRes.json();
+        if (Array.isArray(rows)) {
+          let bestMatch: any = null;
+          let maxOverlap = 0;
+          
+          for (const row of rows) {
+            let overlap = 0;
+            const textToSearch = (row.title + ' ' + (row.raw_content || '')).toLowerCase();
+            for (const word of words) {
+              if (textToSearch.includes(word.toLowerCase())) {
+                overlap++;
+              }
+            }
+            
+            if (item.topic.includes('คมนาคม') && row.title.includes('คมนาคม')) overlap += 5;
+            if (item.topic.includes('มรดก') && (row.title.includes('เมีย') || row.title.includes('เงิน') || row.title.includes('ล้าน') || row.title.includes('กล่อง') || row.title.includes('งานศพ') || row.title.includes('พ่อเฒ่า'))) overlap += 5;
+
+            if (overlap > maxOverlap && overlap >= 2) {
+              maxOverlap = overlap;
+              bestMatch = row;
+            }
+          }
+
+          if (bestMatch && bestMatch.source_url) {
+            addLog(`📡 [News Recovery] จับคู่ข่าวต้นทางสำเร็จ: "${bestMatch.title}" (คะแนนความสอดคล้อง: ${maxOverlap}) กำลังดึงรูปประกอบใหม่...`, 'info');
+            const scrapeRes = await fetch(`${BACKEND_BASE}/api/news/scrape-images`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: bestMatch.source_url })
+            });
+            if (scrapeRes.ok) {
+              const data = await scrapeRes.json();
+              if (data.success && data.images && data.images.length > 0) {
+                addLog(`📸 [News Recovery] กู้คืนรูปประกอบสำเร็จ ${data.images.length} รูป!`, 'success');
+                return {
+                  title: bestMatch.title,
+                  content: bestMatch.raw_content,
+                  headline: bestMatch.selected_headline || bestMatch.title,
+                  images: data.images,
+                  sourceUrl: bestMatch.source_url,
+                  source: bestMatch.author_name || 'RSS News',
+                  timestamp: Date.now()
+                };
+              }
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('Failed to recover news payload:', err);
+    }
+    return null;
+  };
+
   const handleSmartHistoryResume = async (item: any, isBatchRun = false): Promise<boolean> => {
     if (resumingHistoryId || (isResumingAllHistory && !isBatchRun)) return false;
     setResumingHistoryId(item.id);
@@ -3327,6 +3605,13 @@ Instructions for you:
 
     try {
       let currentItem = { ...item };
+      if (!currentItem.newsPayload) {
+        const recovered = await tryRecoverNewsPayload(currentItem);
+        if (recovered) {
+          currentItem.newsPayload = recovered;
+          saveToHistory(currentItem);
+        }
+      }
       let updatedScript = currentItem.script || '';
       let updatedHeadline = currentItem.headline || '';
       let updatedAudioUrl = currentItem.audioUrl || '';
@@ -3439,7 +3724,9 @@ Instructions for you:
           updatedDuration,
           updatedSrtContent,
           updatedHeadline,
-          activeBgm
+          activeBgm,
+          undefined,
+          currentItem.newsPayload
         );
 
         if (!renderPath) {
@@ -3546,7 +3833,7 @@ Instructions for you:
               {sourceFolder ? (
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-400 uppercase">Ready</span>
               ) : (
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 uppercase">Required</span>
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 uppercase" title="จำเป็นสำหรับวิดีโอทั่วไป แต่อัตโนมัติจากข่าวที่มีรูปภาพไม่จำเป็นต้องเลือก">Required (Optional for News)</span>
               )}
             </div>
           </div>
@@ -4000,7 +4287,9 @@ Instructions for you:
                     activeDuration,
                     srtContent,
                     headline,
-                    activeBgm
+                    activeBgm,
+                    undefined,
+                    newsPayload || undefined
                   );
                   if (renderPath) {
                     setAssembledVideoPath(renderPath);
@@ -4134,7 +4423,7 @@ Instructions for you:
             {(() => {
               const scaledHlFontSize = Math.round(headlineFontSize * 8 / 3);
               const maxCharsPerLine = Math.max(12, Math.floor(950 / (scaledHlFontSize * 0.42)));
-              const wrapped = wrapText(headline || 'พาดหัวของคุณตรงนี้', maxCharsPerLine);
+              const wrapped = wrapText(headline || 'พาดหัวของคุณตรงนี้', maxCharsPerLine, 2);
               return wrapped.split('\n').map((line, idx) => (
                 <span
                   key={idx}
@@ -4593,11 +4882,36 @@ Instructions for you:
                         }`}
                       >
                         {/* 1. หัวข้อ */}
-                        <td className="p-3 space-y-1">
+                        <td className="p-3 space-y-1.5">
                           <p className="font-bold text-white text-xs">{item.topic}</p>
                           <p className="text-[10px] text-white/40 font-mono">
                             📅 {item.createdAt ? new Date(item.createdAt).toLocaleString('th-TH') : ''}
                           </p>
+                          {item.newsPayload?.images && item.newsPayload.images.length > 0 && (
+                            <div className="mt-1 p-1.5 rounded-lg bg-black/40 border border-white/5 space-y-1">
+                              <span className="text-[9px] text-orange-400 font-extrabold flex items-center gap-0.5">
+                                📸 รูปข่าวพร้อมใช้ ({item.newsPayload.images.length})
+                              </span>
+                              <div className="flex gap-1 overflow-x-auto pb-0.5 max-w-[200px] scrollbar-thin">
+                                {item.newsPayload.images.map((imgUrl: string, imgIdx: number) => {
+                                  const src = imgUrl.startsWith('http') ? imgUrl : `${BACKEND_BASE}${imgUrl}`;
+                                  return (
+                                    <img 
+                                      key={imgIdx}
+                                      src={src} 
+                                      alt={`scraped-hist-${imgIdx}`}
+                                      style={{ width: '28px', height: '28px', objectFit: 'cover' }}
+                                      className="rounded border border-white/10 hover:border-teal-400 transition-all cursor-pointer"
+                                      onClick={() => window.open(src, '_blank')}
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><rect width="20" height="20" fill="%23222"/></svg>';
+                                      }}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </td>
 
                         {/* 2. พาดหัว */}
@@ -4719,13 +5033,22 @@ Instructions for you:
                                   addLog(`🎬 กำลัง re-render: "${item.topic}"...`, 'info');
                                   const activeBgm = await resolveBgmFileRandomly(bgmFile);
                                   try {
+                                    let newsPayloadToUse = item.newsPayload;
+                                    if (!newsPayloadToUse) {
+                                      newsPayloadToUse = await tryRecoverNewsPayload(item) || undefined;
+                                      if (newsPayloadToUse) {
+                                        item.newsPayload = newsPayloadToUse;
+                                      }
+                                    }
                                     const renderPath = await handleRenderSingleVideo(
                                       item.topic,
                                       item.audioUrl || '',
                                       item.duration || 60,
                                       item.srtContent || '',
                                       item.headline || '',
-                                      activeBgm
+                                      activeBgm,
+                                      undefined,
+                                      newsPayloadToUse
                                     );
                                     if (renderPath) {
                                       saveToHistory({ ...item, videoUrl: renderPath });
@@ -4809,155 +5132,196 @@ Instructions for you:
           <span className="text-xs text-amber-300 font-bold">* ป้อนหัวข้อเพื่อทำวิดีโอครบวงจรทันที</span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Column 1: Input text area */}
-          <div className="space-y-4 lg:col-span-1">
-            <div className="space-y-1.5">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Column 1: Input text area (4 cols) */}
+          <div className="space-y-4 lg:col-span-4 flex flex-col justify-between">
+            <div className="space-y-2">
               <label className="text-xs font-bold text-white/70 block">
                 ✍️ ป้อนหัวข้อที่ต้องการผลิต (1 หัวข้อต่อ 1 บรรทัด)
               </label>
               <textarea
                 value={batchTopicInput}
                 onChange={(e) => setBatchTopicInput(e.target.value)}
-                className="w-full h-44 p-3 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:border-purple-500/80 outline-none resize-none font-mono"
+                className="w-full h-52 p-3 rounded-xl bg-black/45 border border-white/10 text-white text-xs focus:border-purple-500/80 outline-none resize-none font-mono leading-relaxed"
                 placeholder="เช่น&#10;วิธีเอาชนะความขี้เกียจด้วยกฎ 2 นาที&#10;จิตวิทยาคนรวยที่โรงเรียนไม่เคยสอน&#10;3 เคล็ดลับดึงดูดความสำเร็จคนดัง"
               />
               <p className="text-[10px] text-white/40">* สุ่มฟุตเทจ เจนสคริปต์ พากย์เสียง ทำซับ ตัดต่อ และเซฟไฟล์ ครบทุกอย่างอัตโนมัติ</p>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2.5 pt-2">
               <div className="flex gap-2">
                 <button
                   onClick={handleParseBatchInput}
                   disabled={isDraftingAll || batchStatus === 'running'}
-                  className="px-4 py-2 bg-indigo-700/60 hover:bg-indigo-600/80 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-40 flex-1"
+                  className="px-3 py-2.5 bg-indigo-700/50 hover:bg-indigo-600/70 border border-indigo-500/15 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-40 flex-1 active:scale-95"
                 >
                   📥 นำเข้าคิวเตรียมรัน
                 </button>
                 <button
                   onClick={handleDraftAllScripts}
                   disabled={isDraftingAll || batchStatus === 'running' || batchItems.length === 0}
-                  className="px-4 py-2 bg-purple-700/60 hover:bg-purple-600/80 border border-purple-500/20 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-40 flex-1"
+                  className="px-3 py-2.5 bg-purple-700/50 hover:bg-purple-600/70 border border-purple-500/15 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-40 flex-1 active:scale-95"
                 >
-                  {isDraftingAll ? '⏳ กำลังเจน...' : '✍️ สั่ง AI เจนสคริปต์ล่วงหน้า'}
+                  {isDraftingAll ? '⏳ กำลังเจน...' : '✍️ สั่ง AI เจนล่วงหน้า'}
                 </button>
               </div>
 
-              {/* ALL-IN-ONE Auto Pilot Button (USER requested!) */}
               <button
                 onClick={handleAllInOneLaunch}
                 disabled={isDraftingAll || batchStatus === 'running'}
-                className="w-full py-3.5 bg-gradient-to-r from-teal-500 via-indigo-600 to-purple-600 hover:from-teal-400 hover:via-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-2 border border-indigo-500/30"
+                className="w-full py-3 bg-gradient-to-r from-teal-500 via-indigo-600 to-purple-600 hover:from-teal-400 hover:via-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-2 border border-indigo-500/30"
               >
                 ⚡ คลิกเดียวทำคลิปครบวงจรทันที (All-in-One Auto Pilot)
               </button>
             </div>
           </div>
 
-          {/* Column 2: Live Queue items Status */}
-          <div className="lg:col-span-1 p-4 rounded-xl border border-white/10 bg-black/40 space-y-3 flex flex-col justify-between h-[310px]">
-            <div className="flex justify-between items-center border-b border-white/10 pb-2">
-              <span className="text-xs font-bold text-teal-400 block">📋 รายการและขั้นตอนรันคิว ({batchItems.length} ตอน)</span>
-              {batchItems.length > 0 && (
-                <button
-                  onClick={clearCompletedBatch}
-                  className="text-[10px] text-red-400 hover:text-red-300 font-bold"
-                >
-                  🧹 เคลียร์คิว
-                </button>
-              )}
-            </div>
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1.5 scrollbar-thin">
-              {batchItems.length === 0 ? (
-                <div className="text-center py-16 text-white/30 text-xs italic">
-                  📭 คิวผลิตว่างเปล่า ป้อนหัวข้อซ้ายมือเพื่อนำเข้าเตรียมรันครับบอส!
-                </div>
-              ) : (
-                batchItems.map((item, idx) => {
-                  let stClass = 'text-white/60 bg-white/5';
-                  let statusText = 'รอดำเนินการ (Pending)';
-                  if (item.status === 'scripting') { stClass = 'text-purple-300 bg-purple-950/40 border border-purple-500/30'; statusText = '📝 กำลังเขียนสคริปต์'; }
-                  if (item.status === 'voicing') { stClass = 'text-blue-300 bg-blue-950/40 border border-blue-500/30'; statusText = '🎙️ กำลังพากย์เสียง'; }
-                  if (item.status === 'subtitling') { stClass = 'text-cyan-300 bg-cyan-950/40 border border-cyan-500/30'; statusText = '🔤 กำลังทำซับไตเติ้ล'; }
-                  if (item.status === 'rendering') { stClass = 'text-amber-300 bg-amber-950/40 border border-amber-500/30'; statusText = '🎬 กำลังประกอบ/เรนเดอร์'; }
-                  if (item.status === 'completed') { stClass = 'text-emerald-300 bg-emerald-950/40 border border-emerald-500/30'; statusText = '✅ เสร็จสมบูรณ์'; }
-                  if (item.status === 'failed') { stClass = 'text-red-300 bg-red-950/40 border border-red-500/30'; statusText = `❌ ล้มเหลว (${item.error || ''})`; }
-
-                  return (
-                    <div key={idx} className="flex justify-between items-center p-2 rounded-lg bg-black/25 text-[11px] gap-2">
-                      <span className="font-bold text-white/80 truncate max-w-[160px]">{idx + 1}. {item.topic}</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${stClass}`}>{statusText}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-            {/* Batch engine control buttons */}
-            <div className="flex gap-2 w-full pt-2 border-t border-white/5 shrink-0">
-              <button
-                onClick={() => executeBatchQueue()}
-                disabled={batchStatus === 'running' || batchItems.length === 0}
-                className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl disabled:opacity-40 transition-all flex items-center justify-center gap-1.5 shadow-lg active:scale-95"
-              >
-                ▶️ เริ่มรันคิว
-              </button>
-              <button
-                onClick={handlePauseBatch}
-                disabled={batchStatus !== 'running'}
-                className="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl disabled:opacity-40 transition-all flex items-center justify-center active:scale-95"
-                title="พักการทำงานชั่วคราว"
-              >
-                ⏸️ พัก
-              </button>
-              <button
-                onClick={handleStopBatch}
-                disabled={batchStatus !== 'running' && batchStatus !== 'paused'}
-                className="px-3 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl disabled:opacity-40 transition-all flex items-center justify-center active:scale-95"
-                title="หยุดคิวรันทั้งหมด"
-              >
-                ⏹️ หยุด
-              </button>
-            </div>
-          </div>
-
-          {/* Column 3: Monospace terminal console monitor log */}
-          <div className="lg:col-span-1 p-3 rounded-xl border border-white/10 bg-black space-y-2 flex flex-col justify-between" style={{ minHeight: isLogExpanded ? '280px' : 'auto' }}>
-            <div className="flex justify-between items-center border-b border-white/10 pb-1.5 shrink-0">
-              <div className="flex flex-col gap-1 min-w-0">
-                <span className="text-xs font-bold text-teal-400 flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full bg-teal-400 ${getActivePipelineStatus() ? 'animate-ping' : ''}`} />
-                  📟 Log ({logs.length})
-                </span>
-                {/* Flashing Status Text */}
-                {getActivePipelineStatus() && (
-                  <span className="text-[10px] text-amber-300 font-extrabold animate-pulse leading-none mt-0.5 select-text truncate max-w-[220px]" title={getActivePipelineStatus() || ''}>
-                    {getActivePipelineStatus()}
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-2 items-center shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsLogExpanded(!isLogExpanded)}
-                  className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold px-2 py-0.5 rounded border border-indigo-500/20 bg-indigo-500/5 transition-all"
-                >
-                  {isLogExpanded ? '📂 ซ่อน Log' : '📁 แสดง Log'}
-                </button>
-                {isLogExpanded && logs.length > 0 && (
+          {/* Column 2 & 3 Combined: Stacked Queue items List + Log Panel (8 cols) */}
+          <div className="lg:col-span-8 flex flex-col gap-5">
+            {/* Live Queue items Status */}
+            <div className="p-4 rounded-2xl border border-white/10 bg-black/30 flex flex-col justify-between h-[310px] gap-2 shadow-inner">
+              <div className="flex justify-between items-center border-b border-white/10 pb-2 shrink-0">
+                <span className="text-xs font-bold text-teal-400 block">📋 รายการและขั้นตอนรันคิว ({batchItems.length} ตอน)</span>
+                {batchItems.length > 0 && (
                   <button
-                    type="button"
-                    onClick={() => setLogs([])}
+                    onClick={clearCompletedBatch}
                     className="text-[10px] text-red-400 hover:text-red-300 font-bold"
                   >
-                    🧹 ล้าง
+                    ** เคลียร์คิว
                   </button>
                 )}
               </div>
+              
+              <div className="flex-1 overflow-y-auto pr-1.5 scrollbar-thin">
+                {batchItems.length === 0 ? (
+                  <div className="text-center py-16 text-white/30 text-xs italic">
+                    📭 คิวผลิตว่างเปล่า ป้อนหัวข้อซ้ายมือเพื่อนำเข้าเตรียมรันครับบอส!
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {batchItems.map((item, idx) => {
+                      let stClass = 'text-white/60 bg-white/5';
+                      let statusText = 'รอดำเนินการ (Pending)';
+                      if (item.status === 'scripting') { stClass = 'text-purple-300 bg-purple-950/40 border border-purple-500/30'; statusText = '📝 กำลังเขียนบท'; }
+                      if (item.status === 'voicing') { stClass = 'text-blue-300 bg-blue-950/40 border border-blue-500/30'; statusText = '🎙️ กำลังพากย์เสียง'; }
+                      if (item.status === 'subtitling') { stClass = 'text-cyan-300 bg-cyan-950/40 border border-cyan-500/30'; statusText = '🔤 ทำซับไตเติ้ล'; }
+                      if (item.status === 'rendering') { stClass = 'text-amber-300 bg-amber-950/40 border border-amber-500/30'; statusText = '🎬 กำลังประกอบ/เรนเดอร์'; }
+                      if (item.status === 'completed') { stClass = 'text-emerald-300 bg-emerald-950/40 border border-emerald-500/30'; statusText = '✅ เสร็จสมบูรณ์'; }
+                      if (item.status === 'failed') { stClass = 'text-red-300 bg-red-950/40 border border-red-500/30'; statusText = `❌ ล้มเหลว (${item.error || ''})`; }
+
+                      return (
+                        <div key={idx} className="flex flex-col p-3 rounded-xl bg-slate-900/90 border border-white/5 text-[11px] gap-2 shadow hover:border-teal-500/30 transition-all">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="font-bold text-white/95 leading-normal break-words" title={item.topic}>
+                                {idx + 1}. {item.topic}
+                              </span>
+                              {item.newsPayload?.images && item.newsPayload.images.length > 0 && (
+                                <span className="text-[9px] text-orange-400 font-extrabold mt-1">
+                                  📸 รูปข่าวประกอบ ({item.newsPayload.images.length} รูป)
+                                </span>
+                              )}
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold shrink-0 ${stClass}`}>{statusText}</span>
+                          </div>
+
+                          {/* Attached News Images Preview Box */}
+                          {item.newsPayload?.images && item.newsPayload.images.length > 0 && (
+                            <div className="p-2 rounded-lg bg-black/45 border border-white/5 space-y-1.5">
+                              <div className="text-[8px] text-white/50 flex justify-between items-center font-bold tracking-wider">
+                                <span>🖼️ PICTURES ATTACHED</span>
+                                <span className="text-teal-400">SLIDESHOW B-ROLL</span>
+                              </div>
+                              <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-white/10" style={{ width: '100%' }}>
+                                {item.newsPayload.images.map((imgUrl: string, imgIdx: number) => {
+                                  const src = imgUrl.startsWith('http') ? imgUrl : `${BACKEND_BASE}${imgUrl}`;
+                                  return (
+                                    <div key={imgIdx} className="relative shrink-0" style={{ width: '36px', height: '36px' }}>
+                                      <img 
+                                        src={src} 
+                                        alt={`scraped-${imgIdx}`}
+                                        style={{ width: '36px', height: '36px', objectFit: 'cover' }}
+                                        className="rounded-lg border border-white/10 hover:border-teal-400 transition-all cursor-pointer hover:scale-105"
+                                        onClick={() => window.open(src, '_blank')}
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><rect width="36" height="36" fill="%23222"/></svg>';
+                                        }}
+                                      />
+                                      <span className="absolute bottom-0 right-0 bg-black/80 text-[7px] text-white/90 px-1 rounded-tl-md rounded-br-md font-bold">
+                                        {imgIdx + 1}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Batch engine control buttons */}
+              <div className="flex gap-2 w-full pt-2 border-t border-white/5 shrink-0">
+                <button
+                  onClick={() => executeBatchQueue()}
+                  disabled={batchStatus === 'running' || batchItems.length === 0}
+                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl disabled:opacity-40 transition-all flex items-center justify-center gap-1.5 shadow-lg active:scale-95"
+                >
+                  ▶️ เริ่มรันคิว
+                </button>
+                <button
+                  onClick={handlePauseBatch}
+                  disabled={batchStatus !== 'running'}
+                  className="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl disabled:opacity-40 transition-all flex items-center justify-center active:scale-95"
+                  title="พักการทำงานชั่วคราว"
+                >
+                  ⏸️ พัก
+                </button>
+                <button
+                  onClick={handleStopBatch}
+                  disabled={batchStatus !== 'running' && batchStatus !== 'paused'}
+                  className="px-3 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl disabled:opacity-40 transition-all flex items-center justify-center active:scale-95"
+                  title="หยุดคิวรันทั้งหมด"
+                >
+                  ⏹️ หยุด
+                </button>
+              </div>
             </div>
-            {isLogExpanded && (
-              <div className="p-2 bg-black font-mono text-[10px] text-emerald-400 overflow-y-auto space-y-0.5 select-text scrollbar-thin flex-1 max-h-[200px] min-h-[80px]">
+
+            {/* Monospace terminal console monitor log */}
+            <div className="p-4 rounded-2xl border border-white/10 bg-black flex flex-col justify-between min-h-[160px] max-h-[200px] gap-2 shadow-inner">
+              <div className="flex justify-between items-center border-b border-white/10 pb-1.5 shrink-0">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <span className="text-xs font-bold text-teal-400 flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full bg-teal-400 ${getActivePipelineStatus() ? 'animate-ping' : ''}`} />
+                    📟 Log Console ({logs.length})
+                  </span>
+                  {/* Flashing Status Text */}
+                  {getActivePipelineStatus() && (
+                    <span className="text-[10px] text-amber-300 font-extrabold animate-pulse leading-none mt-0.5 select-text truncate max-w-[400px]" title={getActivePipelineStatus() || ''}>
+                      {getActivePipelineStatus()}
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-2 items-center shrink-0">
+                  {logs.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setLogs([])}
+                      className="text-[10px] text-red-400 hover:text-red-300 font-bold px-2 py-0.5 rounded border border-red-500/20 bg-red-500/5 transition-all"
+                    >
+                      🧹 ล้าง Log
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              <div className="p-2 bg-black/40 rounded-lg border border-white/5 font-mono text-[10px] text-emerald-400 overflow-y-auto space-y-0.5 select-text scrollbar-thin flex-1">
                 {logs.length === 0 ? (
-                  <div className="text-white/30 text-xs italic py-6 text-center">📟 รอเริ่มระบบ...</div>
+                  <div className="text-white/30 text-xs italic py-6 text-center">📟 รอเริ่มระบบ... Logs จะขึ้นเมื่อรันคิวครับบอส</div>
                 ) : (
                   logs.map((log, idx) => (
                     <div key={idx} className="whitespace-pre-wrap leading-snug">{log}</div>
@@ -4965,7 +5329,7 @@ Instructions for you:
                 )}
                 <div ref={terminalEndRef} />
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -4984,6 +5348,40 @@ Instructions for you:
           <p className="text-indigo-200/70 text-sm mt-1">
             ระบบปัญญาประดิษฐ์ผลิตวิดีโอสั้นแนวตั้งอัตโนมัติครบวงจร (สคริปต์สไตล์ AI · เสียงพากย์พรีเมียม · ซับไตเติ้ลอัจฉริยะ · WYSIWYG Editor)
           </p>
+        </div>
+
+        {/* Real-time OpenRouter Profile Selector */}
+        <div className="flex items-center gap-2 flex-wrap bg-slate-950/40 p-2.5 rounded-2xl border border-white/5 backdrop-blur-md">
+          <span className="text-[10px] text-purple-300 font-bold uppercase tracking-wider whitespace-nowrap">🔑 OpenRouter Profile:</span>
+          <select
+            value={selectedOpenRouterProfileId}
+            onChange={(e) => {
+              setSelectedOpenRouterProfileId(e.target.value);
+            }}
+            className="bg-slate-900/95 border border-purple-500/30 rounded-xl px-3 py-1.5 text-xs text-slate-200 cursor-pointer focus:outline-none focus:border-teal-400 min-w-48 font-sans shadow-md"
+          >
+            <option value="default" className="bg-slate-950 text-white">⚙️ ใช้คีย์หลักเบราว์เซอร์ (Default)</option>
+            {dbProfiles.filter(p => p.service_name === 'openrouter').map(p => (
+              <option key={p.id} value={String(p.id)} className="bg-slate-950 text-white font-sans">
+                👤 {p.key_name} (SQLite)
+              </option>
+            ))}
+            <option value="manual" className="bg-slate-950 text-white">✍️ กรอกคีย์เองแบบแมนนวล...</option>
+          </select>
+
+          {selectedOpenRouterProfileId === 'manual' && (
+            <input
+              type="password"
+              placeholder="กรอก sk-or-... เพื่อเปิดใช้งาน AI"
+              value={manualOpenRouterKey}
+              onChange={(e) => {
+                const val = e.target.value;
+                setManualOpenRouterKey(val);
+                localStorage.setItem('openrouter_key', val);
+              }}
+              className="bg-slate-900/95 border border-purple-500/30 rounded-xl px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-teal-400 w-60 shadow-md"
+            />
+          )}
         </div>
       </div>
 

@@ -3069,10 +3069,16 @@ app.post('/api/news/download-images', async (req, res) => {
           const protocol = imgUrl.startsWith('https') ? https : http;
           const makeRequest = (requestUrl: string, redirectCount = 0) => {
             if (redirectCount > 5) { reject(new Error('Too many redirects')); return; }
+            let refererHeader = '';
+            try {
+              refererHeader = new URL(requestUrl).origin;
+            } catch {}
+
             protocol.get(requestUrl, {
               headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'image/*',
+                ...(refererHeader ? { 'Referer': refererHeader } : {}),
               },
               timeout: 15000,
             }, (response: any) => {
@@ -3090,7 +3096,7 @@ app.post('/api/news/download-images', async (req, res) => {
           makeRequest(imgUrl);
         });
 
-        localPaths.push(`/Image_stock/${safeId}/${fileName}`);
+        localPaths.push(filePath);
       } catch (imgErr: any) {
         console.warn(`Failed to download image ${i}: ${imgErr.message}`);
       }
@@ -3135,9 +3141,12 @@ app.post('/api/news/build-image-slideshow', (req, res) => {
         const FPS = 30;
 
         // Resolve absolute image paths
+        const publicDir = path.resolve(__dirname, '../../public');
         const resolvedPaths = imagePaths.map((p: string) => {
-          if (path.isAbsolute(p)) return p;
-          return path.resolve(__dirname, '../../public', p.replace(/^\//, ''));
+          // If it's already a full absolute path (e.g. /Users/.../public/Image_stock/...)
+          if (path.isAbsolute(p) && fs.existsSync(p)) return p;
+          // Otherwise treat as web-relative path (e.g. /Image_stock/...) and resolve against public dir
+          return path.resolve(publicDir, p.replace(/^\//, ''));
         }).filter((p: string) => fs.existsSync(p));
 
         if (resolvedPaths.length === 0) {

@@ -347,7 +347,16 @@ export const PALETTE_IMAGE_PROMPT_STYLES: ImagePromptStyle[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'discovery' | 'vault' | 'canvas' | 'settings' | 'prompt-generator' | 'vertical-video' | 'quote-video' | 'avatar-video' | 'dropbox-csv' | 'podcast-clip' | 'tracking'>('discovery');
+  type TabType = 'discovery' | 'vault' | 'canvas' | 'settings' | 'prompt-generator' | 'vertical-video' | 'quote-video' | 'avatar-video' | 'dropbox-csv' | 'podcast-clip' | 'tracking';
+  const validTabs: TabType[] = ['discovery', 'vault', 'canvas', 'settings', 'prompt-generator', 'vertical-video', 'quote-video', 'avatar-video', 'dropbox-csv', 'podcast-clip', 'tracking'];
+  const [activeTab, _setActiveTab] = useState<TabType>(() => {
+    const saved = localStorage.getItem('active_tab') as TabType | null;
+    return saved && validTabs.includes(saved) ? saved : 'discovery';
+  });
+  const setActiveTab = (tab: TabType) => {
+    localStorage.setItem('active_tab', tab);
+    _setActiveTab(tab);
+  };
 
   // Global scale state for accessibility
   const [appScale, setAppScale] = useState<number>(() => {
