@@ -35,6 +35,13 @@ Thumbs.db
 .Spotlight-V100
 .Trashes
 
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
 # IDEs and Editors
 .vscode/
 .idea/
@@ -50,3 +57,64 @@ Thumbs.db
 # Models and temporary renders
 public/models/
 public/temp_render/
+
+# ============================================================
+# Content Vault - Runtime Generated Files (DO NOT COMMIT)
+# ============================================================
+# รูปภาพ, วิดีโอ, และไฟล์ที่โปรแกรมดาวน์โหลด/สร้างขึ้นเอง
+# ไม่ต้องส่งไปกับ Git เพราะโปรแกรมจะสร้างใหม่เองอัตโนมัติ
+
+# Downloaded Media (รูปที่ดาวน์โหลดมา)
+content_vault/downloaded_media/**
+!content_vault/downloaded_media/**/.gitkeep
+
+# Generated Graphics (รูปที่โปรแกรมสร้าง)
+content_vault/generated_graphics/**
+!content_vault/generated_graphics/**/.gitkeep
+
+# Logos (โลโก้ที่ดาวน์โหลด)
+content_vault/logos/**
+!content_vault/logos/.gitkeep
+
+# Databases (ฐานข้อมูล SQLite)
+content_vault/databases/**
+!content_vault/databases/.gitkeep
+
+# Exports CSV (ไฟล์ export)
+content_vault/exports_csv/**
+!content_vault/exports_csv/.gitkeep
+!content_vault/exports_csv/deep_research/.gitkeep
+
+# Scratch / Temp files
+content_vault/scratch/**
+!content_vault/scratch/.gitkeep
+
+scratch/**
+!scratch/.gitkeep
+
+# CSV exports at root level (ไฟล์ข้อมูลที่ generate)
+success.csv
+content_export_*.csv
+
+# ============================================================
+# Image & Media file types (safety net)
+# ============================================================
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.mp4
+*.webm
+*.mov
+*.avi
+# ยกเว้น: รูปที่อยู่ใน frontend/public (UI assets ที่จำเป็น)
+!frontend/public/**/*.png
+!frontend/public/**/*.jpg
+!frontend/public/**/*.jpeg
+!frontend/public/**/*.gif
+!frontend/public/**/*.webp
+!public/**/*.png
+!public/**/*.jpg
+!public/**/*.ico
+!public/**/*.svg

@@ -248,7 +248,9 @@ if __name__ == "__main__":
         vault_root = env_root
     else:
         # Default to a local workspace content vault dir
-        vault_root = "/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/content_vault"
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        vault_root = os.path.join(parent_dir, "content_vault")
 
     initializer = VaultSystemInitializer(vault_root)
     initializer.setup_directories()

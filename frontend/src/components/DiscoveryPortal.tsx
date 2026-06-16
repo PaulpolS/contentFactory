@@ -4,7 +4,7 @@ import {
   RefreshCw, 
   ExternalLink, 
   Info,
-  // CheckCircle,
+  CheckCircle,
   Search,
   FileText,
   TrendingUp,
@@ -13,9 +13,11 @@ import {
 
 const API_BASE = 'http://localhost:5005/api';
 
+import ViralReplicatorPortal from './ViralReplicatorPortal';
+
 interface VaultContent {
   id: string;
-  source_type: 'radar' | 'rss' | 'youtube' | 'github';
+  source_type: 'radar' | 'rss' | 'youtube' | 'github' | 'replicator';
   title: string;
   selected_headline: string | null;
   raw_content: string;
@@ -468,8 +470,8 @@ export default function DiscoveryPortal({ onApprove }: { onApprove?: () => void 
   const [scanLogs, setScanLogs] = useState<string[]>(['[SYSTEM] Ready. เลือกเพจคู่แข่งแล้วกดปุ่มสแกนดึงข้อมูล...']);
   const [isScanning, setIsScanning] = useState(false);
 
-  // Content Discovery Sub-tab: 'rss' | 'youtube' | 'github'
-  const [contentActiveSubTab, setContentActiveSubTab] = useState<'rss' | 'youtube' | 'github'>('rss');
+  // Content Discovery Sub-tab: 'rss' | 'youtube' | 'github' | 'replicator'
+  const [contentActiveSubTab, setContentActiveSubTab] = useState<'rss' | 'youtube' | 'github' | 'replicator'>('rss');
 
   // Content Scrapers Input States
   const [rssUrl, setRssUrl] = useState('https://techcrunch.com/feed/');
@@ -685,6 +687,34 @@ export default function DiscoveryPortal({ onApprove }: { onApprove?: () => void 
       return;
     }
     runBatchYoutubeScraper(selectedVideos);
+  };
+
+  const handleBatchYoutubeImportResume = () => {
+    const selectedVideos = ytSearchResults.filter(v => ytSelectedVideoIds.includes(v.id));
+    if (selectedVideos.length === 0) {
+      alert('กรุณาเลือกวิดีโออย่างน้อย 1 รายการ');
+      return;
+    }
+
+    const videosToResumeScrape = selectedVideos.filter(video => {
+      const alreadyScraped = scrapedResults.some(item => 
+        (item.source_url && (item.source_url.includes(video.id) || item.source_url === video.url)) || 
+        item.id === video.id
+      );
+      return !alreadyScraped;
+    });
+
+    if (videosToResumeScrape.length === 0) {
+      alert('🎉 คลิปที่เลือกทั้งหมดถูกดึงข้อมูลเข้าคลังสำเร็จไปเรียบร้อยแล้วครับ! ไม่มีคลิปใหม่ที่ต้องดึงเพิ่ม');
+      return;
+    }
+
+    const skippedCount = selectedVideos.length - videosToResumeScrape.length;
+    if (skippedCount > 0) {
+      alert(`🔄 ตรวจพบว่าดึงข้อมูลเสร็จแล้ว ${skippedCount} คลิป จะทำการดึงข้อมูลต่อเฉพาะอีก ${videosToResumeScrape.length} คลิปที่เหลือให้ครบถ้วน...`);
+    }
+
+    runBatchYoutubeScraper(videosToResumeScrape);
   };
 
   // const [ghQuery] = useState('ai-agent');
@@ -2094,34 +2124,93 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
       setScanLogs(prev => [...prev, `⏳ กำลังดึงและสร้างรายงาน CSV สำหรับเพจ ${page.name}...`]);
       scrollTerminal('watchlist');
       
-      // Fetch post data for this competitor from SQLite DB
-      const res = await fetch(`${API_BASE}/vault/contents?source_type=radar&keyword=${encodeURIComponent(page.name)}`);
-      const data = await res.json();
+      // Strategy: Try multiple search approaches to find the posts for this page
+      // 1. Search by URL (most reliable - source_url contains the page URL)
+      // 2. Search by page name as keyword fallback
+      let posts: any[] = [];
       
-      let posts = [];
-      if (data.success && data.data && data.data.length > 0) {
-        posts = data.data;
+      // Extract a URL-based identifier to search in source_url
+      // e.g. "https://www.facebook.com/profile.php?id=61564336704837" -> "61564336704837"
+      // e.g. "https://www.facebook.com/techfeedthailand" -> "techfeedthailand"
+      let urlIdentifier = '';
+      try {
+        const parsedUrl = new URL(page.url);
+        const profileId = parsedUrl.searchParams.get('id');
+        if (profileId) {
+          urlIdentifier = profileId;
+        } else {
+          const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+          urlIdentifier = pathParts[pathParts.length - 1] || '';
+        }
+      } catch {
+        urlIdentifier = page.name;
       }
       
-      const csvHeader = 'ลำดับ,ชื่อเพจ,ลิงก์โพส,ข้อความ,ประเภท,ไลก์,แชร์,คอมเมนต์,ยอดวิว,วันที่โพส';
-      let csvRows = [];
-      
-      if (posts.length > 0) {
-        csvRows = posts.map((post: any, idx: number) => {
-          const cleanCaption = (post.raw_content || '').replace(/[\n\r,"]/g, ' ').substring(0, 200);
-          const likes = post.metadata?.likes || 0;
-          const comments = post.metadata?.comments || 0;
-          const shares = post.metadata?.shares || 0;
-          const views = post.metadata?.views || 0;
-          return `${idx+1},"${page.name}","${post.source_url}","${cleanCaption}","${post.metadata?.type || 'post'}",${likes},${shares},${comments},${views},"${post.created_at}"`;
-        });
-      } else {
-        // Fallback mockup items
-        csvRows = [
-          `1,"${page.name}","${page.url}/posts/llama4_viral","Meta เปิดตัว Llama 4 ปฏิวัติวงการปัญญาประดิษฐ์",video,4820,950,2100,54000,"${new Date().toISOString()}"`,
-          `2,"${page.name}","${page.url}/posts/ai_agent_dev","วิศวกรไทยพัฒนาหุ่นยนต์คลาวด์กรองแฮกเกอร์ 99%",photo,2890,340,950,18000,"${new Date().toISOString()}"`
-        ];
+      // First try: search by URL identifier (matches source_url in the DB)
+      if (urlIdentifier) {
+        const res = await fetch(`${API_BASE}/vault/contents?source_type=radar&keyword=${encodeURIComponent(urlIdentifier)}`);
+        const data = await res.json();
+        if (data.success && data.data && data.data.length > 0) {
+          posts = data.data;
+        }
       }
+      
+      // Second try: search by page name if URL search found nothing
+      if (posts.length === 0 && page.name !== urlIdentifier) {
+        const res2 = await fetch(`${API_BASE}/vault/contents?source_type=radar&keyword=${encodeURIComponent(page.name)}`);
+        const data2 = await res2.json();
+        if (data2.success && data2.data && data2.data.length > 0) {
+          posts = data2.data;
+        }
+      }
+      
+      // Third try: fetch ALL radar posts and filter client-side by source_url containing page.url
+      if (posts.length === 0) {
+        const res3 = await fetch(`${API_BASE}/vault/contents?source_type=radar`);
+        const data3 = await res3.json();
+        if (data3.success && data3.data && data3.data.length > 0) {
+          posts = data3.data.filter((post: any) => {
+            const postUrl = (post.source_url || '').toLowerCase();
+            const pageUrl = page.url.toLowerCase();
+            // Check if the post's source_url contains the page URL or its identifier
+            return postUrl.includes(urlIdentifier.toLowerCase()) || 
+                   postUrl.includes(pageUrl.replace(/\/$/, ''));
+          });
+        }
+      }
+      
+      if (posts.length === 0) {
+        setScanLogs(prev => [...prev, `⚠️ ไม่พบข้อมูลโพสต์สำหรับเพจ ${page.name} กรุณาสแกนเพจก่อนดาวน์โหลด CSV`]);
+        scrollTerminal('watchlist');
+        alert(`ไม่พบข้อมูลโพสต์สำหรับเพจ "${page.name}"\nกรุณารันการวิจัยเชิงลึก (Deep Research) สำหรับเพจนี้ก่อน`);
+        return;
+      }
+      
+      const csvEsc = (val: string) => `"${(val || '').replace(/"/g, '""').replace(/[\n\r]/g, ' ')}"`;
+      const csvHeader = 'ลำดับ,ชื่อเพจ/ผู้เขียน,ลิงก์โพส,ข้อความ,ประเภท,ไลก์,แชร์,คอมเมนต์,ยอดวิว,วันที่โพส';
+      
+      const csvRows = posts.map((post: any, idx: number) => {
+        const authorName = post.author_name || page.name;
+        const rawContent = (post.raw_content || '').substring(0, 500);
+        const likes = post.metadata?.likes || 0;
+        const comments = post.metadata?.comments || 0;
+        const shares = post.metadata?.shares || 0;
+        const views = post.metadata?.views || 0;
+        const postType = post.metadata?.type || 'post';
+        const createdAt = post.created_at || '';
+        return [
+          idx + 1,
+          csvEsc(authorName),
+          csvEsc(post.source_url || ''),
+          csvEsc(rawContent),
+          csvEsc(postType),
+          likes,
+          shares,
+          comments,
+          views,
+          csvEsc(createdAt)
+        ].join(',');
+      });
       
       // Add UTF-8 BOM prefix for proper Thai display in Excel
       const csvContent = '\uFEFF' + csvHeader + '\n' + csvRows.join('\n');
@@ -2134,12 +2223,14 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
       a.click();
       URL.revokeObjectURL(url);
       
-      setScanLogs(prev => [...prev, `✅ ดาวน์โหลดรายงาน CSV สำเร็จ!`]);
+      setScanLogs(prev => [...prev, `✅ ดาวน์โหลดรายงาน CSV สำเร็จ! (${posts.length} โพสต์)`]);
       scrollTerminal('watchlist');
-    } catch (e) {
-      console.error(e);
-      setScanLogs(prev => [...prev, `❌ ล้มเหลวในการดาวน์โหลดรายงาน CSV`]);
+    } catch (e: any) {
+      console.error('CSV Download Error:', e);
+      const errMsg = e?.message || String(e);
+      setScanLogs(prev => [...prev, `❌ ล้มเหลวในการดาวน์โหลดรายงาน CSV: ${errMsg}`]);
       scrollTerminal('watchlist');
+      alert(`❌ ดาวน์โหลด CSV ล้มเหลว\n\nสาเหตุ: ${errMsg}\n\nลองตรวจสอบว่าเซิร์ฟเวอร์หลังบ้าน (Backend) ยังทำงานอยู่หรือไม่`);
     }
   };
 
@@ -2400,46 +2491,72 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
     setYtSelectedVideoIds([]);
 
     const allVideosMap = new Map<string, any>();
+    const failedKeywords: string[] = [];
+    let lastSearchError = '';
     
     try {
       for (let i = 0; i < keywordsToSearch.length; i++) {
         const kw = keywordsToSearch[i];
         setYtDiscoveryStatus(`กำลังค้นหาคำว่า "${kw}" (${i + 1}/${keywordsToSearch.length})...`);
         
-        const response = await fetch(`${API_BASE}/youtube-keyword-search`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            keyword: kw,
-            limit: limit,
-            days: days
-          })
-        });
+        try {
+          const response = await fetch(`${API_BASE}/youtube-keyword-search`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              keyword: kw,
+              limit: limit,
+              days: days
+            })
+          });
 
-        const data = await response.json();
-        
-        if (data.success && Array.isArray(data.videos)) {
-          for (const video of data.videos) {
-            if (!allVideosMap.has(video.id)) {
-              allVideosMap.set(video.id, {
-                ...video,
-                queryMatched: kw
-              });
+          const data = await response.json();
+          
+          if (data.success && Array.isArray(data.videos)) {
+            for (const video of data.videos) {
+              if (!allVideosMap.has(video.id)) {
+                allVideosMap.set(video.id, {
+                  ...video,
+                  queryMatched: kw
+                });
+              }
             }
-          }
 
-          const currentList = Array.from(allVideosMap.values());
-          currentList.sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
-          setYtSearchResults(currentList);
-          localStorage.setItem('yt_search_results', JSON.stringify(currentList));
-        } else {
-          console.warn(`Search for keyword "${kw}" failed:`, data.error || 'Unknown error');
+            const currentList = Array.from(allVideosMap.values());
+            currentList.sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
+            setYtSearchResults(currentList);
+            localStorage.setItem('yt_search_results', JSON.stringify(currentList));
+          } else {
+            const errMsg = data.error || 'Unknown error';
+            console.warn(`Search for keyword "${kw}" failed:`, errMsg);
+            failedKeywords.push(kw);
+            lastSearchError = errMsg;
+            setYtDiscoveryStatus(`⚠️ ค้นหาคำว่า "${kw}" ล้มเหลว: ${errMsg}`);
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          }
+        } catch (singleErr: any) {
+          const errMsg = singleErr.message || String(singleErr);
+          console.warn(`Fetch for keyword "${kw}" failed:`, errMsg);
+          failedKeywords.push(kw);
+          lastSearchError = errMsg;
+          setYtDiscoveryStatus(`⚠️ เกิดข้อผิดพลาดกับคำว่า "${kw}": ${errMsg}`);
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
       }
 
-      setYtDiscoveryStatus(`✅ ค้นหาเสร็จสิ้น! ค้นพบคลิปที่ไม่ซ้ำทั้งหมด ${allVideosMap.size} คลิป`);
+      if (failedKeywords.length > 0) {
+        if (allVideosMap.size > 0) {
+          setYtDiscoveryStatus(`⚠️ ค้นหาเสร็จสิ้น! พบ ${allVideosMap.size} คลิป (ข้ามคำที่ล้มเหลว: ${failedKeywords.join(', ')})`);
+        } else {
+          setYtDiscoveryStatus(`❌ การค้นหาล้มเหลวทั้งหมด: ${lastSearchError}`);
+          alert(`การค้นหาล้มเหลวทั้งหมด:\n${lastSearchError}`);
+        }
+      } else {
+        setYtDiscoveryStatus(`✅ ค้นหาเสร็จสิ้น! ค้นพบคลิปที่ไม่ซ้ำทั้งหมด ${allVideosMap.size} คลิป`);
+      }
+
       if (allVideosMap.size > 0) {
         localStorage.setItem('yt_last_search', keywordsToSearch.join(', '));
         setYtLastSearch(keywordsToSearch.join(', '));
@@ -3065,7 +3182,8 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
               {[
                 { id: 'rss', title: '🗞️ RSS ข่าวไอทีด่วน', desc: 'Proxy 3 ชั้น & คะแนน AI' },
                 { id: 'youtube', title: '▶️ YouTube ดูดซับ/แคปสไลด์', desc: 'OpenCV แคปภาพสวย' },
-                { id: 'github', title: '🐙 GitHub Trends คลังสุดฮอต', desc: 'Gemini คลิกเบต 3 สคริปต์' }
+                { id: 'github', title: '🐙 GitHub Trends คลังสุดฮอต', desc: 'Gemini คลิกเบต 3 สคริปต์' },
+                { id: 'replicator', title: '🌀 AI Viral Replicator', desc: 'ค้นพบเรื่องราวที่คล้ายกันจาก CSV' }
               ].map(sub => (
                 <button
                   key={sub.id}
@@ -3688,6 +3806,13 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
                                     </button>
                                     <button
                                       type="button"
+                                      onClick={handleBatchYoutubeImportResume}
+                                      className="px-3 py-1.5 bg-emerald-600/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-650 hover:text-white rounded-lg text-[10px] font-black transition-all cursor-pointer"
+                                    >
+                                      📥 สกัดต่อ (ข้ามที่ดึงแล้ว)
+                                    </button>
+                                    <button
+                                      type="button"
                                       onClick={handleDeleteSelectedYtVideos}
                                       className="px-3 py-1.5 bg-slate-900 border border-slate-800 text-red-450 hover:bg-red-950/40 hover:text-red-400 rounded-lg text-[10px] font-black transition-all cursor-pointer"
                                     >
@@ -3716,11 +3841,17 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
                                     const isPopular = (video.views || 0) >= ytEvergreenMinViews;
                                     const isEvergreen = (video.duration || 0) >= ytEvergreenMinDuration;
                                     const isHumanSpeak = hasHumanOrStoryCues(video.title);
+                                    const alreadyScraped = scrapedResults.some(item => 
+                                      (item.source_url && (item.source_url.includes(video.id) || item.source_url === video.url)) || 
+                                      item.id === video.id
+                                    );
 
                                     return (
                                       <div
                                         key={video.id}
-                                        className="bg-slate-950/40 border border-slate-900 hover:border-slate-800 rounded-2xl overflow-hidden flex flex-col justify-between transition-all hover:scale-[1.01] hover:shadow-lg shadow-black/45 group"
+                                        className={`bg-slate-950/40 border rounded-2xl overflow-hidden flex flex-col justify-between transition-all hover:scale-[1.01] hover:shadow-lg shadow-black/45 group ${
+                                          alreadyScraped ? 'border-emerald-900/60 hover:border-emerald-850' : 'border-slate-900 hover:border-slate-800'
+                                        }`}
                                       >
                                         <div>
                                           {/* Thumbnail overlay */}
@@ -3815,6 +3946,12 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
 
                                             {/* Badges */}
                                             <div className="flex flex-wrap gap-1 pt-1">
+                                              {alreadyScraped && (
+                                                <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-450 border border-emerald-500/30 font-black animate-pulse flex items-center gap-0.5">
+                                                  <CheckCircle className="w-2.5 h-2.5" />
+                                                  ดึงเข้าคลังแล้ว
+                                                </span>
+                                              )}
                                               {isPopular && (
                                                 <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-amber-400/10 text-amber-400 border border-amber-500/20 font-black">
                                                   🔥 Popular
@@ -3854,9 +3991,13 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
                                               alert(`กำลังรันโปรเซสสกัด OpenCV สไลด์และดึงสคริปต์วิดีโอนี้เข้าคลังหลังบ้าน...`);
                                               setYtActiveMode('extractor');
                                             }}
-                                            className="py-1.5 bg-red-600/15 border border-red-500/25 text-red-400 hover:bg-red-650 hover:text-white rounded-lg text-[10px] font-black text-center transition-all cursor-pointer"
+                                            className={`py-1.5 rounded-lg text-[10px] font-black text-center transition-all cursor-pointer ${
+                                              alreadyScraped 
+                                                ? 'bg-emerald-950/20 border border-emerald-500/30 text-emerald-450 hover:bg-emerald-800/40 hover:text-emerald-300' 
+                                                : 'bg-red-600/15 border border-red-500/25 text-red-400 hover:bg-red-650 hover:text-white'
+                                            }`}
                                           >
-                                            📥 สกัด & ดึงเข้าคลัง
+                                            {alreadyScraped ? '✅ ดึงเข้าคลังแล้ว (ดึงซ้ำ)' : '📥 สกัด & ดึงเข้าคลัง'}
                                           </button>
                                         </div>
                                       </div>
@@ -4472,6 +4613,14 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
                   </div>
                 )}
               </div>
+            )}
+
+            {contentActiveSubTab === 'replicator' && (
+              <ViralReplicatorPortal 
+                API_BASE={API_BASE} 
+                openRouterKey={openRouterKey}
+                onApprove={onApprove}
+              />
             )}
           </div>
         </div>
