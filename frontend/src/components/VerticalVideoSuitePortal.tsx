@@ -765,6 +765,7 @@ interface BatchItem {
   srtContent?: string;
   videoUrl?: string;
   error?: string;
+  newsPayload?: NewsPayload;
 }
 
 const hexToRgba = (hex: string, opacity: number) => {
@@ -1154,6 +1155,70 @@ export default function VerticalVideoSuitePortal() {
   const [inlineBrainName, setInlineBrainName] = useState('');
   const [inlineBrainPasteText, setInlineBrainPasteText] = useState('');
   const [isAnalyzingInlineBrain, setIsAnalyzingInlineBrain] = useState(false);
+
+  // ── News-to-Video Mode (NEW) ──
+  interface NewsPayload {
+    title: string;
+    content: string;
+    headline: string;
+    images: string[];
+    sourceUrl: string;
+    source: string;
+    timestamp: number;
+  }
+  const [newsMode, setNewsMode] = useState(false);
+  const [newsPayload, setNewsPayload] = useState<NewsPayload | null>(null);
+  const [newsTargetDuration, setNewsTargetDuration] = useState(60);
+  const [newsScript, setNewsScript] = useState('');
+  const [newsHeadline, setNewsHeadline] = useState('');
+  const [newsLocalImages, setNewsLocalImages] = useState<string[]>([]);
+  const [newsStatus, setNewsStatus] = useState<'idle' | 'scripting' | 'downloading' | 'voicing' | 'subtitling' | 'building-slideshow' | 'rendering' | 'done' | 'error'>('idle');
+  const [newsStatusLog, setNewsStatusLog] = useState<string[]>([]);
+  const [newsResultPath, setNewsResultPath] = useState('');
+
+  // Detect incoming news payload from DiscoveryPortal via localStorage
+  useEffect(() => {
+    // 1. Single Payload
+    const payload = localStorage.getItem('news_to_video_payload');
+    if (payload) {
+      try {
+        const data = JSON.parse(payload) as NewsPayload;
+        localStorage.removeItem('news_to_video_payload');
+        setNewsPayload(data);
+        setNewsMode(true);
+        setNewsHeadline(data.headline || data.title);
+        setNewsScript('');
+        setNewsLocalImages([]);
+        setNewsStatus('idle');
+        setNewsStatusLog([`📰 โหลดข่าวสำเร็จ: "${data.title.substring(0, 60)}..." (${data.images.length} รูป)`]);
+        setNewsResultPath('');
+      } catch (e) {
+        console.error('Failed to parse news payload:', e);
+        localStorage.removeItem('news_to_video_payload');
+      }
+    }
+
+    // 2. Batch Payloads
+    const batchPayloads = localStorage.getItem('batch_news_to_video_payloads');
+    if (batchPayloads) {
+      try {
+        const datas = JSON.parse(batchPayloads) as NewsPayload[];
+        localStorage.removeItem('batch_news_to_video_payloads');
+        if (datas.length > 0) {
+          const newBatchItems: BatchItem[] = datas.map(data => ({
+            topic: data.headline || data.title,
+            status: 'pending',
+            newsPayload: data
+          }));
+          setBatchItems(prev => [...prev, ...newBatchItems]);
+          setNewsMode(false); // We go to batch UI, not single news UI
+        }
+      } catch (e) {
+        console.error('Failed to parse batch news payload:', e);
+        localStorage.removeItem('batch_news_to_video_payloads');
+      }
+    }
+  }, []);
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -2409,9 +2474,10 @@ Instructions for you:
     duration: number,
     subContent: string,
     hlText: string,
-    overrideBgmFile?: string
+    overrideBgmFile?: string,
+    overrideBackgroundVideoPath?: string
   ): Promise<string | null> => {
-    if (!sourceFolder || !outputFolder) {
+    if (!overrideBackgroundVideoPath && (!sourceFolder || !outputFolder)) {
       alert('กรุณาเลือกโฟลเดอร์ต้นทางคลิปดิกและโฟลเดอร์บันทึกปลายทางก่อนครับบอส');
       return null;
     }
@@ -2419,33 +2485,35 @@ Instructions for you:
     addLog('ขั้นตอนที่ 5: สุ่มหยิบฟุตเทจมาต่อให้เข้ากับความยาวคลิปเสียงอัตโนมัติ...', 'info');
 
     // 1. Build and concatenate background clips matching exactly the voice duration
-    let assembledVoiceoverVideo: string | null = null;
-    try {
-      const response = await fetch(`${BACKEND_BASE}/api/build-random-clip-assembly`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceFolder,
-          outputFolder: `${outputFolder}/.temp_assembly`,
-          targetSeconds: duration,
-          outputCount: 1,
-          outputName: `temp_assembled_${Date.now()}`,
-          width: 1080,
-          height: 1920
-        })
-      });
+    let assembledVoiceoverVideo: string | null = overrideBackgroundVideoPath || null;
+    
+    if (!assembledVoiceoverVideo) {
+      try {
+        const response = await fetch(`${BACKEND_BASE}/api/build-random-clip-assembly`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceFolder,
+            outputFolder: `${outputFolder}/.temp_assembly`,
+            targetSeconds: duration,
+            outputCount: 1,
+            outputName: `temp_assembled_${Date.now()}`,
+            width: 1080,
+            height: 1920
+          })
+        });
 
-      if (!response.body) throw new Error('ไม่พบข้อมูลตอบสนองการสตรีมฟุตเทจ');
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+        if (!response.body) throw new Error('ไม่พบข้อมูลตอบสนองการสตรีมฟุตเทจ');
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const payload = JSON.parse(line.slice(6));
@@ -2459,6 +2527,7 @@ Instructions for you:
           }
         }
       }
+      } // close if(!assembledVoiceoverVideo)
     } catch (e: any) {
       addLog(`ขั้นตอนสุ่มประกอบฉากผิดพลาด: ${e.message}`, 'error');
       return null;
@@ -2689,6 +2758,34 @@ Instructions for you:
     await executeBatchQueue(itemsToRun);
   };
 
+  const handleGenerateNewsScriptBatch = async (payload: NewsPayload, targetDuration: number): Promise<{ script: string; headline: string } | null> => {
+    const targetChars = targetDuration <= 45 ? 400 : targetDuration <= 90 ? 950 : 1650;
+    const apiKey = getActiveOpenRouterKey();
+    if (!apiKey) throw new Error('กรุณาตั้งค่า OpenRouter API Key');
+
+    const prompt = `เขียน Script สำหรับพากย์คลิปข่าว (เป็นภาษาไทย) จากเนื้อหาข่าวนี้:
+
+หัวข้อ: ${payload.title}
+เนื้อหา: ${payload.content?.substring(0, 2000) || 'ไม่มีเนื้อหาเพิ่มเติม'}
+
+ความยาวที่ต้องการ: ประมาณ ${targetChars} ตัวอักษร (${targetDuration} วินาที)
+
+กฎ:
+- เขียนเป็นภาษาไทย สไตล์ผู้ประกาศข่าว ชวนติดตาม
+- ขึ้นต้นด้วย Hook ที่ดึงความสนใจ
+- สรุปประเด็นสำคัญให้ครบ กระชับ
+- จบด้วยข้อคิดหรือ Call to Action สั้นๆ
+- ส่งกลับ JSON: { "script": "...", "headline": "พาดหัวสั้นๆ 2-3 บรรทัด" }`;
+
+    const aiResponse = await callAICompletions(apiKey, 
+      'คุณคือผู้เชี่ยวชาญเขียน Script ข่าวสำหรับวิดีโอสั้น ส่งกลับเฉพาะ JSON ไม่มีข้อความอื่น',
+      prompt, true);
+
+    const parsed = safeParseJSON(aiResponse);
+    if (!parsed || !parsed.script) throw new Error('AI ไม่สามารถเขียน Script ข่าวได้');
+    return parsed;
+  };
+
   const executeBatchQueue = async (overrideItems?: BatchItem[]) => {
     const activeItems = overrideItems || batchItems;
     if (activeItems.length === 0) {
@@ -2729,7 +2826,19 @@ Instructions for you:
       // Step 1: AI Script & Style Generation
       let scriptResult = { headline: currentItem.headline || '', script: currentItem.script || '' };
       if (!scriptResult.script || !scriptResult.headline) {
-        const generated = await handleGenerateScript(currentItem.topic, selectedStyleId);
+        let generated: { script: string; headline: string } | null = null;
+        
+        if (currentItem.newsPayload) {
+          addLog(`[${i+1}/${activeItems.length}] 📰 สรุปข่าวหัวข้อ: "${currentItem.topic}"...`, 'info');
+          try {
+            generated = await handleGenerateNewsScriptBatch(currentItem.newsPayload, 60); // default to 60s
+          } catch (e: any) {
+            addLog(`ล้มเหลวในการสรุปข่าว: ${e.message}`, 'error');
+          }
+        } else {
+          generated = await handleGenerateScript(currentItem.topic, selectedStyleId);
+        }
+
         if (!generated) {
           updateItemStatus(i, 'failed', 'เขียนบทความล้มเหลว');
           continue;
@@ -2832,6 +2941,43 @@ Instructions for you:
       });
 
       // Step 4: Assembly & Visual Overlays Rendering
+      updateItemStatus(i, 'assembling');
+      
+      let backgroundVideoToUse: string | undefined = undefined;
+
+      // 4.5. Generate News Slideshow (if it's a news item)
+      if (currentItem.newsPayload && currentItem.newsPayload.images.length > 0) {
+        addLog(`🖼️ กำลังสร้างภาพประกอบข่าว (Slideshow) สำหรับหัวข้อ: "${currentItem.topic}"...`, 'info');
+        try {
+          const dlRes = await fetch(`${BACKEND_BASE}/api/news/download-images`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              imageUrls: currentItem.newsPayload.images, 
+              sourceId: `batch_${Date.now()}` 
+            }),
+          });
+          const dlData = await dlRes.json();
+          if (dlData.success && dlData.localPaths?.length > 0) {
+            const slideshowRes = await fetch(`${BACKEND_BASE}/api/news/build-image-slideshow`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                imagePaths: dlData.localPaths,
+                targetDuration: currentItemDuration + 1,
+                outputPath: `${outputFolder}/.temp_assembly/news_slideshow_batch_${Date.now()}.mp4`,
+              }),
+            });
+            const slideshowData = await slideshowRes.json();
+            if (slideshowData.success) {
+              backgroundVideoToUse = slideshowData.outputPath;
+            }
+          }
+        } catch (e: any) {
+          addLog(`ล้มเหลวในการสร้างภาพข่าว: ${e.message}`, 'warning');
+        }
+      }
+
       updateItemStatus(i, 'rendering');
       
       // Resolve BGM randomly for each compile if BGM is set to a directory
@@ -2843,7 +2989,8 @@ Instructions for you:
         currentItemDuration,
         currentItemSrtContent,
         scriptResult.headline,
-        activeBgm
+        activeBgm,
+        backgroundVideoToUse
       );
 
       if (!renderPath) {
@@ -2915,6 +3062,262 @@ Instructions for you:
     setCurrentBatchIndex(-1);
     setBatchStatus('idle');
     addLog('เคลียร์ตารางคิวและประวัติเรียบร้อย', 'info');
+  };
+
+  // ── News-to-Video Pipeline Handler (NEW) ──
+  const addNewsLog = (msg: string) => {
+    setNewsStatusLog(prev => [...prev, `${new Date().toLocaleTimeString()} ${msg}`]);
+  };
+
+  const handleNewsToVideo = async () => {
+    if (!newsPayload || newsStatus === 'scripting' || newsStatus === 'rendering') return;
+    if (!outputFolder) {
+      alert('กรุณาเลือกโฟลเดอร์บันทึกผลลัพธ์ (Output Folder) ก่อนครับ');
+      return;
+    }
+
+    try {
+      // Step 1: Generate news script via AI
+      setNewsStatus('scripting');
+      addNewsLog('📝 กำลังเขียน Script ข่าว...');
+
+      const durationLabel = newsTargetDuration <= 45 ? 'short' : newsTargetDuration <= 90 ? 'medium' : 'long';
+      const targetChars = newsTargetDuration <= 45 ? 400 : newsTargetDuration <= 90 ? 950 : 1650;
+      
+      const apiKey = getActiveOpenRouterKey();
+      if (!apiKey) {
+        throw new Error('กรุณาตั้งค่า OpenRouter API Key ก่อนครับ');
+      }
+
+      const newsScriptPrompt = `เขียน Script สำหรับพากย์คลิปข่าว (เป็นภาษาไทย) จากเนื้อหาข่าวนี้:
+
+หัวข้อ: ${newsPayload.title}
+เนื้อหา: ${newsPayload.content?.substring(0, 2000) || 'ไม่มีเนื้อหาเพิ่มเติม'}
+
+ความยาวที่ต้องการ: ประมาณ ${targetChars} ตัวอักษร (${newsTargetDuration} วินาที)
+
+กฎ:
+- เขียนเป็นภาษาไทย สไตล์ผู้ประกาศข่าว ชวนติดตาม
+- ขึ้นต้นด้วย Hook ที่ดึงความสนใจ
+- สรุปประเด็นสำคัญให้ครบ กระชับ
+- จบด้วยข้อคิดหรือ Call to Action สั้นๆ
+- ส่งกลับ JSON: { "script": "...", "headline": "พาดหัวสั้นๆ 2-3 บรรทัด" }`;
+
+      const aiResponse = await callAICompletions(apiKey, 
+        'คุณคือผู้เชี่ยวชาญเขียน Script ข่าวสำหรับวิดีโอสั้น ส่งกลับเฉพาะ JSON ไม่มีข้อความอื่น',
+        newsScriptPrompt, true);
+
+      const parsed = safeParseJSON(aiResponse);
+      if (!parsed || !parsed.script) {
+        throw new Error('AI ไม่สามารถเขียน Script ข่าวได้');
+      }
+
+      setNewsScript(parsed.script);
+      setNewsHeadline(parsed.headline || newsPayload.headline);
+      addNewsLog(`✅ เขียน Script สำเร็จ (${parsed.script.length} ตัวอักษร)`);
+
+      // Step 2: Download images
+      setNewsStatus('downloading');
+      addNewsLog('📥 กำลังดาวน์โหลดรูปข่าว...');
+
+      const dlRes = await fetch(`${BACKEND_BASE}/api/news/download-images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          images: newsPayload.images,
+          articleId: `news_${Date.now()}`
+        }),
+      });
+      const dlData = await dlRes.json();
+      
+      if (!dlData.success || !dlData.localPaths || dlData.localPaths.length === 0) {
+        throw new Error('ดาวน์โหลดรูปข่าวล้มเหลว');
+      }
+      setNewsLocalImages(dlData.localPaths);
+      addNewsLog(`✅ ดาวน์โหลดรูปสำเร็จ ${dlData.localPaths.length} รูป`);
+
+      // Step 3: Generate voice
+      setNewsStatus('voicing');
+      addNewsLog('🎤 กำลังสร้างเสียงพากย์...');
+
+      const voiceResult = await handleGenerateVoice(parsed.script, voiceId);
+      if (!voiceResult) {
+        throw new Error('สร้างเสียงพากย์ล้มเหลว');
+      }
+      addNewsLog(`✅ เสียงพากย์สำเร็จ (${voiceResult.duration.toFixed(1)} วินาที)`);
+
+      // Step 4: Generate subtitles
+      setNewsStatus('subtitling');
+      addNewsLog('📝 กำลังสร้างซับไตเติ้ล...');
+
+      const subtitleSegments = await generateSrtSegmentsAsync(
+        parsed.script, voiceResult.duration, voiceResult.audioUrl
+      );
+      
+      // Build SRT content
+      let srtText = '';
+      if (subtitleSegments && subtitleSegments.length > 0) {
+        srtText = subtitleSegments.map((seg: any, i: number) => 
+          `${i + 1}\n${formatTime(seg.start)} --> ${formatTime(seg.end)}\n${seg.text}\n`
+        ).join('\n');
+      }
+      addNewsLog(`✅ ซับไตเติ้ลสำเร็จ (${subtitleSegments?.length || 0} ช่วง)`);
+
+      // Step 5: Build image slideshow
+      setNewsStatus('building-slideshow');
+      addNewsLog('🖼️ กำลังสร้าง slideshow จากรูปข่าว...');
+
+      const slideshowRes = await fetch(`${BACKEND_BASE}/api/news/build-image-slideshow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imagePaths: dlData.localPaths,
+          targetDuration: voiceResult.duration + 1,
+          outputPath: `${outputFolder}/.temp_assembly/news_slideshow_${Date.now()}.mp4`,
+        }),
+      });
+
+      // Read SSE stream for slideshow progress
+      let slideshowPath = '';
+      if (slideshowRes.body) {
+        const reader = slideshowRes.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const payload = JSON.parse(line.slice(6));
+              if (payload.log) addNewsLog(`  [slideshow] ${payload.log}`);
+              if (payload.success && payload.filePath) slideshowPath = payload.filePath;
+              if (payload.error) throw new Error(payload.error);
+            } catch (e: any) {
+              if (e.message && !e.message.includes('JSON')) throw e;
+            }
+          }
+        }
+      }
+
+      if (!slideshowPath) {
+        throw new Error('สร้าง slideshow ล้มเหลว');
+      }
+      addNewsLog(`✅ สร้าง slideshow สำเร็จ`);
+
+      // Step 6: Render final video (using render-video API)
+      setNewsStatus('rendering');
+      addNewsLog('🎬 กำลัง render วิดีโอข่าว...');
+
+      const renderCoords = getRenderCoords();
+      const renderPayload = {
+        topic: parsed.headline || newsPayload.title,
+        scenes: [{
+          imageUrl: slideshowPath,
+          audioUrl: voiceResult.audioUrl,
+          duration: voiceResult.duration,
+          colorFilter: 'none',
+        }],
+        subtitles: srtText,
+        subtitleStyle: {
+          fontName: subStyle.fontName,
+          fontSize: subStyle.fontSize,
+          marginV: renderCoords.subtitleMarginV,
+          borderStyle: subStyle.borderStyle,
+          outlineThickness: subStyle.outlineThickness,
+          shadowThickness: subStyle.shadowThickness,
+          primaryColor: subStyle.primaryColor,
+          outlineColor: subStyle.outlineColor,
+          shadowColor: subStyle.shadowColor,
+        },
+        headline: wrapText(parsed.headline || newsPayload.title),
+        headlineStyle: {
+          fontName: headlineFontName,
+          fontSize: headlineFontSize,
+          fontColor: headlineFontColor,
+          boxColor: headlineBoxColor,
+          boxOpacity: headlineBoxOpacity,
+          y: renderCoords.headlineY,
+          paddingX: headlinePaddingX,
+          paddingY: headlinePaddingY,
+          borderRadius: headlineBorderRadius,
+          shadowBlur: headlineShadowBlur,
+          shadowColor: headlineShadowColor,
+          boxEnabled: headlineBoxEnabled,
+          outlineWidth: headlineOutlineWidth,
+          outlineColor: headlineOutlineColor,
+          lineSpacing: headlineLineSpacing,
+        },
+        outputPath: outputFolder,
+      };
+
+      const renderRes = await fetch(`${BACKEND_BASE}/api/render-video`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(renderPayload),
+      });
+      const renderData = await renderRes.json();
+
+      if (!renderRes.ok) {
+        throw new Error(renderData.error || 'Render ล้มเหลว');
+      }
+
+      const outLog = renderData.logs || '';
+      const match = outLog.match(/✅ Output → ([^\n]+)/);
+      let finalPath = match ? match[1].trim() : '';
+      if (!finalPath) {
+        const cleanTitle = (parsed.headline || newsPayload.title).replace(/[^a-zA-Z0-9ก-๙]/g, '_').substring(0, 50);
+        finalPath = `${outputFolder}/Render_${cleanTitle}_output.mp4`;
+      }
+
+      // BGM overlay if set
+      if (bgmFile && finalPath) {
+        addNewsLog('🎵 กำลังซ้อน BGM...');
+        const bgmMixedPath = finalPath.replace('.mp4', '_mixed.mp4');
+        const mixCmd = `ffmpeg -y -i "${finalPath}" -stream_loop -1 -i "${bgmFile}" -filter_complex "[1:a]volume=${bgmVolume}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[a]" -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 128k -ar 44100 "${bgmMixedPath}"`;
+        const runRes = await fetch(`${BACKEND_BASE}/api/run-bash-script`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ script: mixCmd }),
+        });
+        if (runRes.body) {
+          const reader = runRes.body.getReader();
+          while (true) {
+            const { done } = await reader.read();
+            if (done) break;
+          }
+        }
+        // Replace with mixed version
+        try {
+          await fetch(`${BACKEND_BASE}/api/run-bash-script`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ script: `rm -f "${finalPath}" && mv "${bgmMixedPath}" "${finalPath}"` }),
+          });
+        } catch {}
+      }
+
+      // Cleanup slideshow temp file
+      try {
+        await fetch(`${BACKEND_BASE}/api/delete-assets`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paths: [slideshowPath] }),
+        });
+      } catch {}
+
+      setNewsStatus('done');
+      setNewsResultPath(finalPath);
+      addNewsLog(`🎉 สร้างคลิปข่าวเสร็จสมบูรณ์! → ${finalPath}`);
+
+    } catch (err: any) {
+      setNewsStatus('error');
+      addNewsLog(`❌ เกิดข้อผิดพลาด: ${err.message || String(err)}`);
+    }
   };
 
   const handleSmartHistoryResume = async (item: any, isBatchRun = false): Promise<boolean> => {
@@ -4583,6 +4986,231 @@ Instructions for you:
           </p>
         </div>
       </div>
+
+      {/* ── News-to-Video Mode Panel (NEW) ── */}
+      {newsMode && newsPayload && (
+        <div style={{
+          padding: 24,
+          borderRadius: 20,
+          background: 'linear-gradient(135deg, rgba(249,115,22,0.08), rgba(236,72,153,0.08), rgba(139,92,246,0.08))',
+          border: '1px solid rgba(249,115,22,0.3)',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          {/* Animated glow border */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+            background: 'linear-gradient(90deg, #f97316, #ec4899, #8b5cf6, #06b6d4, #f97316)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 3s linear infinite',
+          }} />
+          
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 28 }}>📰</span>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>โหมดสร้างคลิปข่าว</span>
+                  <span style={{
+                    background: 'linear-gradient(135deg, #f97316, #ec4899)',
+                    color: '#fff',
+                    fontSize: 10,
+                    fontWeight: 800,
+                    padding: '2px 10px',
+                    borderRadius: 20,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                    boxShadow: '0 0 12px rgba(249,115,22,0.4)',
+                    animation: 'pulse 2s ease-in-out infinite',
+                  }}>✨ NEW</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                  {newsPayload.source && <span style={{ marginRight: 8 }}>📡 {newsPayload.source}</span>}
+                  ส่งมาจาก Discovery Portal
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => { setNewsMode(false); setNewsPayload(null); }}
+              style={{
+                padding: '4px 12px', borderRadius: 8,
+                border: '1px solid rgba(239,68,68,0.3)',
+                background: 'rgba(239,68,68,0.1)',
+                color: '#f87171', fontSize: 12, fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >✕ ปิด</button>
+          </div>
+
+          {/* News title */}
+          <div style={{
+            padding: 14, borderRadius: 12,
+            background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(100,116,139,0.2)',
+            marginBottom: 16,
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', lineHeight: 1.5 }}>
+              {newsPayload.title}
+            </div>
+          </div>
+
+          {/* Image thumbnails */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              📸 รูปประกอบข่าว ({newsPayload.images.length} รูป)
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {newsPayload.images.slice(0, 10).map((img, idx) => (
+                <img
+                  key={idx}
+                  src={img}
+                  alt={`news-img-${idx}`}
+                  style={{
+                    width: 72, height: 72, objectFit: 'cover', borderRadius: 10,
+                    border: '2px solid rgba(249,115,22,0.3)',
+                    transition: 'transform 0.2s',
+                  }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Settings row */}
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+            {/* Duration selector */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 6 }}>⏱️ ความยาวคลิป</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[
+                  { label: '30s', value: 30 },
+                  { label: '1m', value: 60 },
+                  { label: '2m', value: 120 },
+                  { label: '3m', value: 180 },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setNewsTargetDuration(opt.value)}
+                    style={{
+                      padding: '6px 14px', borderRadius: 8,
+                      border: `1px solid ${newsTargetDuration === opt.value ? 'rgba(249,115,22,0.6)' : 'rgba(100,116,139,0.3)'}`,
+                      background: newsTargetDuration === opt.value
+                        ? 'linear-gradient(135deg, rgba(249,115,22,0.2), rgba(236,72,153,0.2))'
+                        : 'rgba(15,23,42,0.4)',
+                      color: newsTargetDuration === opt.value ? '#fb923c' : '#94a3b8',
+                      fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >{opt.label}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Voice selector (compact) */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 6 }}>🎤 เสียงพากย์</div>
+              <select
+                value={voiceId}
+                onChange={(e) => setVoiceId(e.target.value)}
+                style={{
+                  padding: '6px 10px', borderRadius: 8,
+                  border: '1px solid rgba(100,116,139,0.3)',
+                  background: 'rgba(15,23,42,0.6)',
+                  color: '#e2e8f0', fontSize: 11, fontWeight: 600,
+                  maxWidth: 280, cursor: 'pointer',
+                }}
+              >
+                {KIEAI_VOICES.map(v => (
+                  <option key={v.id} value={v.id}>{v.name.split('(')[0].trim()}</option>
+                ))}
+                {MACOS_VOICES.map(v => (
+                  <option key={v.id} value={v.id}>🖥️ {v.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+            <button
+              onClick={handleNewsToVideo}
+              disabled={newsStatus !== 'idle' && newsStatus !== 'done' && newsStatus !== 'error'}
+              style={{
+                padding: '10px 24px', borderRadius: 12,
+                background: (newsStatus === 'idle' || newsStatus === 'done' || newsStatus === 'error')
+                  ? 'linear-gradient(135deg, #f97316, #ec4899)'
+                  : 'rgba(100,116,139,0.3)',
+                color: '#fff', fontSize: 14, fontWeight: 800,
+                cursor: (newsStatus === 'idle' || newsStatus === 'done' || newsStatus === 'error') ? 'pointer' : 'not-allowed',
+                border: 'none',
+                display: 'flex', alignItems: 'center', gap: 8,
+                boxShadow: '0 0 20px rgba(249,115,22,0.3)',
+                transition: 'all 0.3s',
+                opacity: (newsStatus !== 'idle' && newsStatus !== 'done' && newsStatus !== 'error') ? 0.6 : 1,
+              }}
+            >
+              🚀 สร้างคลิปข่าว
+              <span style={{
+                background: 'rgba(255,255,255,0.2)',
+                fontSize: 9, fontWeight: 800,
+                padding: '1px 8px', borderRadius: 8,
+              }}>✨ NEW</span>
+            </button>
+
+            {newsStatus !== 'idle' && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px', borderRadius: 10,
+                background: newsStatus === 'done' ? 'rgba(16,185,129,0.1)' : newsStatus === 'error' ? 'rgba(239,68,68,0.1)' : 'rgba(249,115,22,0.1)',
+                border: `1px solid ${newsStatus === 'done' ? 'rgba(16,185,129,0.3)' : newsStatus === 'error' ? 'rgba(239,68,68,0.3)' : 'rgba(249,115,22,0.3)'}`,
+              }}>
+                {newsStatus === 'done' ? '✅' : newsStatus === 'error' ? '❌' : '⏳'}
+                <span style={{
+                  fontSize: 11, fontWeight: 700,
+                  color: newsStatus === 'done' ? '#34d399' : newsStatus === 'error' ? '#f87171' : '#fb923c',
+                }}>
+                  {newsStatus === 'scripting' && 'กำลังเขียน Script...'}
+                  {newsStatus === 'downloading' && 'กำลังดาวน์โหลดรูป...'}
+                  {newsStatus === 'voicing' && 'กำลังสร้างเสียง...'}
+                  {newsStatus === 'subtitling' && 'กำลังสร้างซับ...'}
+                  {newsStatus === 'building-slideshow' && 'กำลังสร้าง Slideshow...'}
+                  {newsStatus === 'rendering' && 'กำลัง Render...'}
+                  {newsStatus === 'done' && 'สำเร็จ!'}
+                  {newsStatus === 'error' && 'ล้มเหลว'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Progress log */}
+          {newsStatusLog.length > 0 && (
+            <div style={{
+              padding: 10, borderRadius: 10,
+              background: 'rgba(0,0,0,0.4)',
+              border: '1px solid rgba(100,116,139,0.15)',
+              maxHeight: 160, overflowY: 'auto',
+              fontFamily: 'monospace', fontSize: 10, color: '#34d399',
+              lineHeight: 1.6,
+            }}>
+              {newsStatusLog.map((log, idx) => (
+                <div key={idx} style={{ whiteSpace: 'pre-wrap' }}>{log}</div>
+              ))}
+            </div>
+          )}
+
+          {/* Result path */}
+          {newsResultPath && (
+            <div style={{
+              marginTop: 12, padding: '8px 14px', borderRadius: 10,
+              background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
+              fontSize: 11, color: '#34d399', fontWeight: 600,
+              wordBreak: 'break-all',
+            }}>
+              📂 ไฟล์: {newsResultPath}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ส่วนที่ 1: การตั้งค่าพื้นฐาน (Basic Settings Dashboard) */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

@@ -2307,7 +2307,8 @@ Please rewrite this following the copywriting style tone and output rules above.
               onApprove={() => {
                 fetchVaultData();
                 fetchApprovedItems();
-              }} 
+              }}
+              onSendToVideoSuite={() => setActiveTab('vertical-video')}
             />
           )}
 
