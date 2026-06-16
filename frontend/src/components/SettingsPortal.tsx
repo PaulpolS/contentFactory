@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react';
-import { 
-  Sliders, 
-  Eye, 
-  EyeOff, 
-  Check, 
-  Clipboard, 
-  RefreshCw, 
-  Key, 
-  ShieldCheck, 
-  Database, 
-  Sparkles, 
-  UserCheck, 
+import {
+  Sliders,
+  Eye,
+  EyeOff,
+  Check,
+  Clipboard,
+  RefreshCw,
+  Key,
+  ShieldCheck,
+  Database,
+  Sparkles,
+  UserCheck,
   Activity,
   Trash2,
-  Plus 
+  Plus
 } from 'lucide-react';
 
 interface FBPageAccount {

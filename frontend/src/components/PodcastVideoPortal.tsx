@@ -1,17 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Film, 
-  Settings, 
-  Play, 
-  Pause, 
-  Square, 
-  Sparkles, 
-  Image as ImageIcon, 
-  Terminal, 
-  FolderOpen, 
-  AlertCircle, 
-  CheckCircle2, 
-  Loader2, 
+import {
+  Film,
+  Settings,
+  Play,
+  Pause,
+  Square,
+  Sparkles,
+  Image as ImageIcon,
+  Terminal,
+  FolderOpen,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
   ChevronRight,
   Music
 } from 'lucide-react';

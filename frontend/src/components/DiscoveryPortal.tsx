@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Play, 
-  RefreshCw, 
-  ExternalLink, 
+import {
+  Play,
+  RefreshCw,
+  ExternalLink,
   Info,
   CheckCircle,
   Search,

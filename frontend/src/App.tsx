@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
-import { 
-  Compass, 
-  Database, 
-  Image as ImageIcon, 
-  Play, 
-  CheckCircle, 
-  Sliders, 
-  Search, 
-  Info, 
+import {
+  Compass,
+  Database,
+  Image as ImageIcon,
+  Play,
+  CheckCircle,
+  Sliders,
+  Search,
+  Info,
   Cpu,
   RefreshCw,
   Eye,

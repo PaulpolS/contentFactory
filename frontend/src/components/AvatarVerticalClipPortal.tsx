@@ -7,7 +7,7 @@ import {
   FolderOpen,
   Music,
   Square,
-  User,
+  User
 } from 'lucide-react';
 
 interface AvatarRenderItem {

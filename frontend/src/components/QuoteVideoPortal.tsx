@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import JSZip from 'jszip';
 import Papa from 'papaparse';
-import { 
-  Quote, 
-  Sparkles, 
-  Settings, 
-  Download, 
-  FileVideo, 
-  Plus, 
-  Trash2, 
-  Check, 
-  Folder, 
-  FolderOpen, 
-  Music, 
+import {
+  Quote,
+  Sparkles,
+  Settings,
+  Download,
+  FileVideo,
+  Plus,
+  Trash2,
+  Check,
+  Folder,
+  FolderOpen,
+  Music,
   AlertCircle,
   Play,
   Pause,

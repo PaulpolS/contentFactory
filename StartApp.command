@@ -7,6 +7,16 @@ echo "=========================================================="
 echo " 🚀 กำลังเริ่มระบบ Content Factory V2..."
 echo "=========================================================="
 
+# 🔪 ปิด process เก่าที่ค้างอยู่บน port ที่ใช้งาน (ป้องกัน port ชน)
+echo "🧹 กำลังล้าง process เก่าบน port 5005 และ 5173..."
+OLD_PIDS=$(lsof -ti :5005,5173)
+if [ ! -z "$OLD_PIDS" ]; then
+    echo "$OLD_PIDS" | xargs kill -9 2>/dev/null
+    echo "   ✅ ปิด process เก่าเรียบร้อยแล้ว"
+else
+    echo "   ℹ️  ไม่มี process เก่าค้างอยู่"
+fi
+
 # ตรวจสอบการติดตั้ง Node modules ของ Backend
 if [ ! -d "backend/node_modules" ]; then
     echo "📦 ไม่พบโฟลเดอร์ node_modules ใน backend, กำลังติดตั้ง..."

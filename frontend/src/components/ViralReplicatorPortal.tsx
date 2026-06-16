@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Upload, 
-  Play, 
-  RefreshCw, 
-  FileText, 
-  Link, 
-  ExternalLink, 
-  Trash2, 
-  Check, 
-  ThumbsUp, 
-  X, 
-  AlertCircle, 
+import {
+  Upload,
+  Play,
+  RefreshCw,
+  FileText,
+  Link,
+  ExternalLink,
+  Trash2,
+  Check,
+  ThumbsUp,
+  X,
+  AlertCircle,
   Compass,
   Download,
   Image as ImageIcon
