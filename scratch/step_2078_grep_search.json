@@ -1,9 +1,0 @@
-{
-  "CaseInsensitive": "false",
-  "IsRegex": "false",
-  "MatchPerLine": "true",
-  "Query": "\"const [headline\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for headline state hook\"",
-  "toolSummary": "\"Search file content\""
-}

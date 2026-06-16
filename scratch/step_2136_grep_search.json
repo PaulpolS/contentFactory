@@ -1,7 +1,0 @@
-{
-  "MatchPerLine": "true",
-  "Query": "\"getActiveOpenRouterKey\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for API key loader\"",
-  "toolSummary": "\"Grep search getActiveOpenRouterKey\""
-}

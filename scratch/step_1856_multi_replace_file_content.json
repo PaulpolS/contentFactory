@@ -1,8 +1,0 @@
-{
-  "Description": "\"Fix remaining warning log types in VerticalVideoSuitePortal.tsx\"",
-  "Instruction": "\"Change warning parameter to info in addLog calls\"",
-  "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":1802,\"ReplacementContent\":\"            addLog('AI ส่งเพียงอาร์เรย์ข้อความไม่มีข้อมูลเวลา → กำลังสลับไปคำนวณจังหวะสถิติตามสัดส่วน...', 'info');\",\"StartLine\":1799,\"TargetContent\":\"            addLog('AI ส่งเพียงอาร์เรย์ข้อความไม่มีข้อมูลเวลา → กำลังสลับไปคำนวณจังหวะสถิติตามสัดส่วน...', 'warning');\"},{\"AllowMultiple\":false,\"EndLine\":1810,\"ReplacementContent\":\"      addLog('ไม่พบ API Key สำหรับ OpenRouter → กำลังสลับไปใช้ระบบคำนวณแบบสถิติสำรอง (Fallback)...', 'info');\",\"StartLine\":1808,\"TargetContent\":\"      addLog('ไม่พบ API Key สำหรับ OpenRouter → กำลังสลับไปใช้ระบบคำนวณแบบสถิติสำรอง (Fallback)...', 'warning');\"}]",
-  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Fixing remaining warning log types\"",
-  "toolSummary": "\"Edit file content\""
-}

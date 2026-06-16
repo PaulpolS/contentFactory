@@ -1,7 +1,0 @@
-{
-  "MatchPerLine": "true",
-  "Query": "\"ห้ามมีคำอธิบาย มาร์กดาวน์ หรืออักขระพิเศษใดๆ นอกเหนือจาก JSON Array ดังกล่าว\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for system prompt endings\"",
-  "toolSummary": "\"Grep search prompt ending\""
-}

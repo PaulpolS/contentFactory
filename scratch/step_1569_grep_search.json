@@ -1,9 +1,0 @@
-{
-  "CaseInsensitive": "true",
-  "IsRegex": "false",
-  "MatchPerLine": "true",
-  "Query": "\"mac_\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for macOS local voice references in React component\"",
-  "toolSummary": "\"Search mac_\""
-}

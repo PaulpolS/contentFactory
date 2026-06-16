@@ -1,9 +1,0 @@
-{
-  "CaseInsensitive": "true",
-  "IsRegex": "false",
-  "MatchPerLine": "true",
-  "Query": "\"lucide-react\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for lucide-react in React component\"",
-  "toolSummary": "\"Search lucide-react\""
-}

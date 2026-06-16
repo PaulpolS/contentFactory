@@ -1,8 +1,0 @@
-{
-  "IsRegex": "false",
-  "MatchPerLine": "true",
-  "Query": "\"grid-cols\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for grid-cols in the file\"",
-  "toolSummary": "\"Search file content\""
-}

@@ -1,7 +1,0 @@
-{
-  "MatchPerLine": "true",
-  "Query": "\"headlineY\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for state declarations\"",
-  "toolSummary": "\"Grep search state variables\""
-}

@@ -748,6 +748,13 @@ const getVoiceDisplayName = (id: string | undefined | null): string => {
   return id.length > 10 ? id.substring(0, 8) + '...' : id;
 };
 
+const SCRIPT_LENGTHS = [
+  { id: 'short', label: 'สั้น (300-500 ตัวอักษร)', description: 'ความยาว 30-45 วินาที กระชับมาก เน้นความไว', targetChars: 400, timeRange: '30 ถึง 45 วินาที' },
+  { id: 'medium', label: 'กลาง (800-1100 ตัวอักษร)', description: 'ความยาว 1-1.5 นาที สรุปประเด็นได้ดีที่สุด', targetChars: 950, timeRange: '60 ถึง 90 วินาที' },
+  { id: 'long', label: 'ยาว (1500-1800 ตัวอักษร)', description: 'ความยาว 2-2.5 นาที อภิปรายลึกมีหลักฐานสถิติรองรับ', targetChars: 1650, timeRange: '120 ถึง 150 วินาที' }
+];
+
+
 interface BatchItem {
   topic: string;
   status: 'pending' | 'scripting' | 'voicing' | 'subtitling' | 'assembling' | 'rendering' | 'completed' | 'failed';
@@ -966,6 +973,12 @@ export default function VerticalVideoSuitePortal() {
   const [headline, setHeadline] = useState('กฎ 2 นาที ชนะความขี้เกียจสะสม');
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [isGeneratingHeadline, setIsGeneratingHeadline] = useState(false);
+  const [scriptLength, setScriptLength] = useState<string>(() => {
+    return localStorage.getItem('auto_video_script_length') || 'short';
+  });
+  useEffect(() => {
+    localStorage.setItem('auto_video_script_length', scriptLength);
+  }, [scriptLength]);
 
   // TTS State
   const [voiceId, setVoiceId] = useState(KIEAI_VOICES[0].id); // Rachel
@@ -1600,6 +1613,8 @@ ${brain.content}
 - โปรดแต่งเนื้อหาให้มีหัวข้อเข้าชุดกัน มีเอกลักษณ์สอดคล้อง ดึงความสนใจที่สืบเนื่องจากหัวข้อหลัก และสามารถเกริ่นนำหรือลงท้ายเพื่อสร้างความต่อเนื่องเชิงซีรีส์ได้อย่างกระชับธรรมชาติ!`;
     }
 
+    const activeLength = SCRIPT_LENGTHS.find(l => l.id === scriptLength) || SCRIPT_LENGTHS[0];
+
     try {
       const systemPrompt = `คุณคือคนเขียนบทสคริปต์สำหรับคลิปสั้นแนวตั้ง (Shorts/TikTok/Reels) ที่เก่งที่สุด 
 
@@ -1608,7 +1623,8 @@ ${brain.content}
 2. ห้ามมีวงเล็บกำกับอารมณ์/ท่าทาง (เช่น (ยิ้ม), (ถอนหายใจ)) โดยเด็ดขาด
 3. ห้ามมีคำระบุตัวตนผู้ดำเนินรายการหรือคนพูด (เช่น "ผู้ดำเนินรายการ:", "พิธีกร:") โดยเด็ดขาด
 4. เขียนบทให้เป็นคำพูดลื่นไหล สะกดสายตาคนฟังตั้งแต่ 3 วินาทีแรก
-5. ความยาวบทสคริปต์พูดให้อยู่ระหว่าง 30 ถึง 45 วินาทีเมื่ออ่านออกเสียง (ประมาณ 100-150 คำภาษาไทย)
+5. ความยาวบทสคริปต์พูด: ให้เขียนความยาวระดับ "${activeLength.label}" (${activeLength.description})
+
 
 นอกจากนี้ช่วยสร้าง "Headline พาดหัวแนวตั้ง" ที่สั้น กระชับ แปะบนปก/หัววิดีโอแล้วโคตรน่าดึงดูดมาให้ด้วย 1 ประโยค
 * สำคัญมาก: คุณต้องช่วยแบ่งวรรคตอนคำบรรทัดของพาดหัวให้สวยงามเป็นคำๆ อย่างมีระดับ โดยใช้เครื่องหมายขึ้นบรรทัดใหม่ (\\n) ห้ามหักครึ่งคำเด็ดขาด (เช่น คำว่า 'เศรษฐี' หรือ 'ขี้เกียจ' ต้องอยู่บรรทัดเดียวกัน ห้ามแยกตัวสะกดหรือสระแยกบรรทัดกัน)
@@ -3241,6 +3257,22 @@ Instructions for you:
                 <p className="text-white/40 italic">"ตัวอย่าง: {copyStyles.find(s => s.id === selectedStyleId)?.example}"</p>
               </div>
             )}
+
+            <div className="space-y-1 pt-2 border-t border-white/5">
+              <label className="text-xs font-semibold text-white/70">📏 ขนาดความยาวสคริปต์ (Script Length)</label>
+              <select
+                value={scriptLength}
+                onChange={(e) => setScriptLength(e.target.value)}
+                className="w-full p-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm outline-none font-semibold text-teal-300 cursor-pointer"
+              >
+                {SCRIPT_LENGTHS.map(l => (
+                  <option key={l.id} value={l.id} className="bg-slate-900 text-white">{l.label}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-white/40">
+                *{SCRIPT_LENGTHS.find(l => l.id === scriptLength)?.description}
+              </p>
+            </div>
 
             {/* Inline Brain Trainer */}
             <div className="p-3 rounded-xl bg-slate-950/40 border border-teal-500/25 text-xs space-y-2 shadow-inner">

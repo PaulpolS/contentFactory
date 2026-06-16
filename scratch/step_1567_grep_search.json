@@ -1,9 +1,0 @@
-{
-  "CaseInsensitive": "true",
-  "IsRegex": "false",
-  "MatchPerLine": "true",
-  "Query": "\"silentMode\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for silentMode references in React component\"",
-  "toolSummary": "\"Search silentMode\""
-}

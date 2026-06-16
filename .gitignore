@@ -50,3 +50,21 @@ Thumbs.db
 # Models and temporary renders
 public/models/
 public/temp_render/
+
+# Stock media files (generated/downloaded at runtime)
+public/Voice_stock/*.mp3
+public/Video_stock/
+public/Sound_stock/*.mp3
+public/Sound_stock/*.wav
+public/Image_stock/
+public/Avatar_stock/
+
+# Keep catalog files tracked (they're config, not media)
+!public/Voice_stock/sfx_catalog.json
+!public/Sound_stock/sfx_catalog.json
+
+# Scratch/temp files
+scratch/
+
+# Export files
+*.csv

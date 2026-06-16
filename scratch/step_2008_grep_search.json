@@ -1,9 +1,0 @@
-{
-  "CaseInsensitive": "false",
-  "IsRegex": "false",
-  "MatchPerLine": "true",
-  "Query": "\"useState(320)\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for headlineY initial state\"",
-  "toolSummary": "\"Search file content\""
-}

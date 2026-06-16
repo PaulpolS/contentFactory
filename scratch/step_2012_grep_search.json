@@ -1,9 +1,0 @@
-{
-  "CaseInsensitive": "false",
-  "IsRegex": "false",
-  "MatchPerLine": "true",
-  "Query": "\"const [subtitleMarginV\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for subtitleMarginV state hook\"",
-  "toolSummary": "\"Search file content\""
-}

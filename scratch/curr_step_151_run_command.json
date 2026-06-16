@@ -1,7 +1,0 @@
-{
-  "CommandLine": "\"python3 scratch/find_quote_backups.py\"",
-  "Cwd": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory\"",
-  "WaitMsBeforeAsync": "3000",
-  "toolAction": "\"Running find_quote_backups.py to check for backups of QuoteVideoPortal.tsx\"",
-  "toolSummary": "\"Run python script\""
-}

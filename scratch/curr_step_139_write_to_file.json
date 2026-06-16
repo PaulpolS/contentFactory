@@ -1,9 +1,0 @@
-{
-  "CodeContent": "\"import os\\n\\nclean_dir = \\\"/Users/paulpolsulintaboon/Documents/GitHub/BulkVideoCreatorApp-Clean\\\"\\nfound = []\\nfor root, dirs, files in os.walk(clean_dir):\\n    for file in files:\\n        if \\\"Quote\\\" in file:\\n            found.append(os.path.join(root, file))\\n\\nprint(\\\"Found quote files in clean repo:\\\")\\nfor f in found:\\n    print(\\\"-\\\", f)\\n\"",
-  "Description": "\"Search for clean quote components in the clean repository to see if we can restore QuoteVideoPortal.tsx from it\"",
-  "IsArtifact": "false",
-  "Overwrite": "true",
-  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/scratch/check_clean_quote.py\"",
-  "toolAction": "\"Creating check_clean_quote.py\"",
-  "toolSummary": "\"Write file\""
-}

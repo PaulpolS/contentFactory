@@ -953,7 +953,14 @@ ${STRICT_COPYWRITING_RULES}
             folderPath: folderPath.trim(),
             completed: completedRecords
           };
-          localStorage.setItem('flow_automator_cache', JSON.stringify(cacheObj));
+          try {
+            localStorage.setItem('flow_automator_cache', JSON.stringify(cacheObj));
+          } catch (storageErr) {
+            console.warn("Storage quota exceeded for flow_automator_cache:", storageErr);
+            if (completedRecords.length === 1 || completedRecords.length % 20 === 0) {
+              addLog("⚠️ แจ้งเตือน: พื้นที่เก็บข้อมูลเบราว์เซอร์เต็ม (Storage Quota Exceeded) ไม่สามารถบันทึกประวัติการฟื้นฟูงานลงเครื่องได้ชั่วคราว แต่ระบบจะยังคงประมวลผลต่อจนเสร็จและดาวน์โหลด CSV ได้ปกติครับ (แนะนำเคลียร์ประวัติ/แคชเบราว์เซอร์ของ localhost)");
+            }
+          }
           setCacheData(cacheObj);
 
           if (outputMode === 'sheets') {

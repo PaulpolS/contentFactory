@@ -1,7 +1,0 @@
-{
-  "CommandLine": "\"python3 scratch/check_quote_portal.py\"",
-  "Cwd": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory\"",
-  "WaitMsBeforeAsync": "3000",
-  "toolAction": "\"Running check_quote_portal.py to check for QuoteVideoPortal.tsx encoding\"",
-  "toolSummary": "\"Run python script\""
-}

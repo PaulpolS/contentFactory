@@ -1,7 +1,0 @@
-{
-  "MatchPerLine": "true",
-  "Query": "\"openrouter_key\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for OpenRouter key storage usages\"",
-  "toolSummary": "\"Grep search openrouter_key\""
-}

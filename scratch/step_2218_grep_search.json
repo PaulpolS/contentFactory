@@ -1,7 +1,0 @@
-{
-  "MatchPerLine": "true",
-  "Query": "\"fetch('https://openrouter.ai\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Finding OpenRouter calls\"",
-  "toolSummary": "\"Grep search OpenRouter fetch\""
-}

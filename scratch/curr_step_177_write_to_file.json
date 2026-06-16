@@ -1,9 +1,0 @@
-{
-  "CodeContent": "\"import os\\nimport json\\n\\nbrain_dir = \\\"/Users/paulpolsulintaboon/.gemini/antigravity/brain\\\"\\nfolder = \\\"7329dad1-f7d4-4220-817c-43133a2c4809\\\"\\ntranscript_path = os.path.join(brain_dir, folder, \\\".system_generated/logs/transcript.jsonl\\\")\\n\\nif os.path.exists(transcript_path):\\n    print(\\\"Extracting current conversation steps for QuoteVideoPortal...\\\")\\n    with open(transcript_path, \\\"r\\\", encoding=\\\"utf-8\\\", errors=\\\"ignore\\\") as f:\\n        for idx, line in enumerate(f):\\n            if \\\"QuoteVideoPortal.tsx\\\" in line:\\n                try:\\n                    data = json.loads(line)\\n                    step = data.get(\\\"step_index\\\")\\n                    for tc in data.get(\\\"tool_calls\\\", []):\\n                        name = tc.get(\\\"name\\\")\\n                        args = tc.get(\\\"args\\\", {})\\n                        if \\\"QuoteVideoPortal.tsx\\\" in str(args):\\n                            out_path = f\\\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/scratch/curr_step_{step}_{name}.json\\\"\\n                            with open(out_path, \\\"w\\\", encoding=\\\"utf-8\\\") as out_f:\\n                                json.dump(args, out_f, indent=2, ensure_ascii=False)\\n                            print(f\\\"Saved step {step} {name} to {out_path}\\\")\\n                except Exception as e:\\n                    pass\\nelse:\\n    print(\\\"Transcript not found.\\\")\\n\"",
-  "Description": "\"Extract tool calls that modified QuoteVideoPortal.tsx from the current conversation transcript\"",
-  "IsArtifact": "false",
-  "Overwrite": "true",
-  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/scratch/extract_quote_portal_steps.py\"",
-  "toolAction": "\"Creating extract_quote_portal_steps.py\"",
-  "toolSummary": "\"Write file\""
-}

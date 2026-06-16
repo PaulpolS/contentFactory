@@ -1,7 +1,0 @@
-{
-  "CommandLine": "\"python3 scratch/convert_quote_portal_to_utf8.py\"",
-  "Cwd": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory\"",
-  "WaitMsBeforeAsync": "3000",
-  "toolAction": "\"Running convert_quote_portal_to_utf8.py to convert QuoteVideoPortal.tsx encoding\"",
-  "toolSummary": "\"Run python script\""
-}

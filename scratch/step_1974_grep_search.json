@@ -1,9 +1,0 @@
-{
-  "CaseInsensitive": "false",
-  "IsRegex": "false",
-  "MatchPerLine": "true",
-  "Query": "\"headlineBoxColor\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for headlineBoxColor references\"",
-  "toolSummary": "\"Search file content\""
-}

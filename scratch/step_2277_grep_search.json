@@ -1,7 +1,0 @@
-{
-  "MatchPerLine": "true",
-  "Query": "\"generateSrtSegmentsAsync\"",
-  "SearchPath": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/frontend/src/components/VerticalVideoSuitePortal.tsx\"",
-  "toolAction": "\"Searching for generateSrtSegmentsAsync function\"",
-  "toolSummary": "\"Grep search generateSrtSegmentsAsync\""
-}

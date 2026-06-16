@@ -1,9 +1,0 @@
-{
-  "CodeContent": "\"import os\\n\\nsearch_dir = \\\"/Users/paulpolsulintaboon/\\\"\\nfound = []\\n# Limit search to Documents and Desktop to make it fast\\ntarget_dirs = [\\\"/Users/paulpolsulintaboon/Documents\\\", \\\"/Users/paulpolsulintaboon/Desktop\\\"]\\nfor t_dir in target_dirs:\\n    if os.path.exists(t_dir):\\n        for root, dirs, files in os.walk(t_dir):\\n            # Skip node_modules or large dirs to be safe\\n            if \\\"node_modules\\\" in root or \\\".git\\\" in root or \\\"Library\\\" in root:\\n                continue\\n            for file in files:\\n                if file == \\\"QuoteVideoPortal.tsx\\\":\\n                    path = os.path.join(root, file)\\n                    try:\\n                        size = os.path.getsize(path)\\n                        found.append((path, size))\\n                    except:\\n                        pass\\n\\nprint(\\\"Found QuoteVideoPortal.tsx copies:\\\")\\nfor path, size in found:\\n    print(f\\\"- {path} (Size: {size})\\\")\\n\"",
-  "Description": "\"Search for other copies of QuoteVideoPortal.tsx in the Documents and Desktop directories to see if a clean copy exists\"",
-  "IsArtifact": "false",
-  "Overwrite": "true",
-  "TargetFile": "\"/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/scratch/find_quote_backups.py\"",
-  "toolAction": "\"Creating find_quote_backups.py\"",
-  "toolSummary": "\"Write file\""
-}
