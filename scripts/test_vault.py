@@ -7,7 +7,9 @@ import urllib.request
 import urllib.error
 import json
 
-VAULT_ROOT = "/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/content_vault"
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+VAULT_ROOT = os.environ.get("VAULT_ROOT") or os.environ.get("VAULT_EXTERNAL_ROOT") or os.path.join(parent_dir, "content_vault")
 DB_PATH = os.path.join(VAULT_ROOT, "databases/content_pool.db")
 SERVER_PORT = 5005
 BASE_URL = f"http://localhost:{SERVER_PORT}/api/vault"
@@ -179,7 +181,7 @@ if __name__ == "__main__":
     
     server_proc = subprocess.Popen(
         ["npm", "run", "dev"],
-        cwd="/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/backend",
+        cwd=os.path.join(parent_dir, "backend"),
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE

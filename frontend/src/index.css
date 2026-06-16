@@ -748,6 +748,21 @@ input.h-7 {
   aspect-ratio: 9 / 16;
 }
 
+.aspect-\[4\/5\] {
+  aspect-ratio: 4 / 5;
+}
+
+.aspect-\[4\/3\] {
+  aspect-ratio: 4 / 3;
+}
+
+.max-h-\[400px\] {
+  max-height: 400px;
+}
+
+.max-h-\[180px\] {
+  max-height: 180px;
+}
 
 /* responsive scaling elements using container width (cqw) */
 .live-badge {

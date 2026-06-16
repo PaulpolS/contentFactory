@@ -2851,15 +2851,54 @@ app.post('/api/youtube-keyword-search', async (req, res) => {
       '--no-warnings',
       '--ignore-errors',
       '--print',
-      '%(id)s\t%(title)s\t%(webpage_url)s\t%(view_count)s\t%(upload_date)s\t%(timestamp)s\t%(duration)s\t%(channel)s\t%(channel_url)s\t%(thumbnail)s',
-      `ytsearch${searchLimit}:${query}`
+      '%(id)s\t%(title)s\t%(webpage_url)s\t%(view_count)s\t%(upload_date)s\t%(timestamp)s\t%(duration)s\t%(channel)s\t%(channel_url)s\t%(thumbnail)s'
     ];
 
-    // รันคำสั่งย่อยในระบบปฏิบัติการ
-    const rawStdout = execFileSync('yt-dlp', args, { 
-      timeout: 150000, 
-      maxBuffer: 1024 * 1024 * 20 
-    }).toString();
+    // ถ้าไม่กำหนดกรอบเวลา ให้ดึงแบบ flat-playlist เพื่อความเร็วสูงและเลี่ยงการโดนบล็อกบอท
+    if (dayWindow === 0) {
+      args.push('--flat-playlist');
+    }
+
+    args.push(`ytsearch${searchLimit}:${query}`);
+
+    // รันคำสั่งย่อยในระบบปฏิบัติการ โดยลองผ่านเบราว์เซอร์ต่าง ๆ เพื่อข้ามการบล็อกบอท
+    let rawStdout = '';
+    let lastError: any = null;
+    const cookieSources = ['chrome', 'safari', 'edge', 'none'];
+
+    for (const source of cookieSources) {
+      try {
+        const currentArgs = [...args];
+        if (source !== 'none') {
+          currentArgs.unshift('--cookies-from-browser', source);
+        }
+        console.log(`[YT Search] Trying search for "${query}" using cookie source: ${source}`);
+        rawStdout = execFileSync('yt-dlp', currentArgs, { 
+          timeout: 150000, 
+          maxBuffer: 1024 * 1024 * 20 
+        }).toString();
+        
+        // ถ้าได้ผลลัพธ์มา (แม้จะไม่ได้ออกทาง stdout เต็มรูปแบบ แต่ไม่เกิดข้อผิดพลาดรุนแรง)
+        if (rawStdout.trim()) {
+          console.log(`[YT Search] Success with cookie source: ${source}`);
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[YT Search] Cookie source "${source}" failed:`, err.message || err);
+        // ถ้าเกิด Error (เช่น exit code 1 จาก yt-dlp) แต่ยังคงมี stdout แสดงว่ามีบางคลิปโหลดได้สำเร็จ
+        if (err.stdout && err.stdout.toString().trim()) {
+          rawStdout = err.stdout.toString();
+          console.log(`[YT Search] Partial success with cookie source: ${source} (exited with error but returned data)`);
+          break;
+        }
+      }
+    }
+
+    // หากไม่พบผลลัพธ์ใดๆ เลย และรอบสุดท้ายมี error ให้ throw error นั้น
+    if (!rawStdout.trim() && lastError) {
+      throw new Error(`ไม่พบผลลัพธ์ในการค้นหา และเกิดข้อผิดพลาด: ${lastError.message || String(lastError)}`);
+    }
 
     // แยกประมวลข้อมูลดิบ
     rawStdout.split('\n')
@@ -2896,13 +2935,17 @@ app.post('/api/youtube-keyword-search', async (req, res) => {
         if (!videoId || seen.has(videoId)) return;
         seen.add(videoId);
 
+        const finalThumbnail = (videoObj.thumbnail && videoObj.thumbnail !== 'NA')
+          ? videoObj.thumbnail
+          : `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
         rows.push({
           id: videoId,
           title: videoObj.title || '(ไม่มีชื่อคลิป)',
           url: videoObj.webpage_url,
           views: videoObj.view_count,
-          uploadedAt: videoObj.upload_date || (vDate ? vDate.toISOString() : ''),
-          thumbnail: videoObj.thumbnail,
+          uploadedAt: videoObj.upload_date && videoObj.upload_date !== 'NA' ? videoObj.upload_date : (vDate ? vDate.toISOString() : ''),
+          thumbnail: finalThumbnail,
           duration: videoObj.duration,
           channelName: videoObj.channel,
           channelUrl: videoObj.channel_url

@@ -34,9 +34,9 @@ router.get('/contents', async (req: Request, res: Response) => {
     }
 
     if (keyword) {
-      sql += ' AND (title LIKE ? OR selected_headline LIKE ? OR raw_content LIKE ?)';
+      sql += ' AND (title LIKE ? OR selected_headline LIKE ? OR raw_content LIKE ? OR source_url LIKE ? OR author_name LIKE ?)';
       const searchStr = `%${keyword}%`;
-      params.push(searchStr, searchStr, searchStr);
+      params.push(searchStr, searchStr, searchStr, searchStr, searchStr);
     }
 
     if (min_rating) {
@@ -92,6 +92,57 @@ router.get('/contents', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[ERROR] Content search failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Internal Server Error'
+    });
+  }
+});
+
+/**
+ * 1.1. Retrieve Single Content Item by ID
+ * GET /api/vault/contents/:id
+ */
+router.get('/contents/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const row = await dbQueryGet('SELECT * FROM vault_contents WHERE id = ?', [id]);
+    if (!row) {
+      return res.status(404).json({
+        success: false,
+        error: 'ไม่พบคอนเทนต์ที่ระบุ (Content not found)'
+      });
+    }
+
+    let metadata = {};
+    let mediaPaths = [];
+
+    try {
+      if (row.metadata_json) {
+        metadata = JSON.parse(row.metadata_json);
+      }
+    } catch (err) {
+      console.warn(`Failed to parse metadata_json for content ID: ${row.id}`, err);
+    }
+
+    try {
+      if (row.media_paths_json) {
+        mediaPaths = JSON.parse(row.media_paths_json);
+      }
+    } catch (err) {
+      console.warn(`Failed to parse media_paths_json for content ID: ${row.id}`, err);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        ...row,
+        metadata,
+        media_paths: mediaPaths
+      }
+    });
+  } catch (error: any) {
+    console.error('[ERROR] Fetching single content failed:', error);
     return res.status(500).json({
       success: false,
       error: error.message || 'Internal Server Error'
@@ -256,6 +307,44 @@ router.get('/graphics', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[ERROR] Fetching all graphics failed:', error);
+  }
+});
+
+/**
+ * 2.4.5. Delete All Generated Graphics (database and files)
+ * DELETE /api/vault/graphics
+ */
+router.delete('/graphics', async (req: Request, res: Response) => {
+  try {
+    const rows = await dbQueryAll('SELECT file_path FROM generated_graphics');
+    let deletedFilesCount = 0;
+    
+    for (const row of rows) {
+      if (row.file_path) {
+        const absPath = path.isAbsolute(row.file_path)
+          ? row.file_path
+          : path.resolve(VAULT_EXTERNAL_ROOT, row.file_path);
+          
+        if (fs.existsSync(absPath)) {
+          try {
+            fs.unlinkSync(absPath);
+            deletedFilesCount++;
+          } catch (err) {
+            console.warn(`[WARN] Failed to delete file: ${absPath}`, err);
+          }
+        }
+      }
+    }
+    
+    await dbRun('DELETE FROM generated_graphics');
+    
+    console.log(`[SUCCESS] Cleared all graphics: deleted ${deletedFilesCount} physical files and cleared database records`);
+    return res.json({
+      success: true,
+      message: `เคลียร์รูปภาพสำเร็จ! ลบข้อมูลจากฐานข้อมูลทั้งหมด และลบไฟล์รูปภาพจำนวน ${deletedFilesCount} ไฟล์`
+    });
+  } catch (error: any) {
+    console.error('[ERROR] Clearing all graphics failed:', error);
     return res.status(500).json({
       success: false,
       error: error.message || 'Internal Server Error'
@@ -702,6 +791,107 @@ router.delete('/logos/:filename', async (req: Request, res: Response) => {
 /**
  * 8. High-Fidelity Thai Copywriting Simulator Fallback
  */
+function cleanSimulatedTitle(title: string): string {
+  // 1. Remove github prefixes
+  let cleaned = title.replace(/^github_[^_]+_/, '').replace(/_/g, ' ');
+
+  // 2. Remove parenthetical text (e.g. (beginner friendly!), [Updated 2026])
+  cleaned = cleaned.replace(/\s*[\(\[][^\]\)]*[\)\]]/g, '').trim();
+
+  // 3. Split by common transition/preposition words to capture the core topic
+  const splitKeywords = [
+    ' for ', ' with ', ' in ', ' using ', ' on ', ' by '
+  ];
+  for (const keyword of splitKeywords) {
+    const idx = cleaned.toLowerCase().indexOf(keyword);
+    if (idx !== -1) {
+      cleaned = cleaned.substring(0, idx);
+    }
+  }
+
+  // 4. Handle colons and dashes
+  const colonIdx = cleaned.indexOf(':');
+  if (colonIdx !== -1) {
+    const part1 = cleaned.substring(0, colonIdx).trim();
+    const part2 = cleaned.substring(colonIdx + 1).trim();
+    if (part1.length > 5 && part1.length < 30) {
+      cleaned = part1;
+    } else {
+      cleaned = part2;
+    }
+  }
+
+  const dashIdx = cleaned.indexOf(' - ');
+  if (dashIdx !== -1) {
+    cleaned = cleaned.substring(0, dashIdx).trim();
+  }
+
+  cleaned = cleaned.trim();
+
+  // 5. Keep at most 35 chars but avoid cutting inside a word
+  if (cleaned.length > 35) {
+    const truncated = cleaned.substring(0, 32);
+    const lastSpace = truncated.lastIndexOf(' ');
+    if (lastSpace > 15) {
+      cleaned = cleaned.substring(0, lastSpace);
+    } else {
+      cleaned = truncated;
+    }
+  }
+
+  return cleaned.trim();
+}
+
+/**
+ * Helper to split clean simulated titles into two parts for a cleaner 3-line layout
+ */
+function splitSimulatedTitle(cleanTitle: string): { part1: string, part2: string } {
+  const words = cleanTitle.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) {
+    return { part1: cleanTitle, part2: '' };
+  }
+
+  const lowerTitle = cleanTitle.toLowerCase();
+  
+  // Rule 1: Starts with "how to"
+  if (lowerTitle.startsWith('how to ')) {
+    const part1 = words.slice(0, 2).join(' ');
+    const part2 = words.slice(2).join(' ');
+    return { part1, part2 };
+  }
+  if (lowerTitle.startsWith('how to')) {
+    const part1 = words.slice(0, 2).join(' ');
+    const part2 = words.slice(2).join(' ');
+    return { part1, part2 };
+  }
+
+  // Rule 2: Known tech names or first word >= 5 chars
+  const firstWord = words[0];
+  const lowerFirstWord = firstWord.toLowerCase();
+  const techNames = [
+    'chatgpt', 'gpt-5', 'gpt-4', 'gpt', 'claude', 'llama', 
+    'python', 'google', 'openai', 'github', 'gohighlevel', 
+    'ai', 'midjourney', 'stable'
+  ];
+  
+  if (techNames.includes(lowerFirstWord) || firstWord.length >= 5) {
+    return {
+      part1: firstWord,
+      part2: words.slice(1).join(' ')
+    };
+  }
+
+  // Rule 3: Default split at approximately half the words
+  const mid = Math.ceil(words.length / 2);
+  return {
+    part1: words.slice(0, mid).join(' '),
+    part2: words.slice(mid).join(' ')
+  };
+}
+
+/**
+ * 8. High-Fidelity Thai Copywriting Simulator Fallback
+ */
 function generateSimulatedCopywriting(title: string, rawContent: string) {
   const lowerTitle = (title || '').toLowerCase();
   const lowerContent = (rawContent || '').toLowerCase();
@@ -719,7 +909,7 @@ function generateSimulatedCopywriting(title: string, rawContent: string) {
     topic = "การตลาดดิจิทัลและการสร้างวิดีโอคอนเทนต์";
   }
 
-  const cleanTitle = title.replace(/^github_[^_]+_/, '').replace(/_/g, ' ');
+  const cleanTitle = cleanSimulatedTitle(title);
 
   let emoji = "🚀";
   let hashtag = "#TechInnovation #ContentFactory";
@@ -754,11 +944,18 @@ function generateSimulatedCopywriting(title: string, rawContent: string) {
     `⚠️ ห้ามพลาดเด็ดขาด! โคลนด่วนก่อนตกขบวนเทคโนโลยี "${cleanTitle}"`
   ];
 
-  const headline_3line = [
-    `ข่าวด่วนที่สุด!`,
-    `เจาะลึกสุดยอด ${cleanTitle}`,
-    `เพิ่มประสิทธิภาพ 10 เท่า`
-  ];
+  let line1 = `ข่าวด่วนที่สุด! เจาะลึกสุดยอด ${cleanTitle}`;
+  let line2 = `เพิ่มประสิทธิภาพ 10 เท่า`;
+  let line3 = ``;
+
+  if (cleanTitle.length > 15) {
+    const { part1, part2 } = splitSimulatedTitle(cleanTitle);
+    line1 = `ข่าวด่วนที่สุด! เจาะลึกสุดยอด ${part1}`;
+    line2 = part2;
+    line3 = `เพิ่มประสิทธิภาพ 10 เท่า`;
+  }
+
+  const headline_3line = [line1, line2, line3];
 
   const comments = [
     `📍 [แนะนำข้อมูลเบื้องหลัง] สิ่งนี้ถูกคิดค้นขึ้นมาเพื่อแก้ไขปัญหาคอขวดที่หลายๆ คนต้องเผชิญในการทำงานร่วมกับระบบเดิมครับ จุดเด่นคือการนำโครงสร้างสถาปัตยกรรมแบบกระจายตัวมาประยุกต์ใช้ ทำให้ประมวลผลเร็วขึ้นมาก!`,
@@ -768,8 +965,8 @@ function generateSimulatedCopywriting(title: string, rawContent: string) {
 
   const headline_3line_keywords = [
     "ข่าวด่วนที่สุด",
-    cleanTitle.split(' ')[0] || "เจาะลึก",
-    "10 เท่า"
+    "10 เท่า",
+    ""
   ];
 
   return {
@@ -838,6 +1035,14 @@ router.post('/contents/:id/generate-copywriting', async (req: Request, res: Resp
         error_message: 'ไม่พบ API Key สำหรับ OpenRouter'
       };
     } else {
+      // Reconstruct the full transcript from cues if available, otherwise fallback to raw_content
+      let fullTranscript = '';
+      if (metadata.transcript_cues && Array.isArray(metadata.transcript_cues)) {
+        fullTranscript = metadata.transcript_cues.map((cue: any) => cue.text).join(' ');
+      } else {
+        fullTranscript = content.raw_content || '';
+      }
+
       // Assemble custom instructions based on feedback & length & font_scale
       const scale = parseFloat(font_scale) || 1.0;
       // Standard line fits about 38 characters at 1.0. At larger font scales, the line width decreases proportionally.
@@ -848,6 +1053,7 @@ router.post('/contents/:id/generate-copywriting', async (req: Request, res: Resp
 
       if (writing_style_prompt) {
         customInstructions += `- WRITING STYLE TONE & RULES: You MUST write the post caption in this style:\n${writing_style_prompt}\n`;
+        customInstructions += `- REPLICATE FORMATTING AND STRUCTURE: If the provided "WRITING STYLE TONE & RULES" contains specific structural separators (such as '==========', '---', or blank lines), numbered sections (e.g., '1.', '2.', '3.'), or particular list layouts, you MUST replicate this exact formatting structure in your generated caption. For example, if the template separates key points with '==========', you must also structure your caption to separate your key points with '=========='. Each section should detail a specific key point or tip extracted from the source content/transcript.\n`;
       }
 
       if (headline_style_examples) {
@@ -882,15 +1088,17 @@ Here is the previous generated version that needs improvement:
 You are an expert copywriter for Thai tech, AI, and business marketing community pages.
 Analyze the following article/content:
 Title: ${content.title}
-Content: ${content.raw_content || ''}
+Author/Channel: ${content.author_name || ''}
+Duration: ${metadata.duration || ''}
+Content/Transcript: ${fullTranscript}
 ${existingCopywritingContext}
 ${customInstructions}
 
 == CRITICAL INSTRUCTION ON STYLE TEMPLATES ==
-- The "WRITING STYLE TONE & RULES" (and "IDEAL HEADLINE STYLE EXAMPLES") provided are ONLY examples of the writing style, tone, format, and structure.
-- DO NOT copy the literal text, numbers, or specific topic from the style template. You MUST generate a completely unique post caption and headlines based strictly on the provided "Title" and "Content" of the source article.
-- Each generated post must focus on the unique details, tools, names, video duration, and numbers of the specific source article (e.g., if the title is about 5 Use Cases, write about 5 Use Cases; if it's a 22-minute tutorial, write about 22 minutes).
-- DO NOT repeat the exact same template phrases (like "สร้างกองทัพ AI 15 ตัว", "กลับมาที่ Claude เพื่อนรัก ฮ่าๆ") for every post unless it is the core topic of that specific article. Be creative and vary the phrasing!
+- The "WRITING STYLE TONE & RULES" (and "IDEAL HEADLINE STYLE EXAMPLES") provided are templates of the desired writing style, tone, formatting, and structure.
+- You MUST write the post caption in the requested style and tone. If the style template contains signature phrasing, specific formatting structures, typical emojis, or brand-specific opening/closing lines, you SHOULD adapt and follow those styling patterns to ensure brand voice consistency.
+- However, DO NOT copy the literal numbers, specific tool names, or topics from the style template example if they are different from the actual source article. You MUST generate a completely unique post caption and headlines based strictly on the provided "Title" and "Content" of the source article.
+- Each generated post must focus on the unique details, tools, names, video duration, and numbers of the specific source article.
 
 == MANDATORY STYLE RULES FOR THAI 3-LINE HEADLINES (headline_3line) ==
 Produce an extremely engaging, high-converting Thai 3-line headline following this exact, highly viral formula:
@@ -924,6 +1132,11 @@ Produce a response that is a VALID, parsable JSON object containing the followin
     "One exact word or short phrase present in Line 3 to highlight (or blank if nothing)"
   ]
 }
+
+== IMPORTANT JSON ESCAPING RULES ==
+- The output MUST be a valid JSON object.
+- All newlines inside string values (like "caption" or paragraphs in "comments") MUST be escaped as '\n'. DO NOT output raw unescaped newlines.
+- All double quotes (") inside string values MUST be escaped as '\"'.
 
 Return ONLY the JSON string. Do not wrap in markdown or any other text.
 `;
@@ -974,7 +1187,8 @@ Return ONLY the JSON string. Do not wrap in markdown or any other text.
             body: JSON.stringify({
               model: "google/gemini-2.5-flash",
               messages: [{ role: "user", content: prompt }],
-              temperature: 0.5
+              temperature: 0.5,
+              response_format: { type: "json_object" }
             })
           });
           responseObj = response;
@@ -1653,6 +1867,11 @@ router.post('/dropbox/batch-upload', async (req: Request, res: Response) => {
       file_path: string;
       dropbox_path: string;
       shared_link: string;
+      clip_title?: string;
+      clip_url?: string;
+      headline?: string;
+      caption?: string;
+      content_id?: string;
       error?: string;
     }> = [];
 
@@ -1691,122 +1910,195 @@ router.post('/dropbox/batch-upload', async (req: Request, res: Response) => {
           continue;
         }
 
-        const fileBuffer = fs.readFileSync(absoluteFilePath);
-        const filename = path.basename(filePath);
-        const dropboxPath = `${dropbox_folder}/${filename}`;
+        // Fetch copywriting metadata and check for existing cached dropbox_link
+        let clipTitle = '';
+        let clipUrl = '';
+        let headline = '';
+        let caption = '';
+        let cachedDropboxLink = '';
+        let contentId = '';
 
-        console.log(`[DROPBOX BATCH] Uploading: ${filePath} -> ${dropboxPath}`);
+        try {
+          const dbRow = await dbQueryGet(
+            `SELECT c.title, c.source_url, c.selected_headline, c.metadata_json, g.dropbox_link, g.content_id 
+             FROM generated_graphics g 
+             JOIN vault_contents c ON g.content_id = c.id 
+             WHERE g.file_path = ?`,
+            [filePath]
+          );
 
-        // Step 1: Upload file to Dropbox
-        const uploadResponse = await fetch('https://content.dropboxapi.com/2/files/upload', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${dropbox_token}`,
-            'Dropbox-API-Arg': JSON.stringify({
-              path: dropboxPath,
-              mode: 'add',
-              autorename: true,
-              mute: false
-            }),
-            'Content-Type': 'application/octet-stream'
-          },
-          body: fileBuffer
-        });
-
-        if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text();
-          console.log(`[DROPBOX BATCH] Upload failed for ${filePath}: ${uploadResponse.status} ${errorText}`);
-          results.push({
-            file_path: filePath,
-            dropbox_path: '',
-            shared_link: '',
-            error: `Dropbox upload failed: ${uploadResponse.status} - ${errorText}`
-          });
-          continue;
-        }
-
-        const uploadResult = await uploadResponse.json() as any;
-        const actualDropboxPath = uploadResult.path_display || dropboxPath;
-        console.log(`[DROPBOX BATCH] Upload successful: ${actualDropboxPath}`);
-
-        // Step 2: Create shared link
-        let sharedLink = '';
-
-        const createLinkResponse = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${dropbox_token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            path: actualDropboxPath,
-            settings: {
-              requested_visibility: 'public',
-              audience: 'public',
-              access: 'viewer'
-            }
-          })
-        });
-
-        if (createLinkResponse.ok) {
-          const linkResult = await createLinkResponse.json() as any;
-          sharedLink = linkResult.url || '';
-        } else {
-          const linkErrorText = await createLinkResponse.text();
-          console.log(`[DROPBOX BATCH] Create shared link response for ${filePath}: ${createLinkResponse.status} ${linkErrorText}`);
-
-          let isAlreadyExists = false;
-          try {
-            const linkError = JSON.parse(linkErrorText);
-            if (
-              linkError?.error?.['.tag'] === 'shared_link_already_exists' ||
-              linkErrorText.includes('shared_link_already_exists')
-            ) {
-              isAlreadyExists = true;
-            }
-          } catch {
-            if (linkErrorText.includes('shared_link_already_exists')) {
-              isAlreadyExists = true;
-            }
-          }
-
-          if (isAlreadyExists) {
-            const listLinksResponse = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${dropbox_token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                path: actualDropboxPath,
-                direct_only: true
-              })
-            });
-
-            if (listLinksResponse.ok) {
-              const listResult = await listLinksResponse.json() as any;
-              if (listResult.links && listResult.links.length > 0) {
-                sharedLink = listResult.links[0].url || '';
+          if (dbRow) {
+            clipTitle = dbRow.title || '';
+            clipUrl = dbRow.source_url || '';
+            headline = dbRow.selected_headline || dbRow.title || '';
+            cachedDropboxLink = dbRow.dropbox_link || '';
+            contentId = dbRow.content_id || '';
+            
+            if (dbRow.metadata_json) {
+              try {
+                const meta = JSON.parse(dbRow.metadata_json);
+                if (meta.copywriting) {
+                  if (meta.copywriting.caption) {
+                    caption = meta.copywriting.caption;
+                  }
+                  // If headline was empty or is still just the title, check if headline_3line is present
+                  if ((!headline || headline === dbRow.title) && meta.copywriting.headline_3line && meta.copywriting.headline_3line.length > 0) {
+                    headline = meta.copywriting.headline_3line.filter(Boolean).join('\n');
+                  }
+                }
+              } catch (parseErr) {
+                console.warn('[DROPBOX BATCH] Failed to parse metadata_json for', filePath, parseErr);
               }
             }
           }
+        } catch (dbErr) {
+          console.error('[DROPBOX BATCH] Database query failed for graphic metadata:', dbErr);
         }
 
-        // Step 3: Convert shared link to direct download
+        let sharedLink = cachedDropboxLink;
+        let actualDropboxPath = '';
+
         if (sharedLink) {
-          if (sharedLink.includes('?dl=0')) {
-            sharedLink = sharedLink.replace('?dl=0', '?dl=1');
-          } else if (sharedLink.includes('?')) {
-            sharedLink += '&dl=1';
+          console.log(`[DROPBOX BATCH] Using cached link for ${filePath}: ${sharedLink}`);
+          actualDropboxPath = `${dropbox_folder}/${path.basename(filePath)}`;
+        } else {
+          // If no cached link, read the file and upload to Dropbox
+          const fileBuffer = fs.readFileSync(absoluteFilePath);
+          const filename = path.basename(filePath);
+          const dropboxPath = `${dropbox_folder}/${filename}`;
+
+          console.log(`[DROPBOX BATCH] Uploading: ${filePath} -> ${dropboxPath}`);
+
+          // Step 1: Upload file to Dropbox
+          const uploadResponse = await fetch('https://content.dropboxapi.com/2/files/upload', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${dropbox_token}`,
+              'Dropbox-API-Arg': JSON.stringify({
+                path: dropboxPath,
+                mode: 'add',
+                autorename: true,
+                mute: false
+              }),
+              'Content-Type': 'application/octet-stream'
+            },
+            body: fileBuffer
+          });
+
+          if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text();
+            console.log(`[DROPBOX BATCH] Upload failed for ${filePath}: ${uploadResponse.status} ${errorText}`);
+            results.push({
+              file_path: filePath,
+              dropbox_path: '',
+              shared_link: '',
+              clip_title: clipTitle,
+              clip_url: clipUrl,
+              headline: headline,
+              caption: caption,
+              content_id: contentId,
+              error: `Dropbox upload failed: ${uploadResponse.status} - ${errorText}`
+            });
+            continue;
+          }
+
+          const uploadResult = await uploadResponse.json() as any;
+          actualDropboxPath = uploadResult.path_display || dropboxPath;
+          console.log(`[DROPBOX BATCH] Upload successful: ${actualDropboxPath}`);
+
+          // Step 2: Create shared link
+          const createLinkResponse = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${dropbox_token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              path: actualDropboxPath,
+              settings: {
+                requested_visibility: 'public',
+                audience: 'public',
+                access: 'viewer'
+              }
+            })
+          });
+
+          if (createLinkResponse.ok) {
+            const linkResult = await createLinkResponse.json() as any;
+            sharedLink = linkResult.url || '';
           } else {
-            sharedLink += '?dl=1';
+            const linkErrorText = await createLinkResponse.text();
+            console.log(`[DROPBOX BATCH] Create shared link response for ${filePath}: ${createLinkResponse.status} ${linkErrorText}`);
+
+            let isAlreadyExists = false;
+            try {
+              const linkError = JSON.parse(linkErrorText);
+              if (
+                linkError?.error?.['.tag'] === 'shared_link_already_exists' ||
+                linkErrorText.includes('shared_link_already_exists')
+              ) {
+                isAlreadyExists = true;
+              }
+            } catch {
+              if (linkErrorText.includes('shared_link_already_exists')) {
+                isAlreadyExists = true;
+              }
+            }
+
+            if (isAlreadyExists) {
+              const listLinksResponse = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${dropbox_token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  path: actualDropboxPath,
+                  direct_only: true
+                })
+              });
+
+              if (listLinksResponse.ok) {
+                const listResult = await listLinksResponse.json() as any;
+                if (listResult.links && listResult.links.length > 0) {
+                  sharedLink = listResult.links[0].url || '';
+                }
+              }
+            }
+          }
+
+          // Step 3: Convert shared link to direct download
+          if (sharedLink) {
+            if (sharedLink.includes('?dl=0')) {
+              sharedLink = sharedLink.replace('?dl=0', '?dl=1');
+            } else if (sharedLink.includes('?')) {
+              sharedLink += '&dl=1';
+            } else {
+              sharedLink += '?dl=1';
+            }
+
+            // Save the newly generated Dropbox link to database for caching
+            try {
+              await dbRun(
+                'UPDATE generated_graphics SET dropbox_link = ? WHERE file_path = ?',
+                [sharedLink, filePath]
+              );
+              console.log(`[DROPBOX BATCH] Saved cached dropbox_link for ${filePath}`);
+            } catch (saveErr) {
+              console.error('[DROPBOX BATCH] Failed to save dropbox_link to DB:', saveErr);
+            }
           }
         }
 
         results.push({
           file_path: filePath,
           dropbox_path: actualDropboxPath,
-          shared_link: sharedLink
+          shared_link: sharedLink,
+          clip_title: clipTitle,
+          clip_url: clipUrl,
+          headline: headline,
+          caption: caption,
+          content_id: contentId
         });
       } catch (fileError: any) {
         console.error(`[DROPBOX BATCH] Error processing ${filePath}:`, fileError);
@@ -1887,5 +2179,42 @@ router.post('/dropbox/exchange-token', async (req: Request, res: Response) => {
   }
 });
 
+// 12. POST /api/vault/upload-temp-csv - Upload and save temporary CSV file
+router.post('/upload-temp-csv', async (req: Request, res: Response) => {
+  try {
+    const { filename, content } = req.body;
+    if (!filename || !content) {
+      return res.status(400).json({
+        success: false,
+        error: 'กรุณาระบุชื่อไฟล์และเนื้อหา CSV'
+      });
+    }
+
+    const tempDir = path.join(VAULT_EXTERNAL_ROOT, 'exports_csv');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const uniqueFilename = `temp_upload_${Date.now()}_${filename.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    const savePath = path.join(tempDir, uniqueFilename);
+    fs.writeFileSync(savePath, content, 'utf8');
+
+    console.log(`[SUCCESS] Saved temporary uploaded CSV: ${savePath}`);
+    return res.json({
+      success: true,
+      filePath: savePath,
+      filename: uniqueFilename,
+      message: 'อัปโหลดไฟล์ CSV สำเร็จ!'
+    });
+  } catch (error: any) {
+    console.error('[ERROR] Failed to upload CSV:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Internal Server Error'
+    });
+  }
+});
+
 export default router;
+
 

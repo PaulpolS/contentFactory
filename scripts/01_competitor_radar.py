@@ -49,7 +49,9 @@ def main():
     print_log("INFO", f"⏳ กำลังตรวจสอบสิทธิ์และดึงกุญแจ Apify Key...")
     
     # Setup DB path
-    vault_root = "/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/content_vault"
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(current_dir)
+    vault_root = os.environ.get("VAULT_ROOT") or os.environ.get("VAULT_EXTERNAL_ROOT") or os.path.join(parent_dir, "content_vault")
     db_path = os.path.join(vault_root, "databases/content_pool.db")
     
     # Resolve Apify key
@@ -101,7 +103,9 @@ def main():
             
             # Poll status
             status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={apify_key}"
-            max_polls = 60 # 5 minutes max
+            # Adjust max polls dynamically: 5 minutes base, plus 1 minute per 10 posts requested
+            # With time.sleep(5.0), 12 polls = 1 minute.
+            max_polls = max(60, int(args.limit * 1.2))
             poll_count = 0
             completed = False
             

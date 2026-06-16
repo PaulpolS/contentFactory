@@ -155,6 +155,19 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
   const [showFbToken, setShowFbToken] = useState(false);
   const [fbUserSaved, setFbUserSaved] = useState(false);
 
+  // Facebook app credentials for lifetime token conversion
+  const [fbAppId, setFbAppId] = useState(() => localStorage.getItem('fb_app_id') || '');
+  const [fbAppSecret, setFbAppSecret] = useState(() => localStorage.getItem('fb_app_secret') || '');
+
+  // Track which saved page tokens are lifetime tokens
+  const [lifetimePageIds, setLifetimePageIds] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('fb_lifetime_page_ids') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
   // Extracted FB pages accounts
   const [fbPages, setFbPages] = useState<FBPageAccount[]>([]);
   const [loadingPages, setLoadingPages] = useState(false);
@@ -601,6 +614,9 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
       });
       localStorage.removeItem('fb_user_token');
       localStorage.removeItem('fb_page_tokens_map');
+      localStorage.removeItem('fb_lifetime_page_ids');
+      localStorage.removeItem('fb_app_id');
+      localStorage.removeItem('fb_app_secret');
       
       // Reload state
       const cleared: Record<string, string> = {};
@@ -612,8 +628,11 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
       setApiKeys(cleared);
       setApiKeyNames(clearedNames);
       setFbUserToken('');
+      setFbAppId('');
+      setFbAppSecret('');
       setFbPages([]);
       setSavedPageTokens({});
+      setLifetimePageIds({});
       calculateStorageUsage();
       alert('🧹 ทำความสะอาดข้อมูล Local Storage บนเครื่องนี้เสร็จสิ้นแล้วครับ!');
     }
@@ -622,6 +641,8 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
   // Save FB User Token
   const saveFbUserToken = () => {
     localStorage.setItem('fb_user_token', fbUserToken);
+    localStorage.setItem('fb_app_id', fbAppId);
+    localStorage.setItem('fb_app_secret', fbAppSecret);
     setFbUserSaved(true);
     setTimeout(() => setFbUserSaved(false), 2000);
   };
@@ -638,7 +659,26 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
     setFbPages([]);
 
     try {
-      const url = `https://graph.facebook.com/v20.0/me/accounts?fields=name,access_token,category,followers_count&limit=100&access_token=${encodeURIComponent(fbUserToken.trim())}`;
+      let finalUserToken = fbUserToken.trim();
+
+      // If App ID & App Secret are provided, exchange short-lived token for long-lived token
+      if (fbAppId.trim() && fbAppSecret.trim()) {
+        const exchangeUrl = `https://graph.facebook.com/v20.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${fbAppId.trim()}&client_secret=${fbAppSecret.trim()}&fb_exchange_token=${encodeURIComponent(finalUserToken)}`;
+        const exchangeRes = await fetch(exchangeUrl);
+        const exchangeData = await exchangeRes.json();
+
+        if (exchangeData.error) {
+          throw new Error(`แปลงเป็น Token ตลอดชีพไม่สำเร็จ: ${exchangeData.error.message || 'เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์'}`);
+        }
+
+        if (exchangeData.access_token) {
+          finalUserToken = exchangeData.access_token;
+          setFbUserToken(finalUserToken);
+          localStorage.setItem('fb_user_token', finalUserToken);
+        }
+      }
+
+      const url = `https://graph.facebook.com/v20.0/me/accounts?fields=name,access_token,category,followers_count&limit=100&access_token=${encodeURIComponent(finalUserToken)}`;
       const res = await fetch(url);
       const data = await res.json();
 
@@ -659,6 +699,55 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
     }
   };
 
+  // Download page tokens as a JSON file
+  const downloadPageTokensAsJson = () => {
+    if (fbPages.length === 0) return;
+    
+    const dataToExport = fbPages.map(page => ({
+      page_id: page.id,
+      page_name: page.name,
+      category: page.category || '',
+      followers_count: page.followers_count || 0,
+      access_token: page.access_token,
+      token_type: fbAppId.trim() && fbAppSecret.trim() ? 'lifetime (never expires)' : 'derived from user token'
+    }));
+
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+      JSON.stringify(dataToExport, null, 2)
+    )}`;
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', jsonString);
+    downloadAnchor.setAttribute('download', `facebook_page_tokens_${new Date().toISOString().slice(0,10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  // Download saved page tokens from local storage as a JSON file
+  const downloadSavedPageTokensAsJson = () => {
+    const savedCount = Object.keys(savedPageTokens).length;
+    if (savedCount === 0) return;
+    
+    const dataToExport = Object.entries(savedPageTokens).map(([id, token]) => {
+      const matchedPage = fbPages.find(p => p.id === id);
+      return {
+        page_id: id,
+        page_name: matchedPage ? matchedPage.name : 'Unknown Saved Page',
+        access_token: token,
+      };
+    });
+
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+      JSON.stringify(dataToExport, null, 2)
+    )}`;
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', jsonString);
+    downloadAnchor.setAttribute('download', `saved_facebook_page_tokens_${new Date().toISOString().slice(0,10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
   // Helper to copy text to clipboard with feedback
   const handleCopyToClipboard = async (text: string, id: string) => {
     try {
@@ -675,17 +764,31 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
     const updated = { ...savedPageTokens, [id]: token };
     setSavedPageTokens(updated);
     localStorage.setItem('fb_page_tokens_map', JSON.stringify(updated));
+
+    const isLifetime = fbAppId.trim() !== '' && fbAppSecret.trim() !== '';
+    const updatedLifetime = { ...lifetimePageIds, [id]: isLifetime };
+    setLifetimePageIds(updatedLifetime);
+    localStorage.setItem('fb_lifetime_page_ids', JSON.stringify(updatedLifetime));
   };
 
   // Save all discovered Facebook page tokens at once
   const saveAllPageTokens = () => {
     if (fbPages.length === 0) return;
     const updated = { ...savedPageTokens };
+    const isLifetime = fbAppId.trim() !== '' && fbAppSecret.trim() !== '';
+    const updatedLifetime = { ...lifetimePageIds };
+    
     fbPages.forEach(page => {
       updated[page.id] = page.access_token;
+      updatedLifetime[page.id] = isLifetime;
     });
+    
     setSavedPageTokens(updated);
     localStorage.setItem('fb_page_tokens_map', JSON.stringify(updated));
+
+    setLifetimePageIds(updatedLifetime);
+    localStorage.setItem('fb_lifetime_page_ids', JSON.stringify(updatedLifetime));
+
     alert(`💾 บันทึก Access Token ของทั้ง ${fbPages.length} เพจเรียบร้อยแล้วครับ!`);
   };
 
@@ -695,6 +798,11 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
     delete updated[id];
     setSavedPageTokens(updated);
     localStorage.setItem('fb_page_tokens_map', JSON.stringify(updated));
+
+    const updatedLifetime = { ...lifetimePageIds };
+    delete updatedLifetime[id];
+    setLifetimePageIds(updatedLifetime);
+    localStorage.setItem('fb_lifetime_page_ids', JSON.stringify(updatedLifetime));
   };
 
   return (
@@ -1544,6 +1652,39 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
                 </button>
               </div>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg bg-black/40 border border-white/5">
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                  Facebook App ID (สำหรับแปลงเป็น Token ตลอดชีพ)
+                </label>
+                <input
+                  type="text"
+                  value={fbAppId}
+                  onChange={e => {
+                    setFbAppId(e.target.value);
+                    localStorage.setItem('fb_app_id', e.target.value);
+                  }}
+                  placeholder="เช่น 145634995501895"
+                  className="w-full glass-input text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                  Facebook App Secret (สำหรับแปลงเป็น Token ตลอดชีพ)
+                </label>
+                <input
+                  type="password"
+                  value={fbAppSecret}
+                  onChange={e => {
+                    setFbAppSecret(e.target.value);
+                    localStorage.setItem('fb_app_secret', e.target.value);
+                  }}
+                  placeholder="App Secret ของคุณ"
+                  className="w-full glass-input text-xs"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Card B: Quick Tutorial */}
@@ -1604,18 +1745,33 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
               </div>
               
               {fbPages.length > 0 && (
-                <button
-                  onClick={saveAllPageTokens}
-                  className="px-4 py-2 font-bold text-xs font-mono uppercase tracking-wider transition-all flex items-center gap-1 active:scale-95 border cursor-pointer"
-                  style={{
-                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                    borderColor: 'rgba(34, 197, 94, 0.2)',
-                    color: '#22c55e',
-                    borderRadius: '8px',
-                  }}
-                >
-                  <span>💾 บันทึกเพจทั้งหมด ({fbPages.length} รายการ)</span>
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={downloadPageTokensAsJson}
+                    className="px-4 py-2 font-bold text-xs font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 border cursor-pointer"
+                    style={{
+                      backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                      borderColor: 'rgba(6, 182, 212, 0.2)',
+                      color: 'var(--accent-cyan)',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <span>📥 ดาวน์โหลด JSON</span>
+                  </button>
+
+                  <button
+                    onClick={saveAllPageTokens}
+                    className="px-4 py-2 font-bold text-xs font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 border cursor-pointer"
+                    style={{
+                      backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                      borderColor: 'rgba(34, 197, 94, 0.2)',
+                      color: '#22c55e',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <span>💾 บันทึกเพจทั้งหมด ({fbPages.length})</span>
+                  </button>
+                </div>
               )}
             </div>
 
@@ -1654,7 +1810,15 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
                           style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}
                         >
                           <td className="py-3 px-4 text-white font-bold rounded-none">
-                            <span className="mr-1.5">📄</span> {page.name}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="mr-0.5">📄</span>
+                              <span>{page.name}</span>
+                              {fbAppId.trim() !== '' && fbAppSecret.trim() !== '' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 leading-none">
+                                  ♾️ ตลอดชีพ
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-4 text-slate-400 rounded-none">
                             {page.category || 'ไม่มีข้อมูลหมวดหมู่'}
@@ -1717,14 +1881,31 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
             }}
           >
             <div 
-              className="flex items-center justify-between pb-2"
+              className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2"
               style={{ borderBottom: '1px solid var(--border-glass)' }}
             >
               <h5 className="text-xs font-bold text-zinc-300 font-mono flex items-center gap-1.5 uppercase tracking-wider">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 👥 รายการกุญแจโทเคนเพจเฟซบุ๊กที่บันทึกแล้วใน Browser เครื่องนี้ ({Object.keys(savedPageTokens).length} รายการ)
               </h5>
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">🔒 Git-Safe Storage Active</span>
+              
+              <div className="flex items-center gap-3">
+                {Object.keys(savedPageTokens).length > 0 && (
+                  <button
+                    onClick={downloadSavedPageTokensAsJson}
+                    className="h-7 px-3 text-[10px] font-bold font-mono transition-all flex items-center gap-1 active:scale-95 border cursor-pointer"
+                    style={{
+                      backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                      borderColor: 'rgba(6, 182, 212, 0.2)',
+                      color: 'var(--accent-cyan)',
+                      borderRadius: '6px',
+                    }}
+                  >
+                    <span>📥 ดาวน์โหลด JSON ที่บันทึกไว้</span>
+                  </button>
+                )}
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">🔒 Git-Safe Storage Active</span>
+              </div>
             </div>
 
             {Object.keys(savedPageTokens).length === 0 ? (
@@ -1746,6 +1927,12 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
                     <span className="text-[10px] font-bold text-zinc-400 truncate max-w-[150px]" title={`เพจ ID: ${id}`}>
                       🆔 {id.slice(0, 6)}...{id.slice(-4)}
                     </span>
+                    
+                    {!!lifetimePageIds[id] && (
+                      <span className="px-1 py-0.5 rounded text-[8px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 leading-none">
+                        ♾️ ตลอดชีพ
+                      </span>
+                    )}
                     
                     <span className="text-[9px] text-slate-500 select-none">
                       ••••••••••••••••

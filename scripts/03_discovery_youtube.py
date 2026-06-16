@@ -277,6 +277,63 @@ def draw_beautiful_placeholder_frame(video_id, title, author, frame_index, perce
     img.save(output_path, "JPEG")
     logger.info(f"Snapshot saved to: {output_path}")
 
+def download_youtube_thumbnails(video_id, output_dir, max_frames=5):
+    """
+    Downloads real YouTube thumbnail images as fallback frames.
+    YouTube provides public thumbnail URLs for every video:
+      - maxresdefault.jpg (1280x720, may not exist for all videos)
+      - sddefault.jpg (640x480)
+      - hqdefault.jpg (480x360)
+      - 0.jpg, 1.jpg, 2.jpg, 3.jpg (auto-generated at different timestamps)
+    Returns list of successfully downloaded relative paths.
+    """
+    logger.info(f"Attempting to download YouTube thumbnails for video: {video_id}")
+    
+    # YouTube auto-generates these thumbnails for every video
+    thumbnail_urls = [
+        (f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg", "maxres"),
+        (f"https://img.youtube.com/vi/{video_id}/sddefault.jpg", "sd"),
+        (f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg", "hq"),
+        (f"https://img.youtube.com/vi/{video_id}/1.jpg", "auto1"),
+        (f"https://img.youtube.com/vi/{video_id}/2.jpg", "auto2"),
+        (f"https://img.youtube.com/vi/{video_id}/3.jpg", "auto3"),
+    ]
+    
+    os.makedirs(output_dir, exist_ok=True)
+    downloaded = []
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+    }
+    
+    for url, label in thumbnail_urls:
+        if len(downloaded) >= max_frames:
+            break
+        try:
+            res = requests.get(url, headers=headers, timeout=8)
+            if res.status_code == 200 and len(res.content) > 2000:
+                # YouTube returns a small grey placeholder (< 1KB) for non-existent maxresdefault
+                frame_idx = len(downloaded) + 1
+                frame_filename = f"frame_{frame_idx}.jpg"
+                frame_abs_path = os.path.join(output_dir, frame_filename)
+                
+                with open(frame_abs_path, "wb") as f:
+                    f.write(res.content)
+                
+                frame_rel_path = f"downloaded_media/youtube_frames/{video_id}/{frame_filename}"
+                downloaded.append(frame_rel_path)
+                logger.info(f"  ✅ Downloaded thumbnail ({label}): {frame_filename} ({len(res.content)} bytes)")
+            else:
+                logger.debug(f"  ⏭️ Thumbnail {label} not available or too small ({len(res.content) if res.status_code == 200 else res.status_code})")
+        except Exception as e:
+            logger.warning(f"  ❌ Failed to download thumbnail {label}: {e}")
+    
+    if downloaded:
+        logger.info(f"Successfully downloaded {len(downloaded)} real YouTube thumbnails for {video_id}")
+    else:
+        logger.warning(f"Could not download any YouTube thumbnails for {video_id}")
+    
+    return downloaded
+
 def generate_mock_transcript(title):
     """Generates highly realistic simulated Thai transcripts matching the video title."""
     cues = []
@@ -495,73 +552,139 @@ def download_and_save_logo(logo_url, output_path):
         logger.warning(f"Failed to download real channel logo from {logo_url}: {e}")
     return False
 
+def run_yt_dlp_with_cookies(extra_args, timeout=20):
+    """Runs yt-dlp trying different cookie sources in order: chrome, safari, edge, none."""
+    import subprocess
+    import json
+    cookie_sources = ["chrome", "safari", "edge", "none"]
+    last_error_msg = ""
+    for source in cookie_sources:
+        cmd = ["yt-dlp"]
+        if source != "none":
+            cmd += ["--cookies-from-browser", source]
+        cmd += extra_args
+        
+        logger.info(f"Running yt-dlp with cookie source: {source}")
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            if res.returncode == 0 and res.stdout.strip():
+                return res
+            else:
+                err_msg = res.stderr or f"Exit code {res.returncode}"
+                logger.warning(f"yt-dlp failed with source {source}: {err_msg}")
+                # Even if returncode is non-zero, check if stdout has some valid json content
+                if res.stdout.strip():
+                    try:
+                        # Test if it's valid JSON
+                        json.loads(res.stdout)
+                        return res
+                    except Exception:
+                        pass
+                last_error_msg = err_msg
+        except Exception as e:
+            logger.warning(f"yt-dlp subprocess error with source {source}: {e}")
+            last_error_msg = str(e)
+            
+    raise RuntimeError(f"All yt-dlp cookie sources failed. Last error: {last_error_msg}")
+
+def generate_cookies_file():
+    """Generates scratch/cookies.txt by trying chrome, safari, edge, none."""
+    import os
+    import subprocess
+    import time
+    
+    cookies_path = os.path.join(vault_root, "scratch", "cookies.txt")
+    os.makedirs(os.path.dirname(cookies_path), exist_ok=True)
+    
+    # If file exists and is less than 30 mins old, reuse it
+    if os.path.exists(cookies_path) and (time.time() - os.path.getmtime(cookies_path)) < 1800:
+        return cookies_path
+        
+    cookie_sources = ["chrome", "safari", "edge"]
+    for source in cookie_sources:
+        cmd = [
+            "yt-dlp",
+            "--cookies-from-browser", source,
+            "--cookies", cookies_path,
+            "--skip-download",
+            "https://www.youtube.com"
+        ]
+        try:
+            logger.info(f"Extracting cookies for transcript fetch from browser: {source}")
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+            if res.returncode == 0 and os.path.exists(cookies_path) and os.path.getsize(cookies_path) > 0:
+                logger.info(f"Successfully saved cookies from browser '{source}' to: {cookies_path}")
+                return cookies_path
+        except Exception as e:
+            logger.warning(f"Failed to extract cookies from {source}: {e}")
+            
+    return None
+
 def get_fallback_videos(query_val):
     video_id = extract_video_id(query_val)
     if video_id:
         logger.info(f"Attempting to fetch real YouTube metadata via yt-dlp for ID: {video_id}")
         try:
-            cmd = [
-                "yt-dlp",
+            extra_args = [
                 "-j",
                 f"https://www.youtube.com/watch?v={video_id}"
             ]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-            if res.returncode == 0:
-                info = json.loads(res.stdout)
-                channel_title = info.get("channel") or info.get("uploader") or "YouTube Channel"
+            res = run_yt_dlp_with_cookies(extra_args, timeout=20)
+            info = json.loads(res.stdout)
+            channel_title = info.get("channel") or info.get("uploader") or "YouTube Channel"
+            
+            # Format subscriber count
+            subscribers = info.get("channel_follower_count")
+            if subscribers is None:
+                subscribers = 250000
+            else:
+                subscribers = int(subscribers)
                 
-                # Format subscriber count
-                subscribers = info.get("channel_follower_count")
-                if subscribers is None:
-                    subscribers = 250000
+            # Format views
+            views = info.get("view_count")
+            if views is None:
+                views = 450000
+            else:
+                views = int(views)
+                
+            # Format duration
+            duration_secs = info.get("duration", 0)
+            if duration_secs:
+                hours = duration_secs // 3600
+                mins = (duration_secs % 3600) // 60
+                secs = duration_secs % 60
+                if hours > 0:
+                    duration_str = f"{hours}:{mins:02d}:{secs:02d}"
                 else:
-                    subscribers = int(subscribers)
-                    
-                # Format views
-                views = info.get("view_count")
-                if views is None:
-                    views = 450000
-                else:
-                    views = int(views)
-                    
-                # Format duration
-                duration_secs = info.get("duration", 0)
-                if duration_secs:
-                    hours = duration_secs // 3600
-                    mins = (duration_secs % 3600) // 60
-                    secs = duration_secs % 60
-                    if hours > 0:
-                        duration_str = f"{hours}:{mins:02d}:{secs:02d}"
-                    else:
-                        duration_str = f"{mins:02d}:{secs:02d}"
-                else:
-                    duration_str = "15:00"
-                    
-                # Format upload date
-                raw_upload_date = info.get("upload_date")
-                if raw_upload_date:
-                    try:
-                        upload_date = datetime.strptime(raw_upload_date, "%Y%m%d").isoformat()
-                    except Exception:
-                        upload_date = datetime.now().isoformat()
-                else:
+                    duration_str = f"{mins:02d}:{secs:02d}"
+            else:
+                duration_str = "15:00"
+                
+            # Format upload date
+            raw_upload_date = info.get("upload_date")
+            if raw_upload_date:
+                try:
+                    upload_date = datetime.strptime(raw_upload_date, "%Y%m%d").isoformat()
+                except Exception:
                     upload_date = datetime.now().isoformat()
-                    
-                video = {
-                    "id": video_id,
-                    "title": info.get("title", "YouTube Video"),
-                    "channel_id": info.get("channel_id") or ("ch_" + hashlib.md5(channel_title.encode('utf-8')).hexdigest()[:10]),
-                    "channel_title": channel_title,
-                    "subscribers": subscribers,
-                    "views": views,
-                    "duration": duration_str,
-                    "upload_date": upload_date,
-                    "uploader_url": info.get("uploader_url"),
-                    "description": info.get("description", ""),
-                    "query": query_val
-                }
-                logger.info(f"Successfully retrieved real video info via yt-dlp: '{video['title']}'")
-                return [video]
+            else:
+                upload_date = datetime.now().isoformat()
+                
+            video = {
+                "id": video_id,
+                "title": info.get("title", "YouTube Video"),
+                "channel_id": info.get("channel_id") or ("ch_" + hashlib.md5(channel_title.encode('utf-8')).hexdigest()[:10]),
+                "channel_title": channel_title,
+                "subscribers": subscribers,
+                "views": views,
+                "duration": duration_str,
+                "upload_date": upload_date,
+                "uploader_url": info.get("uploader_url"),
+                "description": info.get("description", ""),
+                "query": query_val
+            }
+            logger.info(f"Successfully retrieved real video info via yt-dlp: '{video['title']}'")
+            return [video]
         except Exception as e:
             logger.warning(f"Failed to fetch real metadata via yt-dlp: {e}. Trying noembed API...")
             
@@ -602,19 +725,17 @@ def get_youtube_stream_and_duration(video_id):
     logger.info(f"Using yt-dlp to extract stream URL for video: {video_id}")
     try:
         # format: best[ext=mp4]/best is highly compatible and fast
-        cmd = [
-            "yt-dlp",
+        extra_args = [
             "-j",
             "--format", "best[ext=mp4]/best",
             f"https://www.youtube.com/watch?v={video_id}"
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-        if res.returncode == 0:
-            info = json.loads(res.stdout)
-            stream_url = info.get("url")
-            duration = int(info.get("duration", 0))
-            if stream_url and duration > 0:
-                return stream_url, duration
+        res = run_yt_dlp_with_cookies(extra_args, timeout=20)
+        info = json.loads(res.stdout)
+        stream_url = info.get("url")
+        duration = int(info.get("duration", 0))
+        if stream_url and duration > 0:
+            return stream_url, duration
     except Exception as e:
         logger.warning(f"Failed to extract stream info via yt-dlp: {e}")
     return None, None
@@ -805,24 +926,51 @@ def main():
                     media_paths.append(frame_rel_path)
         
         if not real_extraction_success:
-            logger.info("Could not extract real frames. Falling back to premium cinematic placeholder frames...")
-            for idx, pct in enumerate(intervals, start=1):
-                frame_filename = f"frame_{idx}.jpg"
-                frame_abs_path = os.path.join(vault_root, "downloaded_media", "youtube_frames", video["id"], frame_filename)
-                frame_rel_path = f"downloaded_media/youtube_frames/{video['id']}/{frame_filename}"
-                
-                draw_beautiful_placeholder_frame(
-                    video["id"], video["title"], video["channel_title"], idx, pct, video["duration"], frame_abs_path
-                )
-                media_paths.append(frame_rel_path)
+            # Try downloading real YouTube thumbnails as fallback before placeholder
+            frames_dir = os.path.join(vault_root, "downloaded_media", "youtube_frames", video["id"])
+            thumbnail_paths = download_youtube_thumbnails(video["id"], frames_dir, max_frames=args.limit)
+            
+            if thumbnail_paths:
+                logger.info(f"Successfully retrieved {len(thumbnail_paths)} real YouTube thumbnails as frame fallback.")
+                media_paths = thumbnail_paths
+            else:
+                logger.info("YouTube thumbnail download also failed. Falling back to premium cinematic placeholder frames...")
+                for idx, pct in enumerate(intervals, start=1):
+                    frame_filename = f"frame_{idx}.jpg"
+                    frame_abs_path = os.path.join(vault_root, "downloaded_media", "youtube_frames", video["id"], frame_filename)
+                    frame_rel_path = f"downloaded_media/youtube_frames/{video['id']}/{frame_filename}"
+                    
+                    draw_beautiful_placeholder_frame(
+                        video["id"], video["title"], video["channel_title"], idx, pct, video["duration"], frame_abs_path
+                    )
+                    media_paths.append(frame_rel_path)
             
         # 4c. Transcripts extraction logic using youtube-transcript-api (or simulated fallback)
         transcript_cues = []
         try:
             logger.info(f"Attempting to extract real transcript using youtube-transcript-api for {video['id']}...")
             from youtube_transcript_api import YouTubeTranscriptApi
-            # Instantiate client and fetch
-            transcript_list = YouTubeTranscriptApi().fetch(video["id"], languages=['th', 'en'])
+            import requests
+            import http.cookiejar
+            
+            session = requests.Session()
+            session.headers.update({
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "th-TH,th;q=0.9,en-US;q=0.8,en;q=0.7"
+            })
+            
+            cookies_file = generate_cookies_file()
+            if cookies_file and os.path.exists(cookies_file):
+                try:
+                    cj = http.cookiejar.MozillaCookieJar(cookies_file)
+                    cj.load(ignore_discard=True, ignore_expires=True)
+                    session.cookies = cj
+                    logger.info("Loaded browser cookies into requests session for transcript fetch.")
+                except Exception as cookie_err:
+                    logger.warning(f"Failed to load cookies into session: {cookie_err}")
+            
+            api = YouTubeTranscriptApi(http_client=session)
+            transcript_list = api.fetch(video["id"], languages=['th', 'en'])
             
             for item in transcript_list:
                 transcript_cues.append({

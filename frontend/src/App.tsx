@@ -195,6 +195,7 @@ export interface WritingStyle {
   name: string;
   desc: string;
   content: string;
+  examples?: string[];
 }
 
 export interface HeadlinePack {
@@ -455,6 +456,15 @@ export default function App() {
   const [graphicIndex, setGraphicIndex] = useState<number>(0);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [lightboxItem, setLightboxItem] = useState<VaultContent | null>(null);
+  const [selectedGraphicIds, setSelectedGraphicIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (contentGraphics.length > 0) {
+      setSelectedGraphicIds(contentGraphics.map(g => g.id));
+    } else {
+      setSelectedGraphicIds([]);
+    }
+  }, [contentGraphics]);
 
   // V1 Logo circular stamps & margins
   const [savedLogos, setSavedLogos] = useState<{ name: string; url: string }[]>([]);
@@ -530,6 +540,25 @@ export default function App() {
   const [canvasImagePromptStyle, setCanvasImagePromptStyle] = useState('trendtech');
   const [rewritingHeadline, setRewritingHeadline] = useState(false);
   const [showCanvasLogs, setShowCanvasLogs] = useState<boolean>(true);
+
+  // Custom writing styles states
+  const [customWritingStyles, setCustomWritingStyles] = useState<WritingStyle[]>(() => {
+    try {
+      const saved = localStorage.getItem('custom_writing_styles');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to parse custom_writing_styles:', e);
+      return [];
+    }
+  });
+  const [showStylesManager, setShowStylesManager] = useState(false);
+  const [newStyleName, setNewStyleName] = useState('');
+  const [newStyleDesc, setNewStyleDesc] = useState('');
+  const [newStyleExamples, setNewStyleExamples] = useState<string[]>(['']);
+  const [expandedStyleId, setExpandedStyleId] = useState<string | null>(null);
+
+  // Combine system writing styles and custom writing styles
+  const allWritingStyles = [...PALETTE_WRITING_STYLES, ...customWritingStyles];
   
   // Premium Credit Checker States
   const [creditCheckResults, setCreditCheckResults] = useState<{
@@ -595,7 +624,7 @@ export default function App() {
     setRewritingHeadline(true);
     try {
       // Find writing style templates
-      const activeStyle = PALETTE_WRITING_STYLES.find(s => s.id === canvasWritingStyle);
+      const activeStyle = allWritingStyles.find(s => s.id === canvasWritingStyle);
       const activeHeadlinePack = PALETTE_HEADLINE_STYLES.find(h => h.id === canvasHeadlineStyle);
 
       const postStylePrompt = activeStyle ? activeStyle.content : "";
@@ -682,7 +711,7 @@ Please rewrite this following the copywriting style tone and output rules above.
     if (!targetItem) return;
     
     setGeneratingCopywriting(true);
-    const activeStyle = PALETTE_WRITING_STYLES.find(s => s.id === canvasWritingStyle);
+    const activeStyle = allWritingStyles.find(s => s.id === canvasWritingStyle);
     const activeHeadlinePack = PALETTE_HEADLINE_STYLES.find(h => h.id === canvasHeadlineStyle);
     const openRouterKey = localStorage.getItem('openrouter_key')?.trim() || '';
 
@@ -720,6 +749,7 @@ Please rewrite this following the copywriting style tone and output rules above.
           length: canvasArticleLength,
           font_scale: canvasFontScale,
           writing_style_prompt: activeStyle?.content || '',
+          writing_style_examples: activeStyle?.examples || [],
           headline_style_examples: activeHeadlinePack?.headlines || [],
           openrouter_key: openRouterKey
         })
@@ -821,7 +851,7 @@ Please rewrite this following the copywriting style tone and output rules above.
     }
 
     setGeneratingCopywriting(true);
-    const activeStyle = PALETTE_WRITING_STYLES.find(s => s.id === canvasWritingStyle);
+    const activeStyle = allWritingStyles.find(s => s.id === canvasWritingStyle);
     const activeHeadlinePack = PALETTE_HEADLINE_STYLES.find(h => h.id === canvasHeadlineStyle);
     const openRouterKey = localStorage.getItem('openrouter_key')?.trim() || '';
 
@@ -863,6 +893,7 @@ Please rewrite this following the copywriting style tone and output rules above.
             length: canvasArticleLength,
             font_scale: canvasFontScale,
             writing_style_prompt: activeStyle?.content || '',
+            writing_style_examples: activeStyle?.examples || [],
             headline_style_examples: activeHeadlinePack?.headlines || [],
             openrouter_key: openRouterKey
           })
@@ -1036,6 +1067,8 @@ Please rewrite this following the copywriting style tone and output rules above.
     
     setGeneratingCopywriting(true);
     try {
+      const activeStyle = allWritingStyles.find(s => s.id === canvasWritingStyle);
+      const activeHeadlinePack = PALETTE_HEADLINE_STYLES.find(h => h.id === canvasHeadlineStyle);
       const openRouterKey = localStorage.getItem('openrouter_key')?.trim() || '';
       const response = await fetch(`${API_BASE}/vault/contents/${canvasSelectedItem.id}/generate-copywriting`, {
         method: 'POST',
@@ -1046,6 +1079,9 @@ Please rewrite this following the copywriting style tone and output rules above.
           feedback: feedbackText,
           length: canvasArticleLength,
           font_scale: canvasFontScale,
+          writing_style_prompt: activeStyle?.content || '',
+          writing_style_examples: activeStyle?.examples || [],
+          headline_style_examples: activeHeadlinePack?.headlines || [],
           openrouter_key: openRouterKey
         })
       });
@@ -1883,27 +1919,29 @@ Please rewrite this following the copywriting style tone and output rules above.
       // Only export successful ones in CSV
       const successfulResults = data.results.filter((r: any) => !r.error);
       for (const result of successfulResults) {
-        // Find the corresponding graphic from contentGraphics to get the correct content_id
-        const matchingGraphic = contentGraphics.find((g: any) => g.file_path === result.file_path);
+        // Prioritize backend-returned headline/caption (from DB query in batch-upload)
+        let headline = result.headline || '';
+        let caption = result.caption || '';
         
-        let headline = '';
-        let caption = '';
-        
-        if (matchingGraphic) {
-          const itemId = matchingGraphic.content_id;
-          const item = canvasAllItems.find(i => i.id === itemId) || canvasImportedItems.find(i => i.id === itemId);
-          if (item) {
-            const copywriting = item.metadata?.copywriting;
-            headline = copywriting?.headline_3line?.join(' ') || item.selected_headline || item.title || '';
-            caption = copywriting?.caption || '';
+        // Fallback to frontend state lookup if backend didn't return them
+        if (!headline) {
+          const matchingGraphic = contentGraphics.find((g: any) => g.file_path === result.file_path);
+          if (matchingGraphic) {
+            const itemId = matchingGraphic.content_id;
+            const item = canvasAllItems.find(i => i.id === itemId) || canvasImportedItems.find(i => i.id === itemId);
+            if (item) {
+              const copywriting = item.metadata?.copywriting;
+              headline = copywriting?.headline_3line?.join(' ') || item.selected_headline || item.title || '';
+              if (!caption) caption = copywriting?.caption || '';
+            }
           }
         }
         
-        // Fallback to currently selected item if not found
+        // Last resort fallback to currently selected item
         if (!headline) {
           const copywriting = canvasSelectedItem?.metadata?.copywriting;
           headline = copywriting?.headline_3line?.join(' ') || canvasSelectedItem?.selected_headline || canvasSelectedItem?.title || '';
-          caption = copywriting?.caption || '';
+          if (!caption) caption = copywriting?.caption || '';
         }
         
         addLog(` - [แมปข้อมูลสำเร็จ] ไฟล์: ${result.file_path.split('/').pop()} -> หัวข้อ: ${headline.substring(0, 40)}...`);
@@ -2869,17 +2907,42 @@ Please rewrite this following the copywriting style tone and output rules above.
                 
                 {/* Left column options */}
                 <div className="space-y-4 bg-slate-900/20 p-4 rounded-xl border border-slate-850/60">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
-                      <span>📝 สไตล์การเขียนคำโฆษณา (AI Copywriting Tone & Styles)</span>
-                    </label>
+                  <div className="space-y-1.5 text-left">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
+                        <span>📝 สไตล์การเขียนคำโฆษณา (AI Copywriting Tone & Styles)</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowStylesManager(true)}
+                        className="text-[9px] font-extrabold text-cyan-400 hover:text-white px-2 py-0.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        ➕ เพิ่ม/จัดการสไตล์
+                      </button>
+                    </div>
                     <select
                       value={canvasWritingStyle}
                       onChange={(e) => setCanvasWritingStyle(e.target.value)}
                       className="glass-input h-10 text-xs border-slate-700 bg-slate-950/90 text-white font-medium cursor-pointer w-full"
                     >
-                      {PALETTE_WRITING_STYLES.map(s => (
+                      {allWritingStyles.map(s => (
                         <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
+                      <span>📢 รูปแบบพาดหัวโพสต์ (Headline Pack)</span>
+                    </label>
+                    <select
+                      value={canvasHeadlineStyle}
+                      onChange={(e) => setCanvasHeadlineStyle(e.target.value)}
+                      className="glass-input h-10 text-xs border-slate-700 bg-slate-950/90 text-white font-medium cursor-pointer w-full"
+                    >
+                      <option value="">-- เลือกสไตล์พาดหัว --</option>
+                      {PALETTE_HEADLINE_STYLES.map(h => (
+                        <option key={h.id} value={h.id}>{h.name}</option>
                       ))}
                     </select>
                   </div>
@@ -3092,20 +3155,47 @@ Please rewrite this following the copywriting style tone and output rules above.
                         </label>
                         {canvasShowBadge && (
                           <div className="mt-2 space-y-2 pt-2 border-t border-slate-900">
-                            <input
-                              type="text"
-                              value={canvasBadgeText}
-                              onChange={(e) => setCanvasBadgeText(e.target.value)}
-                              placeholder="เช่น AI"
-                              className="w-full text-[10px] px-2 py-1 rounded bg-slate-900 border border-slate-800 text-white"
-                            />
-                            <input
-                              type="text"
-                              value={canvasBadgeSubtext}
-                              onChange={(e) => setCanvasBadgeSubtext(e.target.value)}
-                              placeholder="เช่น Content Lab"
-                              className="w-full text-[10px] px-2 py-1 rounded bg-slate-900 border border-slate-800 text-white"
-                            />
+                            <div>
+                              <span className="text-[9px] text-slate-400 font-bold">สไตล์ของป้าย</span>
+                              <select
+                                value={canvasBadgeStyle}
+                                onChange={(e) => setCanvasBadgeStyle(e.target.value)}
+                                className="w-full text-[10px] px-2 py-1 mt-1 rounded bg-slate-900 border border-slate-800 text-white cursor-pointer"
+                              >
+                                <option value="dev-pick">⭐ Editor's Pick</option>
+                                <option value="tech-focus">🔥 Hot Topic</option>
+                                <option value="editorial">📢 Breaking News</option>
+                                <option value="youtube-channel">▶️ YouTube Channel</option>
+                              </select>
+                            </div>
+
+                            {canvasBadgeStyle === 'youtube-channel' ? (
+                              <div className="p-2 bg-red-955/20 rounded border border-red-900/30">
+                                <p className="text-[9px] text-red-400 font-bold">▶️ ดึงข้อมูลอัตโนมัติจากบทความที่เลือก</p>
+                                <p className="text-[8px] text-slate-450 mt-1">
+                                  {canvasSelectedItem?.author_name
+                                    ? `📺 ${canvasSelectedItem.author_name} — ${canvasSelectedItem.metadata?.subscribers_formatted || canvasSelectedItem.author_followers || 'N/A'} ผู้ติดตาม`
+                                    : '⚠️ ยังไม่มีข้อมูลช่อง — เลือกบทความที่มีข้อมูล YouTube'}
+                                </p>
+                              </div>
+                            ) : (
+                              <>
+                                <input
+                                  type="text"
+                                  value={canvasBadgeText}
+                                  onChange={(e) => setCanvasBadgeText(e.target.value)}
+                                  placeholder="เช่น AI"
+                                  className="w-full text-[10px] px-2 py-1 rounded bg-slate-900 border border-slate-800 text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={canvasBadgeSubtext}
+                                  onChange={(e) => setCanvasBadgeSubtext(e.target.value)}
+                                  placeholder="เช่น Content Lab"
+                                  className="w-full text-[10px] px-2 py-1 rounded bg-slate-900 border border-slate-800 text-white"
+                                />
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -3334,7 +3424,7 @@ Please rewrite this following the copywriting style tone and output rules above.
                     <span className="text-xs font-bold text-white">⚙️ โครงสร้างฟอนต์และสัดส่วนกราฟิก (Font & Split Configuration)</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-1">
                     <div>
                       <span className="block text-[10px] font-bold text-slate-400 mb-1">ฟอนต์แสดงผล (Font Family)</span>
                       <select
@@ -3407,9 +3497,399 @@ Please rewrite this following the copywriting style tone and output rules above.
                         className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400 mt-3"
                       />
                     </div>
+
+                    <div>
+                      <span className="block text-[10px] font-bold text-slate-400 mb-1">ชื่อเพจ / เครดิต (Credit Text)</span>
+                      <input
+                        type="text"
+                        value={canvasCreditText}
+                        onChange={(e) => setCanvasCreditText(e.target.value)}
+                        className="glass-input h-9 text-xs w-full bg-slate-950 border border-slate-800 rounded-lg px-2 text-white"
+                        placeholder="วางแผนเป็น เห็นทางรวย"
+                      />
+                    </div>
                   </div>
                 </div>
 
+              </div>
+
+              {/* 🖼️ Live HTML Preview Section */}
+              <div className="glass-panel p-5 bg-slate-950/30 overflow-hidden">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-850 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-cyan-400" />
+                    <h3 className="text-xs font-black text-white uppercase tracking-wider">🖼️ Live Preview — ตัวอย่างรูปโพสต์แบบ Real-Time</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('live')}
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                        previewTab === 'live'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                          : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                      }`}
+                    >
+                      🎨 HTML Preview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('pillow')}
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                        previewTab === 'pillow'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                      }`}
+                    >
+                      🖨️ Pillow Output
+                    </button>
+                  </div>
+                </div>
+
+                {previewTab === 'live' && (() => {
+                  const activeTheme = PALETTE_THEMES.find(t => t.id === canvasTheme) || PALETTE_THEMES[0];
+                  const defaultContent = {
+                    headline: 'เลือกไอเดียเพื่อดูพรีวิว',
+                    highlight: 'AI Content'
+                  };
+                  const displayHeadline = (canvasHeadlineMode === 'triple'
+                    ? [canvasHeadlineLine1, canvasHeadlineLine2, canvasHeadlineLine3].filter(Boolean).join('\n')
+                    : canvasHeadline) || canvasSelectedItem?.title || defaultContent.headline;
+                  const displayHighlight = canvasHighlight || canvasSelectedItem?.metadata?.copywriting?.highlight || defaultContent.highlight;
+                  const bgImageUrl = canvasBgImage
+                    ? `${API_BASE}/vault/media?path=${encodeURIComponent(canvasBgImage)}`
+                    : (canvasSelectedItem?.media_paths?.[0]
+                      ? `${API_BASE}/vault/media?path=${encodeURIComponent(canvasSelectedItem.media_paths[0])}`
+                      : '');
+
+                  return (
+                    <div className="flex flex-col items-center gap-4">
+                      <div
+                        className={`preview-canvas-container relative overflow-hidden rounded-xl border border-slate-800 shadow-2xl ${
+                          canvasRatio === '1:1' ? 'aspect-square'
+                            : canvasRatio === '16:9' ? 'aspect-[16/9]'
+                            : canvasRatio === '9:16' ? 'aspect-[9/16]'
+                            : canvasRatio === '4:5' ? 'aspect-[4/5]'
+                            : 'aspect-[4/3]'
+                        }`}
+                        style={{ maxWidth: canvasRatio === '9:16' ? '280px' : '500px', width: '100%' }}
+                      >
+                        {/* Background Image */}
+                        {bgImageUrl && (
+                          <img
+                            src={bgImageUrl}
+                            alt="Preview BG"
+                            style={{
+                              position: 'absolute', inset: 0, width: '100%',
+                              height: `${canvasImageSplit}%`, objectFit: 'cover', zIndex: 1
+                            }}
+                          />
+                        )}
+
+                        {/* Gradient Overlay */}
+                        <div style={{
+                          position: 'absolute', left: 0, right: 0, bottom: 0,
+                          height: `${100 - canvasImageSplit + 15}%`,
+                          background: `linear-gradient(to bottom, transparent 0%, ${activeTheme.gradient[0]} 30%, ${activeTheme.gradient[1]} 100%)`,
+                          zIndex: 2
+                        }} />
+
+                        {/* Badge */}
+                        {canvasShowBadge && (
+                          canvasBadgeStyle === 'youtube-channel' && canvasSelectedItem ? (
+                            /* YouTube Channel Card Badge */
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: '4cqw',
+                                left: '4cqw',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '1.5cqw',
+                                background: 'rgba(0,0,0,0.75)',
+                                backdropFilter: 'blur(8px)',
+                                border: '0.3cqw solid rgba(255,255,255,0.15)',
+                                borderRadius: '1.8cqw',
+                                padding: '1.2cqw 2cqw',
+                                zIndex: 15
+                              }}
+                            >
+                              {canvasSelectedItem.author_avatar_url ? (
+                                <img
+                                  src={`${API_BASE}/vault/media?path=${encodeURIComponent(canvasSelectedItem.author_avatar_url)}`}
+                                  alt="channel"
+                                  style={{
+                                    width: '5cqw',
+                                    height: '5cqw',
+                                    borderRadius: '50%',
+                                    border: '0.25cqw solid rgba(255,255,255,0.3)',
+                                    objectFit: 'cover',
+                                    flexShrink: 0,
+                                  }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: '5cqw',
+                                  height: '5cqw',
+                                  borderRadius: '50%',
+                                  background: '#ef4444',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '2.5cqw',
+                                  fontWeight: 900,
+                                  color: 'white',
+                                  flexShrink: 0,
+                                }}>▶</div>
+                              )}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2cqw', minWidth: 0 }}>
+                                <span style={{ fontSize: '2cqw', fontWeight: 800, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {canvasSelectedItem.author_name || 'YouTube Channel'}
+                                </span>
+                                <span style={{ fontSize: '1.5cqw', fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
+                                  {canvasSelectedItem.metadata?.subscribers_formatted || (canvasSelectedItem.author_followers ? `${canvasSelectedItem.author_followers} subscribers` : 'N/A')}
+                                </span>
+                              </div>
+                            </div>
+                          ) : canvasBadgeStyle === 'youtube-channel' ? null : (
+                            /* Default Badge */
+                            <div className="live-badge" style={{
+                              background: canvasBadgeStyle === 'dev-pick'
+                                ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'
+                                : activeTheme.highlight,
+                              color: canvasBadgeStyle === 'dev-pick' ? '#ffffff' : '#000000',
+                              border: `0.3cqw solid ${activeTheme.highlight}`
+                            }}>
+                              <span className="live-badge-title">{canvasBadgeText || 'AI'}</span>
+                              <span className="live-badge-subtitle">{canvasBadgeSubtext || 'Content Lab'}</span>
+                            </div>
+                          )
+                        )}
+
+                        {/* Logo */}
+                        {canvasShowPageLogo && canvasLogoUrl && (
+                          <img
+                            src={`${API_BASE}${canvasLogoUrl}`}
+                            alt="Logo"
+                            className="live-logo-image"
+                            style={{
+                              width: `${canvasLogoSize}%`,
+                              ...(canvasLogoCorner === 'top-right' ? { top: `${canvasLogoMarginY}px`, right: `${canvasLogoMarginX}px` } :
+                                canvasLogoCorner === 'top-left' ? { top: `${canvasLogoMarginY}px`, left: `${canvasLogoMarginX}px` } :
+                                canvasLogoCorner === 'bottom-right' ? { bottom: `${canvasLogoMarginY}px`, right: `${canvasLogoMarginX}px` } :
+                                { bottom: `${canvasLogoMarginY}px`, left: `${canvasLogoMarginX}px` })
+                            }}
+                          />
+                        )}
+
+                        {/* Headline Section */}
+                        <div className="live-headline-section" style={{
+                          background: activeTheme.gradient[1],
+                          textAlign: canvasHeadlineAlign as any || 'left'
+                        }}>
+                          <div className="live-headline-text" style={{ fontSize: `${4.5 * (canvasFontScale || 1)}cqw` }}>
+                            {displayHeadline.split('\n').map((line, i) => {
+                              // Split highlight keywords by comma
+                              const keywords = (displayHighlight || '').split(',').map((k: string) => k.trim()).filter(Boolean);
+                              if (keywords.length === 0) {
+                                return <div key={i}>{line}</div>;
+                              }
+                              // Escape special regex characters and sort by length descending
+                              const escaped = keywords.map((k: string) => k.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+                              escaped.sort((a: string, b: string) => b.length - a.length);
+                              const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
+                              const parts = line.split(regex);
+                              return (
+                                <div key={i}>
+                                  {parts.map((part, idx) => {
+                                    const isMatch = keywords.some((k: string) => k.toLowerCase() === part.toLowerCase());
+                                    if (isMatch) {
+                                      return (
+                                        <span key={idx} className="live-highlight-box" style={{ background: activeTheme.highlight }}>
+                                          {part}
+                                        </span>
+                                      );
+                                    }
+                                    return part;
+                                  })}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          
+                          {/* Credit Text */}
+                          <div className="live-credit-text border-t border-slate-950/20 pt-2 mt-2.5 text-slate-400">
+                            เครดิต: {canvasCreditText || 'Coinpulse Content Lab'}
+                          </div>
+                        </div>
+
+                        {/* Split Divider */}
+                        <div className="live-split-divider" style={{
+                          top: `${canvasImageSplit}%`,
+                          background: `linear-gradient(90deg, ${activeTheme.highlight}, ${activeTheme.secondaryHighlight || activeTheme.highlight})`
+                        }} />
+
+                        {/* Backdrop Image Cycler Controls */}
+                        {canvasSelectedItem && canvasSelectedItem.media_paths && canvasSelectedItem.media_paths.length > 1 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const paths = canvasSelectedItem.media_paths;
+                                const currentIdx = paths.indexOf(canvasBgImage);
+                                const prevIdx = currentIdx <= 0 ? paths.length - 1 : currentIdx - 1;
+                                setCanvasBgImage(paths[prevIdx]);
+                              }}
+                              className="absolute left-2.5 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full bg-slate-950/80 border border-slate-850 text-slate-300 hover:text-white flex items-center justify-center transition-all hover:bg-slate-900 active:scale-95 hover:scale-105 shadow-md font-black text-xs select-none"
+                            >
+                              ◀
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const paths = canvasSelectedItem.media_paths;
+                                const currentIdx = paths.indexOf(canvasBgImage);
+                                const nextIdx = currentIdx === -1 || currentIdx >= paths.length - 1 ? 0 : currentIdx + 1;
+                                setCanvasBgImage(paths[nextIdx]);
+                              }}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full bg-slate-950/80 border border-slate-850 text-slate-300 hover:text-white flex items-center justify-center transition-all hover:bg-slate-900 active:scale-95 hover:scale-105 shadow-md font-black text-xs select-none"
+                            >
+                              ▶
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      {!canvasSelectedItem && (
+                        <p className="text-[10px] text-slate-500 text-center">
+                          💡 คลิกเลือกการ์ดไอเดียด้านล่างเพื่อดูตัวอย่างรูปโพสต์
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {previewTab === 'pillow' && (
+                  <div className="text-center py-8">
+                    {latestGraphic ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <img
+                          src={`${API_BASE}/vault/media?path=${encodeURIComponent(latestGraphic.file_path)}`}
+                          alt="Latest Pillow Output"
+                          className="max-w-full max-h-[400px] rounded-xl border border-emerald-500/30 shadow-2xl shadow-emerald-500/10 object-contain"
+                        />
+                        <p className="text-[10px] text-emerald-400 font-bold">🖨️ ผลลัพธ์ล่าสุดจาก Pillow Engine</p>
+                      </div>
+                    ) : (
+                      <div className="text-slate-500">
+                        <Info className="w-10 h-10 mx-auto mb-2 text-slate-700" />
+                        <p className="text-xs font-bold">ยังไม่มีผลลัพธ์ Pillow</p>
+                        <p className="text-[10px] text-slate-600 mt-1">กดปุ่ม "สั่งเรนเดอร์โพสรูป" เพื่อเริ่มสร้างภาพ</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 🎨 Big Batch Render Button */}
+              <div className="w-full">
+                <button
+                  className={`w-full py-4 px-6 font-black text-sm flex items-center justify-center gap-2.5 transition-all hover:scale-[1.01] active:scale-[0.99] border rounded-2xl cursor-pointer ${
+                    runningModule.canvas
+                      ? 'bg-green-950/30 text-green-400 border-green-800/40 opacity-75 cursor-not-allowed'
+                      : (!canvasSelectedItem && canvasSelectedIds.length === 0)
+                        ? 'bg-slate-900/50 text-slate-500 border-slate-800/60 opacity-60 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-green-500 via-emerald-400 to-green-500 text-slate-950 border-emerald-400 shadow-[0_0_20px_rgba(34,197,94,0.4)] hover:shadow-[0_0_30px_rgba(34,197,94,0.6)]'
+                  }`}
+                  disabled={runningModule.canvas || (!canvasSelectedItem && canvasSelectedIds.length === 0)}
+                  onClick={async () => {
+                    setContentGraphics([]);
+                    setGraphicIndex(0);
+                    setLatestGraphic(null);
+
+                    const idsToRender = canvasSelectedIds.length > 0
+                      ? canvasSelectedIds
+                      : canvasSelectedItem
+                        ? [canvasSelectedItem.id]
+                        : [];
+
+                    if (idsToRender.length === 0) return;
+
+                    if (idsToRender.length === 1) {
+                      // Single render
+                      const item = canvasImportedItems.find(x => x.id === idsToRender[0]);
+                      if (!item) return;
+                      const q = new URLSearchParams();
+                      q.append('title', item.title);
+                      q.append('theme_name', canvasTheme);
+                      q.append('ratio', canvasRatio);
+                      q.append('layout', canvasLayout);
+                      q.append('content_id', item.id);
+                      q.append('font_family', canvasFontFamily);
+                      q.append('font_scale', String(canvasFontScale));
+                      q.append('image_split', String(canvasImageSplit));
+                      q.append('headline_align', canvasHeadlineAlign);
+                      q.append('headline_margin', String(canvasHeadlineMargin));
+
+                      const copywriting = item.metadata?.copywriting;
+                      let headline = item.selected_headline || item.title || '';
+                      let caption = '';
+                      if (canvasSelectedItem?.id === item.id) {
+                        if (canvasHeadlineMode === 'triple') {
+                          if (canvasHeadlineLine1 || canvasHeadlineLine2 || canvasHeadlineLine3) {
+                            q.append('headline_line1', canvasHeadlineLine1);
+                            q.append('headline_line2', canvasHeadlineLine2);
+                            q.append('headline_line3', canvasHeadlineLine3);
+                          }
+                        } else {
+                          headline = canvasHeadline;
+                        }
+                        caption = canvasCaption;
+                      } else if (copywriting) {
+                        if (copywriting.headline_3line && copywriting.headline_3line.length > 0) {
+                          q.append('headline_line1', copywriting.headline_3line[0] || '');
+                          q.append('headline_line2', copywriting.headline_3line[1] || '');
+                          q.append('headline_line3', copywriting.headline_3line[2] || '');
+                        } else {
+                          headline = copywriting.headlines?.[0] || item.selected_headline || item.title || '';
+                        }
+                        caption = copywriting.caption || '';
+                      }
+                      q.append('headline', headline);
+                      if (caption) q.append('caption', caption);
+
+                      if (canvasSelectedItem?.id === item.id && canvasBgImage) {
+                        q.append('base_image', canvasBgImage);
+                      } else if (item.media_paths && item.media_paths.length > 0) {
+                        q.append('base_image', item.media_paths[0]);
+                      }
+
+                      const activeHighlight = canvasSelectedItem?.id === item.id ? canvasHighlight : (copywriting?.highlight || '');
+                      if (activeHighlight) q.append('highlight', activeHighlight);
+
+                      appendCustomParams(q);
+                      runModule('canvas', q.toString());
+                    } else {
+                      // Batch render via queue
+                      setCanvasQueueIds(idsToRender);
+                      setCanvasQueueIndex(0);
+                    }
+                  }}
+                >
+                  {runningModule.canvas ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+                  <span>
+                    {canvasQueueIndex !== null
+                      ? `กำลังสร้างโพสรูปที่ ${canvasQueueIndex + 1}/${canvasQueueIds.length} ...`
+                      : runningModule.canvas
+                        ? 'กำลังเขียนภาพและคำนวณสัดส่วน...'
+                        : canvasSelectedIds.length > 1
+                          ? `🎨 สั่งเรนเดอร์โพสรูปกลุ่มจำนวน ${canvasSelectedIds.length} รายการ`
+                          : '🎨 สั่งเรนเดอร์โพสรูปด้วย Pillow'
+                    }
+                  </span>
+                </button>
               </div>
 
               {/* Action buttons (bulk generate and single item detail workspace) */}
@@ -3540,7 +4020,7 @@ Please rewrite this following the copywriting style tone and output rules above.
                           <button
                             type="button"
                             disabled={generatingCopywriting}
-                            onClick={handleAIRewriteHeadline}
+                            onClick={handleGenerateCopywriting}
                             className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-lg border flex items-center gap-1.5 transition-all shadow-md active:scale-95 ${
                               generatingCopywriting
                                 ? 'bg-purple-500/10 border-purple-500/30 text-purple-400 cursor-wait'
@@ -3660,38 +4140,9 @@ Please rewrite this following the copywriting style tone and output rules above.
                             </span>
                           </div>
 
-                          <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                            <div>
-                              <label className="block text-[10px] font-bold text-purple-300/80 mb-1 uppercase tracking-wider">🎯 สไตล์พาดหัว</label>
-                              <select
-                                value={canvasHeadlineStyle}
-                                onChange={(e) => setCanvasHeadlineStyle(e.target.value)}
-                                className="w-full h-9 text-[11px] rounded-lg border border-purple-500/30 bg-slate-950/80 text-white font-medium cursor-pointer px-2.5 focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-400/30 transition-all"
-                              >
-                                <option value="">-- เลือกสไตล์พาดหัว --</option>
-                                {PALETTE_HEADLINE_STYLES.map(h => (
-                                  <option key={h.id} value={h.id}>{h.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-purple-300/80 mb-1 uppercase tracking-wider">📝 สไตล์การเขียนโพส</label>
-                              <select
-                                value={canvasWritingStyle}
-                                onChange={(e) => setCanvasWritingStyle(e.target.value)}
-                                className="w-full h-9 text-[11px] rounded-lg border border-purple-500/30 bg-slate-950/80 text-white font-medium cursor-pointer px-2.5 focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-400/30 transition-all"
-                              >
-                                <option value="">-- เลือกสไตล์การเขียนโพส --</option>
-                                {PALETTE_WRITING_STYLES.map(s => (
-                                  <option key={s.id} value={s.id}>{s.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-
                           {(!canvasHeadlineStyle || !canvasWritingStyle) && (
-                            <p className="text-[10px] text-amber-400/80 mb-2 flex items-center gap-1">
-                              ⚠️ กรุณาเลือกสไตล์พาดหัวและสไตล์การเขียนโพสให้ครบทั้ง 2 ช่องก่อนกดปุ่ม
+                            <p className="text-[10px] text-amber-400/80 mb-3 flex items-center justify-center gap-1 bg-amber-500/10 border border-amber-500/20 py-2 px-3 rounded-lg text-center w-full">
+                              ⚠️ กรุณาเลือกรูปแบบพาดหัวและสไตล์การเขียนที่แผงควบคุมหลัก "⚙️ Canvas Designer Controls" ด้านบนก่อนครับ
                             </p>
                           )}
 
@@ -3699,41 +4150,22 @@ Please rewrite this following the copywriting style tone and output rules above.
                             type="button"
                             disabled={generatingCopywriting || !canvasHeadlineStyle || !canvasWritingStyle}
                             onClick={handleBulkGenerateCopywriting}
-                            className="relative w-full rounded-xl font-black text-sm flex items-center justify-center gap-3 transition-all hover:scale-[1.01] active:scale-[0.99]"
-                            style={{
-                              background: generatingCopywriting
-                                ? 'rgba(20, 83, 45, 0.3)'
+                            className={`w-full rounded-xl py-3.5 px-5 font-black text-sm flex items-center justify-center gap-3 transition-all hover:scale-[1.01] active:scale-[0.99] border cursor-pointer ${
+                              generatingCopywriting
+                                ? 'bg-green-950/30 text-green-400 border-green-800/40 opacity-75'
                                 : (!canvasHeadlineStyle || !canvasWritingStyle)
-                                  ? 'rgba(30, 41, 59, 0.5)'
-                                  : 'linear-gradient(90deg, #22c55e, #34d399, #22c55e)',
-                              color: generatingCopywriting
-                                ? '#4ade80'
-                                : (!canvasHeadlineStyle || !canvasWritingStyle)
-                                  ? '#64748b'
-                                  : '#0a0a0a',
-                              border: generatingCopywriting
-                                ? '2px solid rgba(22, 101, 52, 0.4)'
-                                : (!canvasHeadlineStyle || !canvasWritingStyle)
-                                  ? '1px solid rgba(51, 65, 85, 0.4)'
-                                  : '2px solid #4ade80',
-                              padding: '14px 20px',
-                              borderRadius: '12px',
-                              boxShadow: generatingCopywriting
-                                ? 'none'
-                                : (!canvasHeadlineStyle || !canvasWritingStyle)
-                                  ? 'none'
-                                  : '0 0 25px rgba(34,197,94,0.6), 0 0 50px rgba(34,197,94,0.2)',
-                              fontWeight: 900,
-                            }}
+                                  ? 'bg-slate-900/50 text-slate-500 border-slate-800/60 cursor-not-allowed'
+                                  : 'bg-gradient-to-r from-green-500 via-emerald-400 to-green-500 text-slate-950 border-emerald-400 shadow-[0_0_20px_rgba(34,197,94,0.4)] hover:shadow-[0_0_30px_rgba(34,197,94,0.6)]'
+                            }`}
                           >
                             {generatingCopywriting ? (
                               <>
-                                <RefreshCw className="w-5 h-5 animate-spin" style={{ color: '#86efac' }} />
+                                <RefreshCw className="w-5 h-5 animate-spin text-green-400" />
                                 <span>กำลังใช้ AI เขียนบทความแบบกลุ่ม... ({canvasSelectedIds.length} รายการ)</span>
                               </>
                             ) : (
                               <>
-                                <Sparkles className="w-5 h-5 text-slate-900 animate-pulse" />
+                                <Sparkles className={`w-5 h-5 ${(!canvasHeadlineStyle || !canvasWritingStyle) ? 'text-slate-500' : 'text-slate-950 animate-pulse'}`} />
                                 <span>🪄 สั่ง AI เขียนบทความแบบกลุ่มที่เลือกทั้งหมด</span>
                               </>
                             )}
@@ -3968,6 +4400,29 @@ Please rewrite this following the copywriting style tone and output rules above.
                     </div>
                   </div>
 
+                  {/* Terminal / Process Logs */}
+                  {(logs.canvas && logs.canvas.length > 1) && (
+                    <div className="mt-4 p-3 rounded-xl bg-black/70 border border-slate-850 font-mono text-[9.5px] leading-relaxed max-h-[180px] overflow-y-auto scrollbar-thin">
+                      <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-900">
+                        <span className="text-[10px] font-bold text-emerald-400">📟 Pillow Engine Terminal</span>
+                        <button
+                          type="button"
+                          onClick={() => setLogs(prev => ({ ...prev, canvas: ['[SYSTEM] Terminal cleared.'] }))}
+                          className="text-[8px] text-slate-600 hover:text-slate-400 transition-colors"
+                        >
+                          ✕ เคลียร์
+                        </button>
+                      </div>
+                      {logs.canvas.map((line, idx) => (
+                        <div key={idx} className="py-0.5 border-b border-slate-950/20 last:border-b-0 hover:bg-slate-900/40 text-emerald-400 flex gap-2">
+                          <span className="text-slate-600 shrink-0 font-bold">[{idx + 1}]</span>
+                          <span>{line}</span>
+                        </div>
+                      ))}
+                      <div ref={terminalBottoms.canvas} />
+                    </div>
+                  )}
+
                   {/* Draw output gallery preview grid */}
                   {contentGraphics.length > 0 && (
                     <div className="w-full mt-6 pt-6 border-t border-slate-800/80 animate-fade-in flex flex-col items-center">
@@ -3975,15 +4430,49 @@ Please rewrite this following the copywriting style tone and output rules above.
                         <div className="flex items-center gap-2">
                           <CheckCircle className="w-4 h-4 text-emerald-400" />
                           <span className="text-xs font-black text-emerald-400 uppercase tracking-wider text-left">🎯 ผลลัพธ์ (Pillow Output)</span>
+                          {contentGraphics.length > 0 && (
+                            <label className="flex items-center gap-1.5 cursor-pointer ml-3 bg-slate-950/40 px-2 py-0.5 rounded border border-slate-850 select-none">
+                              <input
+                                type="checkbox"
+                                checked={contentGraphics.length > 0 && selectedGraphicIds.length === contentGraphics.length}
+                                onChange={() => {
+                                  if (selectedGraphicIds.length === contentGraphics.length) {
+                                    setSelectedGraphicIds([]);
+                                  } else {
+                                    setSelectedGraphicIds(contentGraphics.map(g => g.id));
+                                  }
+                                }}
+                                className="w-3.5 h-3.5 rounded border-slate-750 text-emerald-500 focus:ring-emerald-500 bg-slate-950/80 cursor-pointer accent-emerald-400"
+                              />
+                              <span className="text-[9px] font-bold text-slate-400">เลือกทั้งหมด ({selectedGraphicIds.length}/{contentGraphics.length})</span>
+                            </label>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           {contentGraphics.length > 0 && (
                             <>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setContentGraphics([]);
-                                  setLatestGraphic(null);
+                                onClick={async () => {
+                                  if (!confirm(`⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบรูปภาพทั้งหมดที่สร้างขึ้น (${contentGraphics.length} รูป) ออกจากระบบอย่างถาวร? (การดำเนินการนี้จะลบไฟล์จริงออกจากดิสก์ของเซิร์ฟเวอร์ด้วย)`)) {
+                                    return;
+                                  }
+                                  try {
+                                    const res = await fetch(`${API_BASE}/vault/graphics`, {
+                                      method: 'DELETE'
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                      setContentGraphics([]);
+                                      setLatestGraphic(null);
+                                      alert(`✅ ${data.message || 'เคลียร์รูปภาพสำเร็จ!'}`);
+                                    } else {
+                                      alert(`❌ เกิดข้อผิดพลาด: ${data.error}`);
+                                    }
+                                  } catch (err: any) {
+                                    console.error('Failed to clear graphics:', err);
+                                    alert(`❌ ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้: ${err.message}`);
+                                  }
                                 }}
                                 className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-pink-400 bg-slate-900 hover:bg-pink-950/20 px-2.5 py-1 rounded border border-slate-800 hover:border-pink-900 transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
                               >
@@ -3998,33 +4487,49 @@ Please rewrite this following the copywriting style tone and output rules above.
                                     alert('กรุณากรอก Dropbox Access Token ในส่วนตั้งค่าพื้นฐานก่อน');
                                     return;
                                   }
-                                  if (contentGraphics.length === 0) return;
+                                  const selectedGraphics = contentGraphics.filter(g => selectedGraphicIds.includes(g.id));
+                                  if (selectedGraphics.length === 0) {
+                                    alert('⚠️ กรุณาเลือกรูปภาพที่ต้องการอัพโหลดอย่างน้อย 1 รูปก่อนครับ');
+                                    return;
+                                  }
 
                                   setIsUploadingDropbox(true);
                                   setDropboxUploadProgress('กำลังเริ่มอัพโหลด...');
                                   try {
-                                    const response = await fetch(`${API_BASE}/vault/stock-upload-dropbox`, {
+                                    const response = await fetch(`${API_BASE}/vault/dropbox/batch-upload`, {
                                       method: 'POST',
                                       headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${dropboxToken}`
+                                        'Content-Type': 'application/json'
                                       },
                                       body: JSON.stringify({
-                                        token: dropboxToken,
-                                        folder: dropboxFolder,
-                                        graphics: contentGraphics
+                                        file_paths: selectedGraphics.map(g => g.file_path),
+                                        dropbox_token: dropboxToken,
+                                        dropbox_folder: dropboxFolder
                                       })
                                     });
                                     const result = await response.json();
                                     if (result.success) {
-                                      // Build CSV export
-                                      const csvRows = [['Headline', 'Caption', 'Dropbox Link'].join(',')];
-                                      const successfulResults = result.results || [];
+                                      // Check for individual upload errors
+                                      const allResults = result.results || [];
+                                      const failedResults = allResults.filter((r: any) => r.error);
+                                      const successfulResults = allResults.filter((r: any) => !r.error);
                                       
-                                      for (const resItem of successfulResults) {
-                                        const dbItem = canvasImportedItems.find(x => x.id === resItem.content_id);
-                                        const headline = dbItem?.selected_headline || dbItem?.title || '';
-                                        const caption = dbItem?.metadata?.copywriting?.caption || '';
+                                      if (failedResults.length > 0) {
+                                        const firstError = failedResults[0]?.error || 'Unknown error';
+                                        if (successfulResults.length === 0) {
+                                          alert(`❌ อัพโหลดล้มเหลวทั้งหมด (${failedResults.length} ไฟล์): ${firstError}`);
+                                        } else {
+                                          alert(`⚠️ อัพโหลดบางไฟล์ล้มเหลว (${failedResults.length}/${allResults.length}): ${firstError}`);
+                                        }
+                                      }
+
+                                      // Build CSV from ALL results (including failed ones) so we still get headline/caption
+                                      const csvRows = [['Headline', 'Caption', 'Dropbox Link'].join(',')];
+                                      
+                                      for (const resItem of allResults) {
+                                        // Use backend-returned headline/caption directly (they come from the DB query)
+                                        const headline = resItem.headline || resItem.clip_title || '';
+                                        const caption = resItem.caption || '';
                                         
                                         const escapeCsv = (val: string) => `"${(val || '').replace(/"/g, '""').replace(/\n/g, '\\n')}"`;
                                         csvRows.push([
@@ -4034,16 +4539,18 @@ Please rewrite this following the copywriting style tone and output rules above.
                                         ].join(','));
                                       }
 
-                                      const csvContent = '\uFEFF' + csvRows.join('\n');
-                                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                                      const url = URL.createObjectURL(blob);
-                                      const a = document.createElement('a');
-                                      a.href = url;
-                                      a.download = `content_export_${new Date().toISOString().slice(0, 10)}.csv`;
-                                      a.click();
-                                      URL.revokeObjectURL(url);
+                                      if (csvRows.length > 1) {
+                                        const csvContent = '\uFEFF' + csvRows.join('\n');
+                                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `content_export_${new Date().toISOString().slice(0, 10)}.csv`;
+                                        a.click();
+                                        URL.revokeObjectURL(url);
+                                      }
 
-                                      setDropboxUploadProgress(`✅ อัพโหลดสำเร็จ ${successfulResults.length} ไฟล์ + บันทึก CSV แล้ว!`);
+                                      setDropboxUploadProgress(`✅ อัพโหลดสำเร็จ ${successfulResults.length}/${allResults.length} ไฟล์ + บันทึก CSV แล้ว!`);
                                       setTimeout(() => setDropboxUploadProgress(''), 5000);
                                     } else {
                                       alert(`❌ อัพโหลดล้มเหลว: ${result.error}`);
@@ -4068,29 +4575,50 @@ Please rewrite this following the copywriting style tone and output rules above.
                       )}
 
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 w-full">
-                        {contentGraphics.map((g, idx) => (
-                          <div
-                            key={g.id}
-                            className="relative overflow-hidden rounded-xl border border-slate-850 bg-slate-950/50 p-1.5 shadow-lg group hover:border-emerald-400/80 transition-all duration-300 cursor-zoom-in"
-                            onClick={() => {
-                              const dbItem = canvasImportedItems.find(x => x.id === g.content_id);
-                              setLightboxItem(dbItem || null);
-                              setLightboxImage(`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`);
-                            }}
-                          >
-                            <img
-                              src={`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`}
-                              alt={`Poster Output ${idx + 1}`}
-                              className="w-full h-auto rounded-lg object-contain border border-slate-900 group-hover:scale-[1.03] transition-all duration-300"
-                            />
-                            <div className="absolute top-2.5 right-2.5 bg-slate-950/80 backdrop-blur-sm text-slate-300 border border-slate-800 font-mono text-[8px] px-1.5 py-0.5 rounded-md shadow z-10">
-                              #{idx + 1}
+                        {contentGraphics.map((g, idx) => {
+                          const isChecked = selectedGraphicIds.includes(g.id);
+                          return (
+                            <div
+                              key={g.id}
+                              className={`relative overflow-hidden rounded-xl border p-1.5 shadow-lg group transition-all duration-300 cursor-zoom-in ${
+                                isChecked 
+                                  ? 'border-emerald-500 bg-slate-900/60' 
+                                  : 'border-slate-850 bg-slate-950/50 hover:border-slate-700'
+                              }`}
+                              onClick={() => {
+                                const dbItem = canvasImportedItems.find(x => x.id === g.content_id);
+                                setLightboxItem(dbItem || null);
+                                setLightboxImage(`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`);
+                              }}
+                            >
+                              {/* Checkbox overlay */}
+                              <div className="absolute top-2.5 left-2.5 z-20">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={() => {
+                                    setSelectedGraphicIds(prev => 
+                                      prev.includes(g.id) ? prev.filter(x => x !== g.id) : [...prev, g.id]
+                                    );
+                                  }}
+                                  className="w-4 h-4 rounded border-slate-700 text-emerald-500 bg-slate-950/80 cursor-pointer accent-emerald-400 shadow-md"
+                                />
+                              </div>
+                              <img
+                                src={`${API_BASE}/vault/media?path=${encodeURIComponent(g.file_path)}`}
+                                alt={`Poster Output ${idx + 1}`}
+                                className="w-full h-auto rounded-lg object-contain border border-slate-900 group-hover:scale-[1.03] transition-all duration-300"
+                              />
+                              <div className="absolute top-2.5 right-2.5 bg-slate-950/80 backdrop-blur-sm text-slate-300 border border-slate-800 font-mono text-[8px] px-1.5 py-0.5 rounded-md shadow z-10">
+                                #{idx + 1}
+                              </div>
+                              <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
+                                <Eye className="w-5 h-5 text-emerald-400 filter drop-shadow" />
+                              </div>
                             </div>
-                            <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
-                              <Eye className="w-5 h-5 text-emerald-400 filter drop-shadow" />
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -4463,6 +4991,230 @@ Please rewrite this following the copywriting style tone and output rules above.
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📝 CUSTOM WRITING STYLES MANAGER MODAL */}
+      {showStylesManager && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in text-left">
+          <div className="w-full max-w-3xl bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden glass-panel flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-500 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white leading-tight">จัดการสไตล์และสำนวนการเขียน (Writing Styles Studio)</h3>
+                  <p className="text-[10px] text-slate-400 font-medium mt-0.5">เพิ่มตัวอย่างข้อความที่ต้องการให้ AI เลียนแบบรูปแบบโครงสร้างการเขียน</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStylesManager(false);
+                  setNewStyleName('');
+                  setNewStyleDesc('');
+                  setNewStyleExamples(['']);
+                }}
+                className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-850 hover:bg-slate-850 text-slate-400 hover:text-white flex items-center justify-center transition-all text-xs font-black"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 flex-1 overflow-y-auto custom-scrollbar space-y-6">
+              {/* Form to Add New Style */}
+              <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-850 space-y-4">
+                <h4 className="text-xs font-extrabold text-cyan-400 uppercase tracking-wider">➕ เพิ่มสำนวนการเขียนใหม่ (Add Custom Style)</h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400 font-bold block">ชื่อสำนวน/สไตล์:</label>
+                    <input
+                      type="text"
+                      value={newStyleName}
+                      onChange={(e) => setNewStyleName(e.target.value)}
+                      placeholder="เช่น สำนวนขายด่วนเน้นแชร์ทริค"
+                      className="glass-input h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400 font-bold block">คำอธิบายสไตล์การเขียน:</label>
+                    <input
+                      type="text"
+                      value={newStyleDesc}
+                      onChange={(e) => setNewStyleDesc(e.target.value)}
+                      placeholder="เช่น สไตล์เป็นกันเอง พูดจาสุภาพ ชวนกดติดตามตอนท้าย"
+                      className="glass-input h-9 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] text-slate-400 font-bold block">
+                      ตัวอย่างข้อความที่ต้องการให้เลียนแบบ (Copywriting Example Templates):
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setNewStyleExamples([...newStyleExamples, ''])}
+                      className="px-2.5 py-1 rounded bg-cyan-950/40 text-cyan-400 hover:bg-cyan-900/60 border border-cyan-800/40 hover:border-cyan-700 text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      ➕ เพิ่มตัวอย่างสำนวนที่ {newStyleExamples.length + 1}
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {newStyleExamples.map((example, idx) => (
+                      <div key={idx} className="space-y-1 bg-slate-950/20 p-3 rounded-lg border border-slate-850 flex flex-col gap-2 relative">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-slate-400">
+                            ตัวอย่างสำนวนที่ {idx + 1}
+                          </span>
+                          {newStyleExamples.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewStyleExamples(newStyleExamples.filter((_, i) => i !== idx));
+                              }}
+                              className="text-[10px] text-red-400 hover:text-red-300 font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              ✕ ลบ
+                            </button>
+                          )}
+                        </div>
+                        <textarea
+                          rows={5}
+                          value={example}
+                          onChange={(e) => {
+                            const updated = [...newStyleExamples];
+                            updated[idx] = e.target.value;
+                            setNewStyleExamples(updated);
+                          }}
+                          placeholder={`พิมพ์หรือวางตัวอย่างโพสต์แบบที่ ${idx + 1} ที่นี่...`}
+                          className="glass-input text-xs py-2 h-auto"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const filteredExamples = newStyleExamples.map(ex => ex.trim()).filter(Boolean);
+                      if (!newStyleName.trim() || filteredExamples.length === 0) {
+                        alert('กรุณากรอกชื่อสไตล์และข้อความตัวอย่างอย่างน้อย 1 ตัวอย่างครับ');
+                        return;
+                      }
+                      const newStyle: WritingStyle = {
+                        id: `custom_${Date.now()}`,
+                        name: `⭐ ${newStyleName.trim()}`,
+                        desc: newStyleDesc.trim() || 'สำนวนที่กำหนดเอง',
+                        content: filteredExamples[0] || '',
+                        examples: filteredExamples
+                      };
+                      const updated = [...customWritingStyles, newStyle];
+                      setCustomWritingStyles(updated);
+                      localStorage.setItem('custom_writing_styles', JSON.stringify(updated));
+                      setNewStyleName('');
+                      setNewStyleDesc('');
+                      setNewStyleExamples(['']);
+                      alert('💾 บันทึกสำนวนใหม่เรียบร้อยแล้ว!');
+                    }}
+                    className="btn-neon btn-neon-cyan px-5 py-2 text-xs flex items-center gap-1.5"
+                  >
+                    <span>💾 บันทึกสำนวนนี้</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* List of Existing Styles */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider text-left">📋 รายการสำนวนการเขียนทั้งหมดในระบบ</h4>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1.5 custom-scrollbar">
+                  {[...PALETTE_WRITING_STYLES, ...customWritingStyles].map((style) => {
+                    const isSystem = PALETTE_WRITING_STYLES.some(s => s.id === style.id);
+                    const isExpanded = expandedStyleId === style.id;
+                    return (
+                      <div
+                        key={style.id}
+                        className="p-3 bg-slate-950/20 border border-slate-850 rounded-xl hover:border-slate-700/80 transition-all flex flex-col gap-2"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="text-left flex-1 cursor-pointer" onClick={() => setExpandedStyleId(isExpanded ? null : style.id)}>
+                            <p className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                              {style.name}
+                              {isSystem ? (
+                                <span className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-bold border border-slate-700/60 uppercase">System</span>
+                              ) : (
+                                <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-950/40 text-cyan-400 font-bold border border-cyan-800/40 uppercase">Custom</span>
+                              )}
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{style.desc}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedStyleId(isExpanded ? null : style.id)}
+                              className="text-[10px] text-slate-400 hover:text-white px-2 py-1 bg-slate-900 border border-slate-800 rounded-md transition-all font-bold"
+                            >
+                              {isExpanded ? '🔺 ซ่อนตัวอย่าง' : '👁️ ดูตัวอย่าง'}
+                            </button>
+                            {!isSystem && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!confirm(`คุณแน่ใจว่าต้องการลบสไตล์การเขียน "${style.name}" หรือไม่?`)) return;
+                                  const updated = customWritingStyles.filter(s => s.id !== style.id);
+                                  setCustomWritingStyles(updated);
+                                  localStorage.setItem('custom_writing_styles', JSON.stringify(updated));
+                                }}
+                                className="w-8 h-8 rounded-lg bg-red-950/20 hover:bg-red-950/50 border border-red-900/30 hover:border-red-800 text-red-450 flex items-center justify-center transition-all cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="mt-2 p-3 bg-slate-950/80 rounded-lg border border-slate-900 text-left relative space-y-4">
+                            <span className="absolute right-2.5 top-2.5 text-[8px] font-bold text-slate-500 uppercase tracking-widest">Example Contents</span>
+                            {(style.examples && style.examples.length > 0 ? style.examples : [style.content]).map((exampleText, exIdx) => (
+                              <div key={exIdx} className="space-y-1 border-b border-slate-850/50 pb-2 last:border-0 last:pb-0">
+                                <span className="text-[8px] font-extrabold text-cyan-400 block mb-1">ตัวอย่างสำนวนที่ {exIdx + 1}:</span>
+                                <pre className="text-[10px] text-emerald-400 leading-relaxed font-mono whitespace-pre-wrap word-break-break-word pr-16">{exampleText}</pre>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-850/80 flex justify-end bg-slate-950/20">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStylesManager(false);
+                  setNewStyleName('');
+                  setNewStyleDesc('');
+                  setNewStyleExamples(['']);
+                }}
+                className="btn-neon btn-neon-cyan px-6 py-2 text-xs"
+              >
+                เสร็จสิ้น
+              </button>
             </div>
           </div>
         </div>

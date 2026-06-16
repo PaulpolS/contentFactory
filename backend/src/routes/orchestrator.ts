@@ -3,6 +3,8 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
+// Nodemon Trigger Restart: 2026-06-09
+
 const router = Router();
 
 // Locate scripts directory
@@ -41,6 +43,8 @@ router.get('/run/:module_name', (req: Request, res: Response) => {
     scriptFilename = '04_discovery_github.py';
   } else if (module_name === 'draw' || module_name === 'canvas') {
     scriptFilename = '06_graphic_generator.py';
+  } else if (module_name === 'replicator') {
+    scriptFilename = '08_viral_replicator.py';
   } else {
     res.write(`data: [ERROR] ไม่พบโมดูลย่อยที่ระบุ: ${module_name}\n\n`);
     res.end();
@@ -58,7 +62,7 @@ router.get('/run/:module_name', (req: Request, res: Response) => {
   res.write(`data: [SYSTEM] เริ่มทำงานสคริปต์ย่อย: ${scriptFilename}...\n\n`);
 
   // Collect arguments from query parameters
-  const pythonArgs: string[] = [scriptPath];
+  const pythonArgs: string[] = ['-u', scriptPath];
   for (const [key, value] of Object.entries(req.query)) {
     if (value !== undefined) {
       const cliKey = key.replace(/_/g, '-');

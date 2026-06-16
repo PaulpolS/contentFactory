@@ -1032,10 +1032,11 @@ class GraphicGeneratorModule:
             # Explicit line breaks from triple headline mode — respect them directly
             explicit_lines = [l.strip() for l in headline.split("\n") if l.strip()]
             
-            # Auto-scale font down if any line exceeds max_text_width
+            # Auto-scale font down if any line exceeds max_text_width, but stop scaling at min_font_size
             original_font_size = font_size
+            min_font_size = max(40, int(original_font_size * 0.75))
             font = self.get_font(font_size, font_family)
-            while font_size > 20:
+            while font_size > min_font_size:
                 max_line_w = max(int(font.getlength(line)) for line in explicit_lines)
                 if max_line_w <= max_text_width:
                     break
@@ -1043,11 +1044,21 @@ class GraphicGeneratorModule:
                 line_height = int(font_size * 1.4)
                 font = self.get_font(font_size, font_family)
             
-            wrapped_lines = explicit_lines
+            # If any line still exceeds max_text_width at min_font_size, wrap it using ThaiSyllableWrapper
+            font = self.get_font(font_size, font_family)
+            wrapper = ThaiSyllableWrapper(font, max_text_width, self.logger)
+            wrapped_lines = []
+            for line in explicit_lines:
+                if int(font.getlength(line)) > max_text_width:
+                    wrapped_parts = wrapper.wrap_text(line)
+                    wrapped_lines.extend(wrapped_parts)
+                else:
+                    wrapped_lines.append(line)
+            
             if font_size != original_font_size:
-                self.logger.info(f"[PillowDraw] ✂️ Auto-scaled font from {original_font_size}px to {font_size}px to fit {len(wrapped_lines)} explicit lines")
+                self.logger.info(f"[PillowDraw] ✂️ Auto-scaled font from {original_font_size}px to {font_size}px to fit explicit lines")
             else:
-                self.logger.info(f"[PillowDraw] ✂️ Using {len(wrapped_lines)} explicit headline lines (font {font_size}px)")
+                self.logger.info(f"[PillowDraw] ✂️ Using {len(wrapped_lines)} explicit/wrapped headline lines (font {font_size}px)")
         else:
             font = self.get_font(font_size, font_family)
             wrapper = ThaiSyllableWrapper(font, max_text_width, self.logger)
@@ -1543,7 +1554,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Content Factory V2 Poster Creator with Thai Syllable Wrapper Engine")
     parser.add_argument("--content-id", type=str, help="ID of content from vault_contents table to process")
     parser.add_argument("--ratio", type=str, default="1:1", help="Image aspect ratio")
-    parser.add_argument("--theme", type=str, default="Classic Red Blue", help="Color theme")
+    parser.add_argument("--theme", "--theme-name", dest="theme", type=str, default="Classic Red Blue", help="Color theme")
     parser.add_argument("--layout", type=str, choices=["youtube", "ai_news", "github", "quotes", "top_gainers"], default="top_gainers", help="Design layout style")
     parser.add_argument("--headline", type=str, help="Manual headline (overrides database or standalone run)")
     parser.add_argument("--keywords", type=str, help="Comma-separated manual keywords (overrides database)")
@@ -1589,13 +1600,15 @@ if __name__ == "__main__":
     parser.add_argument("--highlight-padding-x", type=float, default=0.22, help="Highlight horizontal padding factor")
     parser.add_argument("--highlight-padding-y", type=float, default=0.09, help="Highlight vertical padding factor")
 
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
     # Determine external vault root path dynamically
     vault_root = args.vault_root or os.environ.get("VAULT_ROOT") or os.environ.get("VAULT_EXTERNAL_ROOT")
     if not vault_root:
         # Standard fallback to workspace location
-        vault_root = "/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/content_vault"
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        vault_root = os.path.join(parent_dir, "content_vault")
 
     generator = GraphicGeneratorModule(vault_root)
 

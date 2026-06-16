@@ -2,7 +2,10 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 def generate_logos():
-    logos_dir = "/Users/paulpolsulintaboon/Documents/GitHub/ContentFactory/content_vault/logos"
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(current_dir)
+    vault_root = os.environ.get("VAULT_ROOT") or os.environ.get("VAULT_EXTERNAL_ROOT") or os.path.join(parent_dir, "content_vault")
+    logos_dir = os.path.join(vault_root, "logos")
     os.makedirs(logos_dir, exist_ok=True)
     
     # 1. Generate Gold Crown Logo
