@@ -382,6 +382,7 @@ export default function App() {
   // Vault data states
   const [vaultItems, setVaultItems] = useState<VaultContent[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [isImportingVideo, setIsImportingVideo] = useState(false);
   const [vaultSelectedIds, setVaultSelectedIds] = useState<string[]>([]);
   const [expandedImageIds, setExpandedImageIds] = useState<string[]>([]);
   const [expandedScriptIds, setExpandedScriptIds] = useState<string[]>([]);
@@ -1558,6 +1559,158 @@ Please rewrite this following the copywriting style tone and output rules above.
     setActiveTab('canvas');
   };
 
+  // Single Item Import to Vertical Video Workspace
+  const handleSingleImportForVideo = async (item: VaultContent) => {
+    setIsImportingVideo(true);
+    try {
+      if (item.status === 'scraped') {
+        try {
+          await fetch(`${API_BASE}/vault/contents/batch-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: [item.id], status: 'ready_for_design' })
+          });
+          fetchVaultData();
+          fetchApprovedItems();
+        } catch (err) {
+          console.error('Failed to update status on single import for video:', err);
+        }
+      }
+
+      let images = (item.media_paths || []).map(p => {
+        if (p.startsWith('http://') || p.startsWith('https://')) {
+          return p;
+        }
+        return `${API_BASE}/vault/media?path=${encodeURIComponent(p)}`;
+      });
+
+      if (images.length === 0 && item.source_url) {
+        try {
+          const scrapeRes = await fetch(`${API_BASE}/news/scrape-images`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: item.source_url })
+          });
+          if (scrapeRes.ok) {
+            const data = await scrapeRes.json();
+            if (data.success && data.images && data.images.length > 0) {
+              images = data.images;
+            }
+          }
+        } catch (err) {
+          console.error('Failed to scrape images during video import:', err);
+        }
+      }
+
+      const newsPayload = {
+        title: item.title,
+        content: item.raw_content || '',
+        headline: item.selected_headline || item.title,
+        images: images,
+        sourceUrl: item.source_url,
+        source: item.author_name || 'Vault News',
+        timestamp: Date.now()
+      };
+
+      try {
+        localStorage.setItem('news_to_video_payload', JSON.stringify(newsPayload));
+      } catch (storageErr) {
+        console.error('Failed to setItem on localStorage:', storageErr);
+        try {
+          localStorage.removeItem('vertical_video_batch_items');
+          localStorage.setItem('news_to_video_payload', JSON.stringify(newsPayload));
+          alert('⚠️ หน่วยความจำบราว์เซอร์ (Local Storage) เต็ม ระบบได้เคลียร์ประวัติคิววิดีโอเก่าออกเพื่อทำรายการต่อให้แล้วครับบอส');
+        } catch (innerErr) {
+          alert('❌ หน่วยความจำบราว์เซอร์เต็มอย่างรุนแรง ไม่สามารถจัดส่งข้อมูลได้ กรุณาลบประวัติหรือเคลียร์แคชบราวเซอร์ครับ');
+        }
+      }
+      setActiveTab('vertical-video');
+    } catch (err: any) {
+      alert(`เกิดข้อผิดพลาดในการนำเข้าคลิปแนวตั้ง: ${err.message || err}`);
+    } finally {
+      setIsImportingVideo(false);
+    }
+  };
+
+  // Batch Approve & Import to Vertical Video Workspace
+  const handleBatchApproveForVideo = async () => {
+    if (vaultSelectedIds.length === 0) return;
+    setIsImportingVideo(true);
+    try {
+      const selectedItems = vaultItems.filter(item => vaultSelectedIds.includes(item.id));
+      const scrapedIds = selectedItems.filter(item => item.status === 'scraped').map(item => item.id);
+      
+      if (scrapedIds.length > 0) {
+        await fetch(`${API_BASE}/vault/contents/batch-status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: scrapedIds, status: 'ready_for_design' })
+        });
+      }
+
+      const payloadPromises = selectedItems.map(async (item) => {
+        let images = (item.media_paths || []).map(p => {
+          if (p.startsWith('http://') || p.startsWith('https://')) {
+            return p;
+          }
+          return `${API_BASE}/vault/media?path=${encodeURIComponent(p)}`;
+        });
+
+        if (images.length === 0 && item.source_url) {
+          try {
+            const scrapeRes = await fetch(`${API_BASE}/news/scrape-images`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: item.source_url })
+            });
+            if (scrapeRes.ok) {
+              const data = await scrapeRes.json();
+              if (data.success && data.images && data.images.length > 0) {
+                images = data.images;
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to scrape images for batch item ${item.id}:`, err);
+          }
+        }
+
+        return {
+          title: item.title,
+          content: item.raw_content || '',
+          headline: item.selected_headline || item.title,
+          images: images,
+          sourceUrl: item.source_url,
+          source: item.author_name || 'Vault News',
+          timestamp: Date.now()
+        };
+      });
+
+      const batchPayloads = await Promise.all(payloadPromises);
+      
+      try {
+        localStorage.setItem('batch_news_to_video_payloads', JSON.stringify(batchPayloads));
+      } catch (storageErr) {
+        console.error('Failed to setItem on localStorage:', storageErr);
+        try {
+          localStorage.removeItem('vertical_video_batch_items');
+          localStorage.setItem('batch_news_to_video_payloads', JSON.stringify(batchPayloads));
+          alert('⚠️ หน่วยความจำบราว์เซอร์ (Local Storage) เต็ม ระบบได้เคลียร์ประวัติคิววิดีโอเก่าออกเพื่อทำรายการต่อให้แล้วครับบอส');
+        } catch (innerErr) {
+          alert('❌ หน่วยความจำบราว์เซอร์เต็มอย่างรุนแรง ไม่สามารถจัดส่งข้อมูลได้ กรุณาลบประวัติหรือเคลียร์แคชบราวเซอร์ครับ');
+        }
+      }
+      setVaultSelectedIds([]);
+      fetchVaultData();
+      fetchApprovedItems();
+      
+      setActiveTab('vertical-video');
+    } catch (err: any) {
+      alert(`เกิดข้อผิดพลาดในการนำเข้ากลุ่มคลิปแนวตั้ง: ${err.message || err}`);
+    } finally {
+      setIsImportingVideo(false);
+    }
+  };
+
   const handleBatchDelete = async () => {
     if (vaultSelectedIds.length === 0) return;
     if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบไอเดียที่เลือกจำนวน ${vaultSelectedIds.length} รายการออกจากระบบ?`)) return;
@@ -2440,9 +2593,24 @@ Please rewrite this following the copywriting style tone and output rules above.
                       <div className="flex flex-wrap items-center gap-2">
                         <button 
                           onClick={handleBatchApprove}
+                          disabled={isImportingVideo}
                           className="btn-neon btn-neon-cyan px-4 py-2 text-xs"
                         >
                           🟢 อนุมัติที่เลือกเพื่อส่งไปทำโพสรูป (Batch Approve)
+                        </button>
+                        <button 
+                          onClick={handleBatchApproveForVideo}
+                          disabled={isImportingVideo}
+                          className="btn-neon btn-neon-purple px-4 py-2 text-xs flex items-center gap-1.5"
+                        >
+                          {isImportingVideo ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              กำลังส่งไปทำคลิป...
+                            </>
+                          ) : (
+                            '🎬 อนุมัติที่เลือกเพื่อส่งไปทำคลิปแนวตั้ง (Batch Video)'
+                          )}
                         </button>
                         <button 
                           onClick={handleBatchDelete}
@@ -2634,12 +2802,22 @@ Please rewrite this following the copywriting style tone and output rules above.
                                     </span>
                                   </td>
                                   <td className="data-grid-td text-center" onClick={(e) => e.stopPropagation()}>
-                                    <button
-                                      onClick={() => handleSingleImport(item)}
-                                      className="px-2.5 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/25 hover:bg-cyan-500/20 text-[10px] font-bold text-cyan-400 flex items-center gap-1 mx-auto transition-all"
-                                    >
-                                      <span>📥 นำเข้าทำรูป</span>
-                                    </button>
+                                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                                      <button
+                                        onClick={() => handleSingleImport(item)}
+                                        disabled={isImportingVideo}
+                                        className="px-2.5 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/25 hover:bg-cyan-500/20 text-[10px] font-bold text-cyan-400 flex items-center gap-1 transition-all"
+                                      >
+                                        <span>📥 นำเข้าทำรูป</span>
+                                      </button>
+                                      <button
+                                        onClick={() => handleSingleImportForVideo(item)}
+                                        disabled={isImportingVideo}
+                                        className="px-2.5 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/25 hover:bg-purple-500/20 text-[10px] font-bold text-purple-400 flex items-center gap-1 transition-all"
+                                      >
+                                        <span>🎬 ทำคลิปแนวตั้ง</span>
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
 

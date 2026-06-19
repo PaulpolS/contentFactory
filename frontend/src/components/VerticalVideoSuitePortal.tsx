@@ -1213,7 +1213,11 @@ export default function VerticalVideoSuitePortal() {
     }
   });
   useEffect(() => {
-    localStorage.setItem('vertical_video_batch_items', JSON.stringify(batchItems));
+    try {
+      localStorage.setItem('vertical_video_batch_items', JSON.stringify(batchItems));
+    } catch (e) {
+      console.warn('LocalStorage quota exceeded for vertical_video_batch_items:', e);
+    }
   }, [batchItems]);
   const [currentBatchIndex, setCurrentBatchIndex] = useState(-1);
   const [batchStatus, setBatchStatus] = useState<'idle' | 'running' | 'paused' | 'stopped'>('idle');
