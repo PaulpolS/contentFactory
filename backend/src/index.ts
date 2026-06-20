@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import vaultRouter from './routes/vault';
 import orchestratorRouter from './routes/orchestrator';
+import clipEditorRouter from './routes/clipEditor';
 
 // Load optional environment variables from .env
 dotenv.config();
@@ -21,6 +22,7 @@ app.use(express.json({ limit: '50mb' }));
 // Mount routers
 app.use('/api/vault', vaultRouter);
 app.use('/api/orchestrator', orchestratorRouter);
+app.use('/api/clip-editor', clipEditorRouter);
 
 // === Restored Visual Footage Presets API Endpoints ===
 app.post('/api/save-video', (req, res) => {

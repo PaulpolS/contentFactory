@@ -14,6 +14,10 @@ node_modules/
 .npm_cache/
 **/.npm_cache/
 
+# Single Clip Editor — cache ความยาวคลิป (สร้างตอนรัน)
+.durations_cache.json
+**/.durations_cache.json
+
 # Build outputs
 dist/
 **/dist/

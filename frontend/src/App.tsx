@@ -24,6 +24,7 @@ import {
   FileText,
   Quote,
   Mic,
+  Scissors,
   Activity
 } from 'lucide-react';
 import DiscoveryPortal from './components/DiscoveryPortal';
@@ -34,6 +35,7 @@ import QuoteVideoPortal from './components/QuoteVideoPortal';
 import { AvatarVerticalClipPortal } from './components/AvatarVerticalClipPortal';
 import FlowAutomatorPortal from './components/FlowAutomatorPortal';
 import PodcastVideoPortal from './components/PodcastVideoPortal';
+import SingleClipEditorPortal from './components/SingleClipEditorPortal';
 
 
 const API_BASE = 'http://localhost:5005/api';
@@ -347,7 +349,7 @@ export const PALETTE_IMAGE_PROMPT_STYLES: ImagePromptStyle[] = [
 ];
 
 export default function App() {
-  type TabType = 'discovery' | 'vault' | 'canvas' | 'settings' | 'prompt-generator' | 'vertical-video' | 'quote-video' | 'avatar-video' | 'dropbox-csv' | 'podcast-clip' | 'tracking';
+  type TabType = 'discovery' | 'vault' | 'canvas' | 'settings' | 'prompt-generator' | 'vertical-video' | 'quote-video' | 'avatar-video' | 'dropbox-csv' | 'podcast-clip' | 'clip-editor' | 'tracking';
   const validTabs: TabType[] = ['discovery', 'vault', 'canvas', 'settings', 'prompt-generator', 'vertical-video', 'quote-video', 'avatar-video', 'dropbox-csv', 'podcast-clip', 'tracking'];
   const [activeTab, _setActiveTab] = useState<TabType>(() => {
     const saved = localStorage.getItem('active_tab') as TabType | null;
@@ -2382,12 +2384,20 @@ Please rewrite this following the copywriting style tone and output rules above.
             <span>🧑‍💼 Avatar แนวตั้ง (Avatar Clip)</span>
           </button>
 
-          <button 
+          <button
             className={`sidebar-btn ${activeTab === 'podcast-clip' ? 'active' : ''}`}
             onClick={() => setActiveTab('podcast-clip')}
           >
             <Mic className="w-5 h-5" />
             <span>🎙️ สร้างคลิปpodcast (Podcast Clip)</span>
+          </button>
+
+          <button
+            className={`sidebar-btn ${activeTab === 'clip-editor' ? 'active' : ''}`}
+            onClick={() => setActiveTab('clip-editor')}
+          >
+            <Scissors className="w-5 h-5" />
+            <span>✂️ ตัด/สุ่มต่อคลิป (Clip Editor)</span>
           </button>
 
           <button 
@@ -2439,6 +2449,7 @@ Please rewrite this following the copywriting style tone and output rules above.
               {activeTab === 'podcast-clip' && '🎙️ สร้างคลิปpodcast | ระบบตัดต่อ B-Roll ซ้อนเสียงพากย์อัตโนมัติ'}
               {activeTab === 'dropbox-csv' && '☁️ Dropbox/CSV | Workflow Automator (บอท Flow)'}
               {activeTab === 'tracking' && '📊 Work Tracking System | ระบบติดตามงานและจัดการ Stock จาก Google Sheets'}
+              {activeTab === 'clip-editor' && '✂️ ตัด/สุ่มต่อคลิป | Single Clip Editor — Jump Cut + สุ่มต่อคลิปด้วย FFmpeg'}
               {activeTab === 'settings' && '⚙️ ตั้งค่าระบบ | แผงควบคุมกุญแจและขนาดการแสดงผล'}
             </h1>
             <p className="text-xs text-slate-400 mt-1">
@@ -2452,6 +2463,7 @@ Please rewrite this following the copywriting style tone and output rules above.
               {activeTab === 'podcast-clip' && 'สุ่มหยิบฟุตเทจ B-Roll จากโฟลเดอร์ดิบ มา Concat เรียงซ้อนทับไฟล์เสียงเสียงพากย์ บังคับ Scale/Crop และรักษาระยะเวลาตามความยาวเสียงเป๊ะ'}
               {activeTab === 'dropbox-csv' && 'เชื่อมต่อ Dropbox → AI Prompt → Google Sheets / CSV อัตโนมัติ ปรับระดับการประมวลผลวิดีโอและรูปภาพ'}
               {activeTab === 'tracking' && 'เชื่อมต่อ Google Sheets ดึงข้อมูล Stock ของนักตัดต่อและคลังบทความโดยตรง สรุปเปรียบเทียบในรูปแบบแผนภูมิกราฟิก'}
+              {activeTab === 'clip-editor' && 'ตัดทุกคลิปในโฟลเดอร์ด้วยสูตร Scene 1 + Jump Cuts + เอฟเฟกต์ + Transition + BGM หรือสุ่มหยิบคลิปไม่ซ้ำมาต่อกันให้ได้ความยาวที่กำหนด สั่ง FFmpeg เรนเดอร์พร้อมสตรีม Log สด'}
               {activeTab === 'settings' && 'ปรับแต่งระดับการสเกลโปรแกรม ขนาดตัวอักษรและปุ่ม จัดการคีย์ API สำหรับ Scrapers / AI และบันทึกโทเคนเพจเฟซบุ๊กออฟไลน์'}
 
             </p>
@@ -4875,6 +4887,11 @@ Please rewrite this following the copywriting style tone and output rules above.
           {/* TAB 10: PODCAST VIDEO PORTAL */}
           {activeTab === 'podcast-clip' && (
             <PodcastVideoPortal />
+          )}
+
+          {/* TAB 11: SINGLE CLIP EDITOR (ตัด/สุ่มต่อคลิป) */}
+          {activeTab === 'clip-editor' && (
+            <SingleClipEditorPortal />
           )}
 
         </div>
