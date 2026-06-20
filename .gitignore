@@ -10,6 +10,10 @@ lerna-debug.log*
 node_modules/
 **/node_modules/
 
+# npm cache (สร้างขึ้นตอนรัน ไม่ต้อง commit)
+.npm_cache/
+**/.npm_cache/
+
 # Build outputs
 dist/
 **/dist/

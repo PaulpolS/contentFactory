@@ -1,0 +1,19 @@
+# ปรับ line-ending ให้เหมือนกันทุกเครื่อง (กัน conflict ปลอม ๆ ที่เกิดจากระบบปฏิบัติการต่างกัน)
+* text=auto eol=lf
+
+# ไฟล์สคริปต์ต้องเป็น LF เสมอ
+*.command text eol=lf
+*.sh      text eol=lf
+
+# ไฟล์ binary — อย่าให้ Git ไปยุ่งกับเนื้อข้างใน
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.mp4  binary
+*.mov  binary
+*.mp3  binary
+*.wav  binary
+*.db   binary
+*.sqlite binary

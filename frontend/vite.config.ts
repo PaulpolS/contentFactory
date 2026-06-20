@@ -8,6 +8,9 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // อย่าแอบย้ายไป port อื่นเงียบ ๆ เมื่อ 5173 ไม่ว่าง — ให้หยุดและฟ้อง error ชัด ๆ
+    // (StartApp.command ล้าง port ให้ก่อนเริ่มอยู่แล้ว จึงไม่ควรชนถ้าเปิดผ่านสคริปต์)
+    strictPort: true,
   },
   resolve: {
     alias: {

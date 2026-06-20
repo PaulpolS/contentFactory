@@ -3255,8 +3255,20 @@ app.post('/api/news/build-image-slideshow', (req, res) => {
 
 // Start listening
 const PORT = process.env.PORT || 5005;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🔊 Content Vault V2 backend listening at http://localhost:${PORT}`);
+});
+
+// จับ error ตอนเปิด port ให้ชัด ๆ แทนที่จะ crash เงียบ ๆ แล้ว nodemon รีสตาร์ทวนไม่จบ
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(
+      `\n❌ Port ${PORT} ถูกใช้งานอยู่แล้ว — มี process เก่าค้างอยู่\n` +
+      `   วิธีแก้: ดับเบิลคลิก StopApp.command หรือรันคำสั่ง:  lsof -ti tcp:${PORT} | xargs kill -9\n`
+    );
+    process.exit(1);
+  }
+  throw err;
 });
 
 export default app;
