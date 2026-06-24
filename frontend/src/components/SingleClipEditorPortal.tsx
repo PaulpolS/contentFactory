@@ -76,6 +76,12 @@ const SingleClipEditorPortal: React.FC = () => {
     return e;
   });
 
+  // === ถอดเสียง → ตั้งชื่อคลิป (Whisper) ===
+  const [transcribeModel, setTranscribeModel] = useState('large-v3-turbo');
+  const [transcribeLang, setTranscribeLang] = useState('auto');
+  // ข้ามคลิปที่ไม่มีเสียงพูด (ไม่มี audio stream) ตอนตัดต่อ — เปิดไว้ default
+  const [skipNoVoice, setSkipNoVoice] = useState(true);
+
   // === Assembly state ===
   const [assemblySourceFolder, setAssemblySourceFolder] = useState(
     () => localStorage.getItem('singleclip_assembly_source') || '',
@@ -179,6 +185,7 @@ const SingleClipEditorPortal: React.FC = () => {
     scEffectsS2,
     transType,
     transDur,
+    skipNoAudio: skipNoVoice,
   });
 
   // ---------- Jump Cut: download .command ----------
@@ -234,6 +241,37 @@ const SingleClipEditorPortal: React.FC = () => {
       const res = await fetch(API('/clip-editor/run-bash-script'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ script: fullScript }),
+        signal: controller.signal,
+      });
+      await readSSE(res, (msg) => {
+        if (msg.type === 'log') pushLog(msg.text || '');
+        else if (msg.type === 'done') { setRunStatus('done'); pushLog('✅ เสร็จเรียบร้อย'); }
+        else if (msg.type === 'error') { setRunStatus('error'); pushLog('[ERROR] ' + (msg.text || '')); }
+      });
+    } catch (e: any) {
+      if (e?.name === 'AbortError') pushLog('⛔ หยุดแล้ว');
+      else { pushLog('[ERROR] ' + (e?.message || e)); setRunStatus('error'); }
+    } finally {
+      setIsRunning(false); abortRef.current = null;
+    }
+  };
+
+  // ---------- ถอดเสียง → เปลี่ยนชื่อคลิปต้นฉบับ (Whisper) ----------
+  const handleTranscribeRename = async (dryRun: boolean) => {
+    if (!clipPath) { alert('กรุณาเลือกโฟลเดอร์ต้นฉบับก่อน'); return; }
+    if (!dryRun && !confirm(
+      `ระบบจะถอดเสียงทุกคลิปแล้ว "เปลี่ยนชื่อไฟล์ต้นฉบับจริง" ตามสิ่งที่พูด\n` +
+      `• คลิปที่ไม่มีเสียงจะถูกข้าม\n• ชื่อจะไม่ทับกัน (ต่อเลขให้อัตโนมัติ)\n\n` +
+      `โฟลเดอร์: ${clipPath}\n\nดำเนินการต่อ?`,
+    )) return;
+    setIsRunning(true); setRunStatus('running'); setRunLog([]);
+    pushLog(dryRun ? '👁️ ดูตัวอย่างชื่อจากเสียง...' : '🎤 ถอดเสียงและเปลี่ยนชื่อ...');
+    try {
+      const controller = new AbortController();
+      abortRef.current = () => controller.abort();
+      const res = await fetch(API('/clip-editor/transcribe-rename'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: clipPath, model: transcribeModel, language: transcribeLang, dryRun }),
         signal: controller.signal,
       });
       await readSSE(res, (msg) => {
@@ -324,29 +362,39 @@ const SingleClipEditorPortal: React.FC = () => {
     </div>
   );
 
-  const inputCls = 'w-full rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500';
+  const inputCls = 'w-full rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500';
+  // ชุดปุ่มมาตรฐาน — ใช้คลาส .ce-btn-* ใน index.css (คุมสี/hover/active ครบในตัว)
+  const btnPrimary = 'ce-btn ce-btn-lg ce-btn-primary';
+  const btnDanger = 'ce-btn ce-btn-lg ce-btn-danger';
+  const btnPick = 'ce-btn ce-btn-md ce-btn-pick shrink-0';
+  const btnGhost = 'ce-btn ce-btn-md ce-btn-ghost';
 
   return (
     <div className="space-y-4 p-1">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-bold text-zinc-100">🎬 ตัด/สุ่มต่อคลิป (Single Clip Editor)</h2>
-        <div className="flex gap-2">
+      {/* Header / Action bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl p-3"
+        style={{ background: 'var(--bg-glass)', border: '1px solid var(--border-glass)' }}>
+        <div className="flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-xl text-xl"
+            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 8px 20px -8px rgba(99,102,241,0.6)' }}>🎬</div>
+          <div>
+            <h2 className="text-lg font-bold leading-tight text-zinc-100">ตัด/สุ่มต่อคลิป</h2>
+            <p className="text-xs text-zinc-400">Single Clip Editor</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2.5">
           {activeMode === 'jumpcut' && (
-            <button onClick={handleGenerateScript} disabled={isRunning}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-50">
-              💾 สร้างสคริปต์ .command
+            <button onClick={handleGenerateScript} disabled={isRunning} className={btnGhost} title="ดาวน์โหลดเป็นสคริปต์ .command ไว้ดับเบิลคลิกรันเอง">
+              💾 <span className="hidden sm:inline">สร้างสคริปต์</span> .command
             </button>
           )}
           {!isRunning ? (
-            <button onClick={activeMode === 'jumpcut' ? handleRun : handleRunAssembly}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
-              {activeMode === 'jumpcut' ? '▶ ตัดต่อเลย!' : '▶ สุ่มต่อคลิปเลย!'}
+            <button onClick={activeMode === 'jumpcut' ? handleRun : handleRunAssembly} className={btnPrimary}>
+              ▶ {activeMode === 'jumpcut' ? 'ตัดต่อเลย!' : 'สุ่มต่อคลิปเลย!'}
             </button>
           ) : (
-            <button onClick={handleStop}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500">
-              ⛔ หยุด
+            <button onClick={handleStop} className={btnDanger}>
+              <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-white" /> หยุด
             </button>
           )}
         </div>
@@ -354,16 +402,22 @@ const SingleClipEditorPortal: React.FC = () => {
 
       {/* Mode switcher */}
       <div className="grid grid-cols-2 gap-3">
-        {([['jumpcut', '✂️ Jump Cut เดิม', 'ตัดทุกคลิปในโฟลเดอร์ด้วยสูตร Scene1+Scene2'],
-          ['assembly', '🎲 สุ่มต่อคลิปตามเวลา', 'สุ่มหยิบคลิปไม่ซ้ำมาต่อให้ได้ความยาวที่กำหนด']] as const)
-          .map(([mode, title, desc]) => (
-            <button key={mode} onClick={() => setActiveMode(mode)}
-              className={`rounded-xl border p-3 text-left transition ${activeMode === mode
-                ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'}`}>
-              <div className="text-sm font-bold text-zinc-100">{title}</div>
-              <div className="text-xs text-zinc-400">{desc}</div>
-            </button>
-          ))}
+        {([['jumpcut', '✂️', 'Jump Cut', 'ตัดทุกคลิปในโฟลเดอร์ด้วยสูตร Scene1+Scene2'],
+          ['assembly', '🎲', 'สุ่มต่อคลิปตามเวลา', 'สุ่มหยิบคลิปไม่ซ้ำมาต่อให้ได้ความยาวที่กำหนด']] as const)
+          .map(([mode, icon, title, desc]) => {
+            const active = activeMode === mode;
+            return (
+              <button key={mode} onClick={() => setActiveMode(mode)}
+                className={`ce-mode ${active ? 'active' : ''} relative flex items-start gap-3 rounded-xl p-3.5 text-left`}>
+                <span className="text-2xl">{icon}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold" style={{ color: active ? '#93c5fd' : '#f4f4f5' }}>{title}</span>
+                  <span className="mt-0.5 block text-xs leading-snug text-zinc-400">{desc}</span>
+                </span>
+                {active && <span className="absolute right-2.5 top-2.5" style={{ color: '#60a5fa' }}>✓</span>}
+              </button>
+            );
+          })}
       </div>
 
       {/* ===== JUMP CUT MODE ===== */}
@@ -372,16 +426,68 @@ const SingleClipEditorPortal: React.FC = () => {
           {/* ซ้าย */}
           <div className="space-y-4">
             <Card title="📂 เลือกไฟล์ต้นฉบับ">
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <button onClick={async () => { const d = await pickFolder('เลือกโฟลเดอร์ต้นฉบับ'); if (d) setClipPath(d); }}
-                    className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700">📁 ต้นฉบับ</button>
-                  <input className={inputCls} value={clipPath} onChange={(e) => setClipPath(e.target.value)} placeholder="โฟลเดอร์ที่มีคลิปต้นฉบับ" />
+              <div className="space-y-2.5">
+                <div>
+                  <span className="mb-1 block text-xs font-medium text-zinc-400">โฟลเดอร์ต้นฉบับ</span>
+                  <div className="flex gap-2">
+                    <button onClick={async () => { const d = await pickFolder('เลือกโฟลเดอร์ต้นฉบับ'); if (d) setClipPath(d); }}
+                      className={btnPick}>📁 เลือก</button>
+                    <input className={inputCls} value={clipPath} onChange={(e) => setClipPath(e.target.value)} placeholder="โฟลเดอร์ที่มีคลิปต้นฉบับ" />
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={async () => { const d = await pickFolder('เลือกโฟลเดอร์ปลายทาง'); if (d) setOutputPath(d); }}
-                    className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700">📁 ปลายทาง</button>
-                  <input className={inputCls} value={outputPath} onChange={(e) => setOutputPath(e.target.value)} placeholder="โฟลเดอร์เซฟไฟล์ผลลัพธ์" />
+                <div>
+                  <span className="mb-1 block text-xs font-medium text-zinc-400">โฟลเดอร์ปลายทาง</span>
+                  <div className="flex gap-2">
+                    <button onClick={async () => { const d = await pickFolder('เลือกโฟลเดอร์ปลายทาง'); if (d) setOutputPath(d); }}
+                      className={btnPick}>📁 เลือก</button>
+                    <input className={inputCls} value={outputPath} onChange={(e) => setOutputPath(e.target.value)} placeholder="โฟลเดอร์เซฟไฟล์ผลลัพธ์" />
+                  </div>
+                </div>
+
+                {/* ข้ามคลิปที่ไม่มีเสียงพูด — toggle เด่นชัด */}
+                <label className="flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-xs"
+                  style={{
+                    borderColor: skipNoVoice ? 'rgba(34,197,94,0.5)' : 'var(--border-glass)',
+                    background: skipNoVoice ? 'rgba(34,197,94,0.1)' : 'rgba(0,0,0,0.25)',
+                    color: skipNoVoice ? '#bbf7d0' : '#a1a1aa',
+                  }}>
+                  <span className={`ce-toggle-track ${skipNoVoice ? 'on' : ''}`}>
+                    <span className="ce-toggle-knob" />
+                  </span>
+                  <input type="checkbox" checked={skipNoVoice} onChange={(e) => setSkipNoVoice(e.target.checked)} className="sr-only" />
+                  <span>⏭️ ข้ามคลิปที่ <b>ไม่มีเสียงพูด</b> ตอนตัดต่อ <span className="text-zinc-500">(ไม่ต้องตรวจเอง — คลิปเงียบถูกข้ามอัตโนมัติ)</span></span>
+                </label>
+
+                {/* ถอดเสียง → ตั้งชื่อคลิป */}
+                <div className="mt-1 rounded-lg p-2.5"
+                  style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.35)' }}>
+                  <div className="mb-2 text-xs font-semibold" style={{ color: '#c4b5fd' }}>🎤 ถอดเสียง → ตั้งชื่อคลิป (Whisper ในเครื่อง)</div>
+                  <div className="mb-2 grid grid-cols-2 gap-2">
+                    <select className={inputCls} value={transcribeModel} onChange={(e) => setTranscribeModel(e.target.value)} disabled={isRunning}>
+                      <option value="large-v3-turbo">⚡ turbo (เร็ว+แม่น — แนะนำ)</option>
+                      <option value="medium">⚖️ medium (สมดุล)</option>
+                      <option value="small">🐇 small (เร็ว)</option>
+                      <option value="large-v3">🎯 large-v3 (แม่นสุด ช้า)</option>
+                    </select>
+                    <select className={inputCls} value={transcribeLang} onChange={(e) => setTranscribeLang(e.target.value)} disabled={isRunning}>
+                      <option value="auto">🌐 ตรวจภาษาอัตโนมัติ</option>
+                      <option value="th">🇹🇭 ไทย</option>
+                      <option value="en">🇬🇧 อังกฤษ</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleTranscribeRename(true)} disabled={isRunning}
+                      className="ce-btn ce-btn-md ce-btn-ghost flex-1">
+                      👁️ ดูตัวอย่างชื่อ
+                    </button>
+                    <button onClick={() => handleTranscribeRename(false)} disabled={isRunning}
+                      className="ce-btn ce-btn-md ce-btn-transcribe flex-1">
+                      ✅ ถอดเสียง + เปลี่ยนชื่อจริง
+                    </button>
+                  </div>
+                  <div className="mt-1.5 text-[11px] leading-snug text-zinc-500">
+                    เปลี่ยนชื่อ "ไฟล์ต้นฉบับ" ในโฟลเดอร์ต้นฉบับตามสิ่งที่พูด · คลิปไม่มีเสียงจะถูกข้าม · ดูผลใน Log ด้านล่าง
+                  </div>
                 </div>
               </div>
             </Card>
@@ -450,8 +556,9 @@ const SingleClipEditorPortal: React.FC = () => {
               </div>
             </Card>
 
-            <div className="rounded-lg border border-yellow-600/40 bg-yellow-500/10 p-3 text-xs text-yellow-200/90">
+            <div className="rounded-lg p-3 text-xs" style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.4)", color: "#fcd34d" }}>
               💡 ปุ่ม "ตัดต่อเลย!" จะตัด <b>ทุกไฟล์</b> ในโฟลเดอร์ต้นฉบับ แล้วเซฟเป็น <code>ชื่อไฟล์_output.mp4</code> ในโฟลเดอร์ปลายทาง
+              {skipNoVoice && <> · คลิปที่ <b>ไม่มีเสียงพูด</b> จะถูกข้าม</>}
             </div>
           </div>
         </div>
@@ -462,16 +569,22 @@ const SingleClipEditorPortal: React.FC = () => {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="space-y-4">
             <Card title="📂 โฟลเดอร์">
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <button onClick={async () => { const d = await pickFolder('เลือกโฟลเดอร์ต้นทาง'); if (d) setAssemblySourceFolder(d); }}
-                    className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700">📁 ต้นทาง</button>
-                  <input className={inputCls} value={assemblySourceFolder} onChange={(e) => setAssemblySourceFolder(e.target.value)} placeholder="โฟลเดอร์ที่มีคลิปดิบ" />
+              <div className="space-y-2.5">
+                <div>
+                  <span className="mb-1 block text-xs font-medium text-zinc-400">โฟลเดอร์ต้นทาง</span>
+                  <div className="flex gap-2">
+                    <button onClick={async () => { const d = await pickFolder('เลือกโฟลเดอร์ต้นทาง'); if (d) setAssemblySourceFolder(d); }}
+                      className={btnPick}>📁 เลือก</button>
+                    <input className={inputCls} value={assemblySourceFolder} onChange={(e) => setAssemblySourceFolder(e.target.value)} placeholder="โฟลเดอร์ที่มีคลิปดิบ" />
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={async () => { const d = await pickFolder('เลือกโฟลเดอร์ปลายทาง'); if (d) setAssemblyOutputFolder(d); }}
-                    className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700">📁 ปลายทาง</button>
-                  <input className={inputCls} value={assemblyOutputFolder} onChange={(e) => setAssemblyOutputFolder(e.target.value)} placeholder="โฟลเดอร์เซฟผลลัพธ์" />
+                <div>
+                  <span className="mb-1 block text-xs font-medium text-zinc-400">โฟลเดอร์ปลายทาง</span>
+                  <div className="flex gap-2">
+                    <button onClick={async () => { const d = await pickFolder('เลือกโฟลเดอร์ปลายทาง'); if (d) setAssemblyOutputFolder(d); }}
+                      className={btnPick}>📁 เลือก</button>
+                    <input className={inputCls} value={assemblyOutputFolder} onChange={(e) => setAssemblyOutputFolder(e.target.value)} placeholder="โฟลเดอร์เซฟผลลัพธ์" />
+                  </div>
                 </div>
               </div>
             </Card>
@@ -510,7 +623,7 @@ const SingleClipEditorPortal: React.FC = () => {
                 </div>
               )}
             </Card>
-            <div className="rounded-lg border border-yellow-600/40 bg-yellow-500/10 p-3 text-xs text-yellow-200/90">
+            <div className="rounded-lg p-3 text-xs" style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.4)", color: "#fcd34d" }}>
               💡 ระบบจะใช้คลิป "ใหม่" ให้ครบทุกไฟล์ก่อน (กันซ้ำข้ามรอบ) เมื่อครบจะเริ่มรอบใหม่ — กด "ล้างประวัติ" เพื่อรีเซ็ต
             </div>
           </div>
@@ -518,16 +631,25 @@ const SingleClipEditorPortal: React.FC = () => {
       )}
 
       {/* ===== LOG PANEL ===== */}
-      <Card title="📋 Log Output" className="!bg-black/80">
-        <div className="h-64 overflow-y-auto rounded bg-black p-3 font-mono text-xs leading-relaxed text-green-400">
-          {runLog.length === 0 ? <span className="text-zinc-600">— ยังไม่มี log —</span>
+      <Card className="!bg-black/80">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-zinc-200">📋 Log Output</h3>
+          {(() => {
+            const badge = {
+              running: { t: '⏳ กำลังทำงาน', c: 'ce-badge ce-badge-run' },
+              done: { t: '✅ เสร็จแล้ว', c: 'ce-badge ce-badge-done' },
+              error: { t: '❌ ผิดพลาด', c: 'ce-badge ce-badge-err' },
+              idle: { t: '— ว่าง —', c: 'ce-badge ce-badge-idle' },
+            }[runStatus];
+            return <span className={badge.c}>{badge.t}</span>;
+          })()}
+        </div>
+        <div className="h-64 overflow-y-auto rounded-lg bg-black p-3 font-mono text-xs leading-relaxed text-green-400">
+          {runLog.length === 0 ? <span className="text-zinc-600">— ยังไม่มี log — กดปุ่มเขียวด้านบนเพื่อเริ่ม</span>
             : runLog.map((l, i) => (
               <div key={i} className={l.startsWith('[ERROR]') ? 'text-red-400' : ''}>{l}</div>
             ))}
           <div ref={logEndRef} />
-        </div>
-        <div className="mt-2 text-xs text-zinc-500">
-          สถานะ: {runStatus === 'running' ? '⏳ กำลังทำงาน' : runStatus === 'done' ? '✅ เสร็จ' : runStatus === 'error' ? '❌ ผิดพลาด' : '— ว่าง —'}
         </div>
       </Card>
     </div>

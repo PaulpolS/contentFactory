@@ -1,0 +1,8 @@
+# Python dependencies สำหรับ scrapers + graphic generator
+# ติดตั้งด้วย:  pip3 install -r scripts/requirements.txt
+Pillow
+requests
+
+# ฟีเจอร์ "ถอดเสียง → ตั้งชื่อคลิป" (Single Clip Editor) ใช้ Whisper รันในเครื่อง
+# หมายเหตุ: ดึง PyTorch มาด้วย (ไฟล์ใหญ่ ~2GB) — ถ้าไม่ใช้ฟีเจอร์นี้ ลบบรรทัดล่างได้
+openai-whisper

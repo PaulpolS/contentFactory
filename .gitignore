@@ -1,3 +1,6 @@
+# Scraped third-party data (ห้าม commit — มีข้อมูลส่วนตัวของผู้อื่น)
+scrapes/
+
 # Logs
 logs
 *.log
@@ -17,6 +20,15 @@ node_modules/
 # Single Clip Editor — cache ความยาวคลิป (สร้างตอนรัน)
 .durations_cache.json
 **/.durations_cache.json
+
+# ค่าเฉพาะเครื่อง (ห้าม commit — แต่ละเครื่องตั้งเอง)
+media-location.txt
+.setup_complete
+
+# โฟลเดอร์ media หนัก (เป็น symlink ออกไปนอกโปรแกรม)
+content_vault/generated_graphics
+content_vault/downloaded_media
+content_vault/logos
 
 # Build outputs
 dist/

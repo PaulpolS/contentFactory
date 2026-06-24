@@ -75,6 +75,7 @@ export interface SingleClipConfig {
   scEffectsS2: EffectMap; // Scene 2
   transType: string;
   transDur: number;
+  skipNoAudio?: boolean;  // true = ข้ามคลิปที่ไม่มีเสียงพูด (ไม่มี audio stream) ไม่เรนเดอร์
 }
 
 const fx = (n: number) => n.toFixed(3);
@@ -137,7 +138,14 @@ export function buildBashScript(cfg: SingleClipConfig): string {
   const cuts = cfg.cutsPreview;
   const nCuts = cuts.length;
   const s1Dur = Math.max(0.01, cfg.scene1End - cfg.scene1Start);
+  const s2Dur = Math.max(0.01, cuts.reduce((a, c) => a + c.dur, 0));
   const hasBgm = !!(cfg.bgmPath && cfg.bgmPath.trim());
+  // index ของ silent-audio input (anullsrc) — ใส่ไว้ท้ายสุดเสมอ
+  // ใช้แทนเสียงคลิปเมื่อคลิป "ไม่มี audio stream" (เช่น คลิป AI-generated) เพื่อกัน
+  // error "Stream specifier ':a' ... matches no streams"
+  const silentIdx = nCuts + 1 + (hasBgm ? 1 : 0);
+
+  const aformat = 'aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo';
 
   // --- (A) Header + probe ---
   const head: string[] = [
@@ -158,6 +166,15 @@ export function buildBashScript(cfg: SingleClipConfig): string {
     'cl="stereo"',
     'zoom_dur="${duration}"',
     'export FREI0R_PATH="/opt/homebrew/lib/frei0r-1:/usr/local/lib/frei0r-1:${FREI0R_PATH:-}"',
+    // ตรวจว่าคลิปมี audio stream ไหม — ถ้าไม่มีจะใช้ความเงียบ (anullsrc) แทนเสียง Scene 1
+    'has_audio=$(ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$CLIP" | head -n1)',
+    'if [ -n "$has_audio" ]; then',
+    `  S1A="[0:a]atrim=${fx(cfg.scene1Start)}:${fx(cfg.scene1End)},asetpts=PTS-STARTPTS,${aformat}[s1a]"`,
+    '  echo "🔊 คลิปมีเสียง — ใช้เสียงต้นฉบับใน Scene 1"',
+    'else',
+    `  S1A="[${silentIdx}:a]atrim=0:${fx(s1Dur)},asetpts=PTS-STARTPTS,${aformat}[s1a]"`,
+    '  echo "🔇 คลิปไม่มีเสียง — ใช้ความเงียบแทน Scene 1"',
+    'fi',
   ];
 
   // --- (B) input args ---
@@ -165,11 +182,12 @@ export function buildBashScript(cfg: SingleClipConfig): string {
   for (const c of cuts) inputs.push(`-ss ${fx(c.ts)} -t ${fx(c.dur)} -i "$CLIP"`);
   const bgmIdx = nCuts + 1;
   if (hasBgm) inputs.push('-i "$BGM"');
+  // silent-audio input (ใช้แทนเสียงคลิปที่ mute/ไม่มีเสียง) — ต้องอยู่ index = silentIdx
+  inputs.push('-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100');
 
   // --- (C) filter_complex ---
   const fc: string[] = [];
   const ctx = { fps, zoomDur, vidW: '${vid_w}', vidH: '${vid_h}' };
-  const aformat = 'aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo';
 
   // Scene 1 video
   fc.push(`[0:v]trim=${fx(cfg.scene1Start)}:${fx(cfg.scene1End)},setpts=PTS-STARTPTS[s1v_raw]`);
@@ -193,12 +211,12 @@ export function buildBashScript(cfg: SingleClipConfig): string {
   fc.push(`[s1_final][s2v]xfade=transition=${cfg.transType}:duration=${fx(cfg.transDur)}:offset=${fx(offset)}[vout]`);
 
   // Audio
-  fc.push(`[0:a]atrim=${fx(cfg.scene1Start)}:${fx(cfg.scene1End)},asetpts=PTS-STARTPTS,${aformat}[s1a]`);
-  for (let i = 0; i < nCuts; i++) {
-    fc.push(`[${i + 1}:a]volume=0,asetpts=PTS-STARTPTS,${aformat}[ca${i}]`);
-  }
-  const caLabels = Array.from({ length: nCuts }, (_, i) => `[ca${i}]`).join('');
-  fc.push(`${caLabels}concat=n=${nCuts}:v=0:a=1[s2a]`);
+  // Scene 1 audio: ${S1A} ถูก bash expand ตอนรัน — เลือกเสียงจริง (ถ้าคลิปมี audio)
+  // หรือความเงียบจาก anullsrc (ถ้าคลิปไม่มี audio) ดูส่วน head (has_audio)
+  fc.push('${S1A}');
+  // Scene 2 audio: jump cuts ถูก mute อยู่แล้ว → ใช้ความเงียบยาวเท่าผลรวม cut ทั้งหมด
+  // (ดึงจาก anullsrc ตัวเดียว ไม่ต้องพึ่ง [i:a] ของแต่ละ cut อีก — กัน error คลิปไม่มีเสียง)
+  fc.push(`[${silentIdx}:a]atrim=0:${fx(s2Dur)},asetpts=PTS-STARTPTS,${aformat}[s2a]`);
   fc.push(`[s1a][s2a]concat=n=2:v=0:a=1[basea]`);
 
   // BGM mixing
@@ -228,5 +246,17 @@ export function buildBashScript(cfg: SingleClipConfig): string {
     'echo "✅ done: $OUTPUT"',
   ];
 
-  return head.join('\n') + '\n\n' + cmd.join('\n') + '\n';
+  // ข้ามคลิปที่ไม่มีเสียงพูด: ถ้า has_audio ว่าง (ไม่มี audio stream) → ไม่เรนเดอร์ไฟล์นี้
+  // ใช้ has_audio ที่ probe ไว้แล้วในส่วน head
+  const body = cfg.skipNoAudio
+    ? [
+        'if [ -z "$has_audio" ]; then',
+        '  echo "⏭️ ข้าม (ไม่มีเสียงพูด): $CLIP"',
+        'else',
+        ...cmd.map((l) => '  ' + l),
+        'fi',
+      ]
+    : cmd;
+
+  return head.join('\n') + '\n\n' + body.join('\n') + '\n';
 }

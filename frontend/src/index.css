@@ -1078,6 +1078,107 @@ input.h-7 {
   box-sizing: border-box !important;
 }
 
+/* ============================================================================
+   Single Clip Editor — ปุ่ม/คอนโทรลเฉพาะหน้านี้ (สีชัด กดง่าย user-friendly)
+   เขียนสไตล์ครบในตัว (padding/สี/hover/active) ไม่พึ่ง utility class ภายนอก
+   เพราะ index.css นี้นิยาม utility เองแบบจำกัด (ไม่มี gradient/sky/violet ฯลฯ)
+   ============================================================================ */
+.ce-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  border: none;
+  line-height: 1.1;
+  transition: filter 0.15s ease, transform 0.1s ease, background 0.15s ease;
+}
+.ce-btn:active { transform: scale(0.97); }
+.ce-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.ce-btn-lg { padding: 0.75rem 1.5rem; font-size: 1rem; }
+.ce-btn-md { padding: 0.6rem 1rem; font-size: 0.85rem; }
+
+.ce-btn-primary {
+  background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 22px -8px rgba(34, 197, 94, 0.65) !important;
+}
+.ce-btn-primary:hover { filter: brightness(1.1); }
+
+.ce-btn-danger {
+  background: linear-gradient(135deg, #fb7185, #e11d48) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 22px -8px rgba(244, 63, 94, 0.65) !important;
+}
+.ce-btn-danger:hover { filter: brightness(1.1); }
+
+.ce-btn-transcribe {
+  background: linear-gradient(135deg, #8b5cf6, #d946ef) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 18px -8px rgba(139, 92, 246, 0.6) !important;
+}
+.ce-btn-transcribe:hover { filter: brightness(1.1); }
+
+.ce-btn-pick {
+  background: rgba(37, 99, 235, 0.18) !important;
+  color: #93c5fd !important;
+  border: 1px solid rgba(37, 99, 235, 0.55) !important;
+}
+.ce-btn-pick:hover { background: rgba(37, 99, 235, 0.32) !important; }
+
+.ce-btn-ghost {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #e4e4e7 !important;
+  border: 1px solid var(--border-glass-bright, #3f3f46) !important;
+}
+.ce-btn-ghost:hover { background: rgba(255, 255, 255, 0.12) !important; }
+
+/* toggle switch (ข้ามคลิปไม่มีเสียงพูด) */
+.ce-toggle-track {
+  position: relative;
+  height: 1.25rem;
+  width: 2.25rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: #52525b;
+  transition: background 0.15s ease;
+}
+.ce-toggle-track.on { background: #22c55e; }
+.ce-toggle-knob {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  height: 1rem;
+  width: 1rem;
+  border-radius: 9999px;
+  background: #fff;
+  transition: left 0.15s ease;
+}
+.ce-toggle-track.on .ce-toggle-knob { left: 1.125rem; }
+
+/* mode switcher (Jump Cut / สุ่มต่อคลิป) */
+.ce-mode {
+  border: 2px solid var(--border-glass, #27272a);
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.ce-mode:hover { border-color: var(--border-glass-bright, #3f3f46); }
+.ce-mode.active {
+  border-color: #2563eb !important;
+  background: rgba(37, 99, 235, 0.14) !important;
+  box-shadow: 0 8px 20px -10px rgba(37, 99, 235, 0.5);
+}
+
+/* status badge ใน Log */
+.ce-badge { border-radius: 9999px; padding: 0.25rem 0.75rem; font-size: 0.75rem; font-weight: 600; border: 1px solid transparent; }
+.ce-badge-run { background: rgba(245, 158, 11, 0.15); color: #fcd34d; border-color: rgba(245, 158, 11, 0.4); }
+.ce-badge-done { background: rgba(34, 197, 94, 0.15); color: #86efac; border-color: rgba(34, 197, 94, 0.4); }
+.ce-badge-err { background: rgba(244, 63, 94, 0.15); color: #fda4af; border-color: rgba(244, 63, 94, 0.4); }
+.ce-badge-idle { background: rgba(255, 255, 255, 0.04); color: #a1a1aa; border-color: #3f3f46; }
+
 
 
 

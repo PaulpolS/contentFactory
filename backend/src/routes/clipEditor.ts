@@ -29,6 +29,28 @@ function getFFprobePath(): string {
   return 'ffprobe';
 }
 
+// python ที่มี whisper ติดตั้งอยู่ (CLI whisper อยู่บน framework python 3.11)
+function getPythonPath(): string {
+  const candidates = [
+    '/Library/Frameworks/Python.framework/Versions/3.11/bin/python3',
+    '/opt/homebrew/bin/python3',
+    '/usr/local/bin/python3',
+  ];
+  for (const p of candidates) if (fs.existsSync(p)) return p;
+  return 'python3';
+}
+
+// หา path ของ scripts/transcribe_clips.py (backend cwd มักเป็น .../backend)
+function getTranscribeScriptPath(): string | null {
+  const candidates = [
+    path.join(process.cwd(), '..', 'scripts', 'transcribe_clips.py'),
+    path.join(process.cwd(), 'scripts', 'transcribe_clips.py'),
+    path.join(__dirname, '..', '..', '..', 'scripts', 'transcribe_clips.py'),
+  ];
+  for (const p of candidates) if (fs.existsSync(p)) return p;
+  return null;
+}
+
 // PATH ที่ inject ให้ทุก spawn (ให้ ffmpeg/ffprobe/frei0r หาเจอ)
 const FF_PATH = `/opt/homebrew/opt/ffmpeg-full/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
 
@@ -386,6 +408,166 @@ router.post('/build-random-clip-assembly', async (req: Request, res: Response) =
   } catch (e: any) {
     if (!finished) fail(e?.message || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ');
   }
+});
+
+// ============================================================================
+//  POST /api/clip-editor/transcribe-rename  — ถอดเสียงคลิป → ตั้งชื่อไฟล์ (SSE)
+//  ใช้ Whisper (รันในเครื่อง) ถอดสิ่งที่พูดในคลิป แล้วเปลี่ยนชื่อไฟล์ต้นฉบับ
+//  - ข้ามคลิปที่ไม่มีเสียงอัตโนมัติ
+//  - rename แบบกันชนกัน (ไม่ทับไฟล์เดิม) และ log ทุกการเปลี่ยนชื่อ
+// ============================================================================
+
+// แปลงข้อความที่ถอดได้ → ชื่อไฟล์ปลอดภัย (รองรับไทย+อังกฤษ)
+function makeNameFromText(text: string, maxWords = 12, maxChars = 60): string {
+  let cleaned = String(text || '')
+    .replace(/[\n\r\t]+/g, ' ')
+    .replace(/[^a-zA-Z0-9ก-๙\s_-]/g, '') // ตัดอักขระที่ใช้ในชื่อไฟล์ไม่ได้/ไม่ต้องการ
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return '';
+  const words = cleaned.split(' ');
+  if (words.length > 1) cleaned = words.slice(0, maxWords).join(' ');
+  if (cleaned.length > maxChars) cleaned = cleaned.slice(0, maxChars).trim();
+  return cleaned
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[_-]+|[_-]+$/g, '');
+}
+
+router.post('/transcribe-rename', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  if (typeof (res as any).flushHeaders === 'function') (res as any).flushHeaders();
+
+  let finished = false;
+  const send = (o: object) => {
+    if (!res.writableEnded) {
+      try { res.write('data: ' + JSON.stringify(o) + '\n\n'); } catch { /* ignore */ }
+    }
+  };
+  const endErr = (text: string) => { send({ type: 'error', text }); if (!res.writableEnded) res.end(); finished = true; };
+
+  const body = req.body || {};
+  const folder: string = body.folder || '';
+  const model: string = (body.model || 'large-v3-turbo').toString();
+  const language: string = (body.language || 'auto').toString();
+  const dryRun: boolean = !!body.dryRun;
+  const prefix: string = (body.prefix || '').toString();
+
+  if (!folder || !fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) {
+    return endErr('ไม่พบโฟลเดอร์ต้นฉบับ');
+  }
+  const scriptPath = getTranscribeScriptPath();
+  if (!scriptPath) return endErr('ไม่พบ scripts/transcribe_clips.py');
+
+  // กันชน: เก็บชื่อที่ "จะใช้" ในรอบนี้ไว้ด้วย (ไฟล์ที่ยังไม่ถูก rename จริงตอน dryRun)
+  const reserved = new Set<string>();
+  const pickUniqueName = (base: string, ext: string, original: string): string => {
+    let candidate = base + ext;
+    if (candidate === original) return original; // ชื่อเดิมอยู่แล้ว
+    let i = 2;
+    while (fs.existsSync(path.join(folder, candidate)) || reserved.has(candidate.toLowerCase())) {
+      candidate = `${base}_${i}${ext}`;
+      i++;
+    }
+    return candidate;
+  };
+
+  const python = getPythonPath();
+  const env = { ...process.env, PATH: FF_PATH };
+  send({ type: 'log', text: `🎤 เริ่มถอดเสียง (โมเดล: ${model}, ภาษา: ${language})${dryRun ? ' — โหมดดูตัวอย่าง (ยังไม่เปลี่ยนชื่อจริง)' : ''}` });
+
+  const proc = spawn(python, [scriptPath, folder, model, language], { stdio: ['ignore', 'pipe', 'pipe'], env });
+
+  let renamed = 0, skipped = 0, failed = 0;
+  let stdoutBuf = '';
+
+  const handleObj = (obj: any) => {
+    if (!obj || typeof obj !== 'object') return;
+    switch (obj.type) {
+      case 'log':
+        send({ type: 'log', text: obj.text || '' });
+        break;
+      case 'progress':
+        send({ type: 'log', text: `🎧 (${obj.index}/${obj.total}) ${obj.file}` });
+        break;
+      case 'skip':
+        skipped++;
+        send({ type: 'log', text: `⏭️ ข้าม "${obj.file}" — ${obj.reason === 'no_audio' ? 'คลิปไม่มีเสียง' : obj.reason}` });
+        break;
+      case 'text': {
+        const original: string = obj.file;
+        const ext = path.extname(original);
+        const base = makeNameFromText(obj.text || '');
+        if (!base) {
+          failed++;
+          send({ type: 'log', text: `⚠️ "${original}" — ถอดเสียงไม่ได้ความ คงชื่อเดิมไว้` });
+          break;
+        }
+        const finalBase = prefix ? `${prefix}${base}` : base;
+        const newName = pickUniqueName(finalBase, ext, original);
+        if (newName === original) {
+          send({ type: 'log', text: `✓ "${original}" — ชื่อเหมาะสมอยู่แล้ว` });
+          break;
+        }
+        reserved.add(newName.toLowerCase());
+        if (dryRun) {
+          renamed++;
+          send({ type: 'rename', file: original, newName, dryRun: true });
+          send({ type: 'log', text: `👁️ "${original}"  →  "${newName}"  (ตัวอย่าง)` });
+        } else {
+          try {
+            fs.renameSync(path.join(folder, original), path.join(folder, newName));
+            renamed++;
+            send({ type: 'rename', file: original, newName, dryRun: false });
+            send({ type: 'log', text: `✅ "${original}"  →  "${newName}"` });
+          } catch (e: any) {
+            failed++;
+            send({ type: 'log', text: `❌ เปลี่ยนชื่อ "${original}" ไม่สำเร็จ: ${e.message}` });
+          }
+        }
+        break;
+      }
+      case 'all_done':
+        break;
+      case 'error':
+        send({ type: 'log', text: `[ERROR] ${obj.text || ''}` });
+        break;
+    }
+  };
+
+  proc.stdout.on('data', (d: Buffer) => {
+    stdoutBuf += d.toString();
+    const lines = stdoutBuf.split('\n');
+    stdoutBuf = lines.pop() || '';
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t) continue;
+      try { handleObj(JSON.parse(t)); } catch { send({ type: 'log', text: t }); }
+    }
+  });
+  proc.stderr.on('data', (d: Buffer) =>
+    d.toString().split('\n').forEach(l => l.trim() && send({ type: 'log', text: l })));
+
+  proc.on('close', (code) => {
+    if (finished) return; finished = true;
+    if (stdoutBuf.trim()) { try { handleObj(JSON.parse(stdoutBuf.trim())); } catch { /* ignore */ } }
+    if (code === 0) {
+      send({ type: 'done', renamed, skipped, failed, dryRun });
+      send({ type: 'log', text: `🎉 เสร็จ — ${dryRun ? 'ดูตัวอย่าง' : 'เปลี่ยนชื่อ'} ${renamed} ไฟล์, ข้าม ${skipped}, พลาด ${failed}` });
+    } else {
+      send({ type: 'error', text: `transcribe process exited (code ${code})` });
+    }
+    if (!res.writableEnded) res.end();
+  });
+  proc.on('error', (err: any) => {
+    if (finished) return; finished = true;
+    send({ type: 'error', text: err.message });
+    if (!res.writableEnded) res.end();
+  });
+
+  res.on('close', () => { if (!finished) { try { proc.kill('SIGKILL'); } catch { /* ignore */ } } });
 });
 
 export default router;

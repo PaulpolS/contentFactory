@@ -107,6 +107,37 @@ function autoTitleFromFileName(fileName: string) {
   return lines.slice(0, 2).join('\n');
 }
 
+// ── พรีวิวพาดหัวให้ "ตรงกับ output จริง" ──
+// มิเรอร์ logic ของ backend (makeTitle → wrapTitleLine(26) → 3 บรรทัด)
+// เพื่อให้การตัดบรรทัด + ขนาดฟอนต์ auto ในพรีวิวตรงกับวิดีโอที่เรนเดอร์ออกมา
+function wrapTitleLineForPreview(line: string, maxChars = 26): string[] {
+  const words = line.split(' ').filter(Boolean);
+  if (words.length <= 1) return [line];
+  const out: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (Array.from(next).length > maxChars && current && out.length < 2) {
+      out.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  if (current) out.push(current);
+  return out;
+}
+
+function wrapHeadlineForPreview(text: string): string {
+  const normalized = String(text || '')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map(l => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  return normalized.flatMap(l => wrapTitleLineForPreview(l, 26)).slice(0, 3).join('\n');
+}
+
 function readSavedTitleTexts(): Record<string, string> {
   try {
     const parsed = JSON.parse(localStorage.getItem(AVATAR_VERTICAL_KEYS.titleTexts) || '{}');
@@ -174,6 +205,34 @@ export function AvatarVerticalClipPortal() {
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+
+  // ── ลากปรับตำแหน่งพาดหัวบนพรีวิว (อ้างอิงกรอบจอ 9:16 = 1920px สูง) ──
+  const previewScreenRef = useRef<HTMLDivElement | null>(null);
+  const [isDraggingHeadline, setIsDraggingHeadline] = useState(false);
+  const startHeadlineDrag = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const screen = previewScreenRef.current;
+    if (!screen) return;
+    setIsDraggingHeadline(true);
+    // เก็บ offset ระหว่างจุดที่จับกับขอบบนของป้าย เพื่อให้ลากลื่น ไม่กระโดดตอนจับ
+    const bannerTop = (e.currentTarget as HTMLElement).getBoundingClientRect().top;
+    const grabOffset = e.clientY - bannerTop;
+    const moveTo = (clientY: number) => {
+      const rect = screen.getBoundingClientRect();
+      if (rect.height <= 0) return;
+      const ratio = (clientY - grabOffset - rect.top) / rect.height; // 0 (บนสุด) → 1 (ล่างสุด)
+      const y = Math.round(ratio * 1920);
+      setHeadlineYPosition(Math.max(50, Math.min(1500, y)));         // คุมช่วงเดียวกับสไลเดอร์
+    };
+    const onMove = (ev: PointerEvent) => moveTo(ev.clientY);
+    const onUp = () => {
+      setIsDraggingHeadline(false);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
 
   useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.avatarFolder, avatarFolder); }, [avatarFolder]);
   useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.footageFolder, footageFolder); }, [footageFolder]);
@@ -1905,80 +1964,99 @@ export function AvatarVerticalClipPortal() {
               <span>📱</span> พรีวิวหน้าจอ 9:16 แบบเรียลไทม์
             </h2>
             
-            <div className="relative w-full max-w-[330px] aspect-[9/16] rounded-[36px] p-2.5 bg-gray-900 border-[6px] border-gray-800 shadow-2xl overflow-hidden group">
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 w-24 h-4.5 bg-black rounded-full z-30 flex items-center justify-between px-3">
-                <div className="w-1.5 h-1.5 bg-gray-800 rounded-full"></div>
-                <div className="w-3.5 h-1.5 bg-gray-800 rounded-full"></div>
+            <div className="relative shadow-2xl overflow-hidden"
+              style={{ width: '100%', maxWidth: 320, aspectRatio: '9 / 16', borderRadius: 36, padding: 10, background: '#0a0a0a', border: '6px solid #1c1c20' }}>
+              {/* notch */}
+              <div className="absolute left-1/2 z-30 flex items-center justify-between"
+                style={{ top: 14, transform: 'translateX(-50%)', width: 86, height: 16, background: '#000', borderRadius: 9999, paddingLeft: 12, paddingRight: 12 }}>
+                <span style={{ width: 6, height: 6, background: '#27272a', borderRadius: 9999 }} />
+                <span style={{ width: 14, height: 6, background: '#27272a', borderRadius: 9999 }} />
               </div>
-              
-              <div 
-                className="relative w-full h-full rounded-[28px] overflow-hidden bg-black flex flex-col select-none"
-                style={{ containerType: 'inline-size' }}
+
+              <div
+                ref={previewScreenRef}
+                className="relative overflow-hidden bg-black flex flex-col select-none"
+                style={{ width: '100%', height: '100%', borderRadius: 28, containerType: 'inline-size' }}
               >
                 {isVerticalAvatar ? (
-                  <div className="absolute inset-0 w-full h-full relative">
+                  <div className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/60 to-purple-900/60 flex items-center justify-center text-center">
-                      <div className="opacity-35 text-[10px] font-bold text-gray-300">
+                      <div className="font-bold text-gray-300" style={{ opacity: 0.35, fontSize: '3cqw' }}>
                         🎬 B-Roll Background (เต็มจอ)
                       </div>
                     </div>
-                    
-                    <div className="absolute inset-x-0 bottom-0 h-[60%] flex items-end justify-center">
+                    <div className="absolute inset-x-0 bottom-0 flex items-end justify-center" style={{ height: '60%' }}>
                       {useGreenScreenKeying ? (
-                        <div className="relative w-full h-full flex items-end justify-center overflow-hidden">
-                          <div className="absolute bottom-0 w-[80%] h-[90%] bg-green-500/20 border-t-2 border-x-2 border-green-500/50 rounded-t-full flex items-center justify-center">
-                            <span className="text-[11px] font-bold text-green-400 drop-shadow">Chroma Keyed Avatar</span>
-                          </div>
+                        <div className="absolute bottom-0 bg-green-500/20 flex items-center justify-center"
+                          style={{ width: '80%', height: '90%', border: '2px solid rgba(34,197,94,0.5)', borderBottom: 'none', borderTopLeftRadius: 9999, borderTopRightRadius: 9999 }}>
+                          <span className="font-bold text-green-400" style={{ fontSize: '3.2cqw' }}>Chroma Keyed Avatar</span>
                         </div>
                       ) : (
-                        <div className="absolute bottom-0 w-full h-full bg-purple-950/40 border-t border-purple-500/30 flex items-center justify-center">
-                          <span className="text-[11px] font-bold text-purple-300">Avatar Overlay (เต็มจอ)</span>
+                        <div className="absolute bottom-0 bg-purple-950/40 flex items-center justify-center"
+                          style={{ width: '100%', height: '100%', borderTop: '1px solid rgba(168,85,247,0.3)' }}>
+                          <span className="font-bold text-purple-300" style={{ fontSize: '3.2cqw' }}>Avatar Overlay (เต็มจอ)</span>
                         </div>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <div className="absolute inset-0 w-full h-full flex flex-col">
-                    <div className="h-[54%] w-full bg-gradient-to-br from-indigo-950 to-indigo-900 flex flex-col items-center justify-center relative border-b border-white/10">
-                      <div className="text-[10px] font-bold text-indigo-300 opacity-60">🎬 B-Roll (วิดีโอประกอบ)</div>
-                      <div className="text-[8px] text-indigo-400/50 mt-1">ขนาด 1080 x 1040 (54%)</div>
+                  <div className="absolute inset-0 flex flex-col" style={{ width: '100%', height: '100%' }}>
+                    <div className="w-full bg-gradient-to-br from-indigo-950 to-indigo-900 flex flex-col items-center justify-center relative"
+                      style={{ height: '54.17%', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                      <div className="font-bold text-indigo-300" style={{ opacity: 0.6, fontSize: '3cqw' }}>🎬 B-Roll (วิดีโอประกอบ)</div>
+                      <div className="text-indigo-400/50" style={{ marginTop: 4, fontSize: '2.4cqw' }}>1080 × 1040 (54%)</div>
                     </div>
-                    <div className="h-[46%] w-full bg-gradient-to-tr from-purple-950 to-purple-900 flex flex-col items-center justify-center relative">
-                      <div className="text-[10px] font-bold text-purple-300 opacity-60">👤 Avatar (คลิปพูดหลัก)</div>
-                      <div className="text-[8px] text-purple-400/50 mt-1">ขนาด 1080 x 880 (46%)</div>
+                    <div className="w-full bg-gradient-to-tr from-purple-950 to-purple-900 flex flex-col items-center justify-center relative"
+                      style={{ height: '45.83%' }}>
+                      <div className="font-bold text-purple-300" style={{ opacity: 0.6, fontSize: '3cqw' }}>👤 Avatar (คลิปพูดหลัก)</div>
+                      <div className="text-purple-400/50" style={{ marginTop: 4, fontSize: '2.4cqw' }}>1080 × 880 (46%)</div>
                     </div>
                   </div>
                 )}
-                
+
                 {(() => {
                   const renderingRow = items.find(q => q.status === 'rendering');
-                  const text = renderingRow 
+                  const rawText = renderingRow
                     ? (titleTexts[renderingRow.name] || autoTitleFromFileName(renderingRow.name))
-                    : (items.length > 0 
+                    : (items.length > 0
                         ? (titleTexts[items[0].name] || autoTitleFromFileName(items[0].name))
                         : "พาดหัวดึงดูดความสนใจ\nจะขึ้นแสดงที่นี่");
-                  
-                  // Dynamic font size simulation if font size is auto (0)
+                  // ตัดบรรทัดแบบเดียวกับ backend → พรีวิวตรงกับวิดีโอจริง (WYSIWYG)
+                  const text = wrapHeadlineForPreview(rawText);
+
+                  // ถ้าฟอนต์ auto (0) คำนวณขนาดจากบรรทัดที่ตัดแล้ว (สูตรเดียวกับ backend)
                   let simulatedFontSize = headlineFontSize;
                   if (simulatedFontSize === 0) {
                     const lines = text.split('\n').filter(Boolean);
                     const longestLine = Math.max(...lines.map(line => Array.from(line).length), 1);
                     simulatedFontSize = Math.max(42, Math.min(82, Math.floor(1500 / longestLine)));
                   }
-                  
+
                   return (
-                    <div 
-                      className="absolute left-1/2 -translate-x-1/2 w-[90%] text-center pointer-events-none transition-all duration-75 z-10"
+                    <div
+                      onPointerDown={startHeadlineDrag}
+                      title="ลากเพื่อเลื่อนตำแหน่งพาดหัว"
+                      className="absolute left-1/2 text-center z-10"
                       style={{
                         top: `${(headlineYPosition / 1920) * 100}%`,
+                        transform: 'translateX(-50%)',
+                        width: '92%',
                         display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center',
+                        cursor: isDraggingHeadline ? 'grabbing' : 'grab',
+                        touchAction: 'none',
+                        transition: isDraggingHeadline ? 'none' : 'top 0.06s ease',
                       }}
                     >
-                      <div 
-                        className="font-extrabold leading-snug whitespace-pre-line break-words max-w-[90%] shadow-lg border text-center flex items-center justify-center"
-                        style={getPreviewBannerStyle(simulatedFontSize)}
+                      <div
+                        className="font-extrabold leading-snug whitespace-pre-line break-words text-center flex items-center justify-center"
+                        style={{
+                          ...getPreviewBannerStyle(simulatedFontSize),
+                          maxWidth: '100%',
+                          outline: isDraggingHeadline ? '2px dashed rgba(168,85,247,0.9)' : 'none',
+                          outlineOffset: '2px',
+                        }}
                       >
                         {text}
                       </div>
@@ -1991,12 +2069,20 @@ export function AvatarVerticalClipPortal() {
                     {subtitleLanguage === 'en' ? '[Simulated Subtitles Here]' : '[คำบรรยายจะขึ้นโชว์ที่นี่]'}
                   </div>
                 )}
-                
+
+                {/* badge แสดงค่า Y ขณะลาก */}
+                {isDraggingHeadline && (
+                  <div className="absolute z-30 font-bold text-white"
+                    style={{ top: 8, left: '50%', transform: 'translateX(-50%)', background: 'rgba(139,92,246,0.95)', padding: '4px 10px', borderRadius: 9999, fontSize: '3cqw', boxShadow: '0 4px 12px rgba(0,0,0,0.4)' }}>
+                    Y = {headlineYPosition}px
+                  </div>
+                )}
+
               </div>
             </div>
-            
-            <div className="text-[10px] text-gray-500 mt-3 text-center leading-normal max-w-[240px]">
-              ขยับสไลเดอร์ <b>ตำแหน่ง Y</b> เพื่อเลื่อนตำแหน่งพาดหัวขึ้น-ลงแบบเรียลไทม์
+
+            <div className="text-gray-500 mt-3 text-center leading-normal" style={{ fontSize: 11, maxWidth: 260 }}>
+              🖱️ <b>ลากพาดหัว</b> บนจอเพื่อจัดตำแหน่งได้เลย หรือใช้สไลเดอร์ <b>ตำแหน่ง Y</b> ก็ได้ — พรีวิวตรงกับวิดีโอจริง
             </div>
           </div>
 

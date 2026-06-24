@@ -805,8 +805,88 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
     localStorage.setItem('fb_lifetime_page_ids', JSON.stringify(updatedLifetime));
   };
 
+  // ===== โฟลเดอร์เก็บรูป/Media (แยกต่อเครื่อง) =====
+  const [mediaRoot, setMediaRoot] = useState('');
+  const [mediaStatus, setMediaStatus] = useState<'ok' | 'broken' | 'unset' | 'loading'>('loading');
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [mediaMsg, setMediaMsg] = useState('');
+
+  const loadMediaLocation = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/vault/media-location`);
+      const data = await res.json();
+      setMediaRoot(data.mediaRoot || '');
+      setMediaStatus(data.status || 'unset');
+    } catch { setMediaStatus('unset'); }
+  };
+  useEffect(() => { loadMediaLocation(); }, []);
+
+  const changeMediaFolder = async () => {
+    try {
+      const pick = await fetch(`${API_BASE}/pick-folder`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'เลือกโฟลเดอร์เก็บรูป/media ของเครื่องนี้' }),
+      });
+      const picked = await pick.json();
+      if (!picked.success || !picked.dir) return;
+      if (!confirm(`ตั้งโฟลเดอร์ media เป็น:\n${picked.dir}\n\nรูปที่มีอยู่จะถูกย้ายไปที่นี่ (ปลอดภัย: ก็อปแล้วเช็คครบค่อยลบของเดิม) ดำเนินการต่อ?`)) return;
+      setMediaBusy(true); setMediaMsg('⏳ กำลังย้าย/ตั้งค่า media... (ไฟล์เยอะอาจใช้เวลาสักครู่)');
+      const res = await fetch(`${API_BASE}/vault/media-location`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaRoot: picked.dir }),
+      });
+      const data = await res.json();
+      if (data.success) { setMediaMsg('✅ ตั้งค่าเรียบร้อย! แนะนำให้ปิด-เปิดโปรแกรมใหม่ (StopApp → StartApp) เพื่อให้มีผลสมบูรณ์'); await loadMediaLocation(); }
+      else setMediaMsg('❌ ' + (data.error || 'ตั้งค่าไม่สำเร็จ'));
+    } catch (e: any) { setMediaMsg('❌ ' + (e?.message || 'เชื่อมต่อ backend ไม่ได้')); }
+    finally { setMediaBusy(false); }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in pb-12">
+      {/* แจ้งเตือนครั้งแรก: ยังไม่ได้ตั้งโฟลเดอร์รูป หรือ symlink พัง (เพิ่งก็อปมาเครื่องใหม่) */}
+      {(mediaStatus === 'unset' || mediaStatus === 'broken') && (
+        <div className="p-4 border rounded-xl" style={{ backgroundColor: 'rgba(234,179,8,0.10)', borderColor: 'rgba(234,179,8,0.45)' }}>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🗂️</span>
+            <div className="flex-1">
+              <div className="text-sm font-bold text-yellow-200">
+                {mediaStatus === 'broken' ? 'โฟลเดอร์เก็บรูป (media) ของเครื่องนี้หาย' : 'ยังไม่ได้ตั้งโฟลเดอร์เก็บรูป (media) ของเครื่องนี้'}
+              </div>
+              <div className="text-xs text-yellow-100/80 mt-1">
+                {mediaStatus === 'broken'
+                  ? 'ดูเหมือนเพิ่งก็อปโปรแกรมมาเครื่องใหม่ — รูปยังชี้ไปที่เก่าที่ไม่มี กรุณาเลือกโฟลเดอร์เก็บรูปของเครื่องนี้ก่อนใช้งาน'
+                  : 'รูป/วิดีโอจะเก็บแยกจากตัวโปรแกรม (เพื่อก็อปโปรแกรมไปมาได้เบาๆ) กรุณาเลือกโฟลเดอร์เก็บรูปของเครื่องนี้'}
+              </div>
+              <button onClick={changeMediaFolder} disabled={mediaBusy}
+                className="mt-2 rounded-lg bg-yellow-500 px-3 py-1.5 text-xs font-bold text-black hover:bg-yellow-400 disabled:opacity-50">
+                📁 เลือกโฟลเดอร์เก็บรูปเดี๋ยวนี้
+              </button>
+              {mediaMsg && <div className="mt-2 text-xs text-yellow-100">{mediaMsg}</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* การ์ดตั้งค่าโฟลเดอร์ media (แสดงเสมอ) */}
+      <div className="p-4 border rounded-xl" style={{ backgroundColor: 'var(--bg-glass)', borderColor: 'var(--border-glass)' }}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="text-sm font-bold text-white">📁 โฟลเดอร์เก็บรูป/Media (เครื่องนี้)</div>
+            <div className="text-xs text-slate-400 mt-1">
+              {mediaStatus === 'loading' ? 'กำลังโหลด...' :
+                mediaRoot ? <>ตอนนี้เก็บที่: <span className="text-cyan-300 break-all">{mediaRoot}</span> {mediaStatus === 'ok' ? '✅' : '⚠️'}</>
+                  : 'ยังไม่ได้ตั้งค่า (รูปเก็บในตัวโปรแกรม)'}
+            </div>
+          </div>
+          <button onClick={changeMediaFolder} disabled={mediaBusy}
+            className="rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-700 disabled:opacity-50 shrink-0">
+            {mediaBusy ? '⏳ กำลังทำงาน...' : '📁 เปลี่ยนโฟลเดอร์'}
+          </button>
+        </div>
+        {mediaStatus !== 'unset' && mediaStatus !== 'broken' && mediaMsg && <div className="mt-2 text-xs text-slate-300">{mediaMsg}</div>}
+      </div>
+
       
                   {/* Introduction Command Center Header */}
       <div 

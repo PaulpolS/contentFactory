@@ -17,7 +17,7 @@ const app = express();
 
 // Enable basic middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '200mb' }));
 
 // Mount routers
 app.use('/api/vault', vaultRouter);
@@ -68,6 +68,20 @@ app.post('/api/pick-folder', (req, res) => {
     res.json({ success: true, dir: result });
   } catch (err) {
     res.json({ success: false, cancelled: true });
+  }
+});
+
+// เปิดโฟลเดอร์/ไฟล์ใน Finder (ใช้ร่วมกันหลายพอร์ทัล)
+app.get('/api/open-folder', (req, res) => {
+  const target = String((req.query as any).type || (req.query as any).path || '').trim();
+  if (!target || !fs.existsSync(target)) {
+    return res.json({ success: false, error: 'ไม่พบโฟลเดอร์' });
+  }
+  try {
+    execSync(`open ${JSON.stringify(target)}`, { timeout: 8000 });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message });
   }
 });
 
@@ -2269,7 +2283,9 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
       const longestLine = Math.max(...titleLines.map(line => Array.from(line).length), 1);
       const fontSize = Math.max(42, Math.min(82, Math.floor(1500 / longestLine)));
       const hlFontSize = hlFontSizeOverride > 0 ? hlFontSizeOverride : fontSize;
-      const finalY = (!isVerticalAvatar && hlYPosition === 220) ? Math.round(TOP_H * 0.40) : hlYPosition;
+      // WYSIWYG: ใช้ตำแหน่ง Y ตามที่ผู้ใช้ตั้ง/ลากในพรีวิวตรง ๆ (เลิก override ค่า default
+      // เป็น 416 ซึ่งทำให้ output ไม่ตรงกับพรีวิว)
+      const finalY = hlYPosition;
 
       fs.writeFileSync(
         titleAssPath,
@@ -2413,6 +2429,248 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
     }
   })();
 });
+
+// ══════════════════════════════════════════════════════════════════════
+// ── Quote Video (คลิปคำคม) APIs ──
+//   เรนเดอร์ฝั่ง backend: เอา footage ในโฟลเดอร์มาสุ่มต่อ/วน ให้ครบวินาที
+//   แล้ว overlay ด้วย PNG โปร่งใส (tint + ตัวอักษร + ไอคอน + โลโก้) ที่ frontend
+//   วาดจาก canvas พรีวิวตัวเดียวกัน → ผลลัพธ์ตรงกับพรีวิว 100% (WYSIWYG)
+//   มีปุ่ม พัก/เรนเดอร์ต่อ/หยุด ผ่าน SIGSTOP/SIGCONT/SIGKILL
+// ══════════════════════════════════════════════════════════════════════
+let quoteRenderProcess: any = null;
+let quoteRenderPaused = false;
+let quoteRenderStopped = false;
+let quoteRenderStream: any = null;
+
+app.post('/api/quote-render', (req, res) => {
+  // ปิด timeout เริ่มต้นของ Node (2 นาที) กัน ffmpeg ที่รันนานถูกฆ่า
+  req.setTimeout(0);
+  res.setTimeout(0);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const { spawn } = require('child_process');
+  const ffmpegPath = getFFmpegPath();
+  const AUDIO_EXTS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'];
+  const OUT_W = 1080;
+  const OUT_H = 1920;
+
+  quoteRenderStream = res;
+  quoteRenderStopped = false;
+  quoteRenderPaused = false;
+
+  const send = (obj: object) => {
+    if (!res.writableEnded) {
+      try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); } catch {}
+    }
+  };
+
+  const runFfmpeg = (args: string[], label: string) => new Promise<void>((resolve, reject) => {
+    const env = { ...process.env, PATH: `/opt/homebrew/opt/ffmpeg-full/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}` };
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'], env });
+    quoteRenderProcess = proc;
+    proc.stderr.on('data', (data: Buffer) => {
+      const text = data.toString();
+      const match = text.match(/time=(\d{2}:\d{2}:\d{2}\.\d{2})/);
+      if (match) send({ log: `⚙️ ${label} » ${match[1]}` });
+    });
+    proc.on('close', (code: number | null) => {
+      if (quoteRenderProcess === proc) quoteRenderProcess = null;
+      if (quoteRenderStopped) reject(new Error('ถูกหยุดโดยผู้ใช้'));
+      else if (code === 0) resolve();
+      else reject(new Error(`${label} ล้มเหลว (ffmpeg code ${code})`));
+    });
+    proc.on('error', reject);
+    res.on('close', () => { try { proc.kill('SIGKILL'); } catch {} });
+  });
+
+  let tempDir = '';
+  const payload = req.body || {};
+
+  (async () => {
+    try {
+      const footageFolder = String(payload.footageFolder || '').trim();
+      const outputFolder = String(payload.outputFolder || '').trim();
+      const bgmFile = String(payload.bgmFile || '').trim();
+      const bgmVolume = Math.max(0, Math.min(1, Number(payload.bgmVolume ?? 0.15)));
+      const durationSec = Math.max(3, Math.min(120, Number(payload.durationSec ?? 15)));
+
+      // items: [{ overlayPng (base64 dataURL หรือ raw), fileNameBase }]
+      let items: Array<{ overlayPng: string; fileNameBase: string }> = Array.isArray(payload.items) ? payload.items : [];
+      if (items.length === 0 && payload.overlayPng) {
+        items = [{ overlayPng: payload.overlayPng, fileNameBase: payload.fileNameBase || 'quote' }];
+      }
+
+      if (!footageFolder || !fs.existsSync(footageFolder) || !fs.statSync(footageFolder).isDirectory()) throw new Error('ไม่พบโฟลเดอร์ footage (กรุณาเลือกโฟลเดอร์วิดีโอพื้นหลัง)');
+      if (!outputFolder) throw new Error('ยังไม่ได้เลือกโฟลเดอร์ Output');
+      if (items.length === 0) throw new Error('ไม่มี overlay สำหรับเรนเดอร์');
+      if (bgmFile && (!fs.existsSync(bgmFile) || !AUDIO_EXTS.includes(path.extname(bgmFile).toLowerCase()))) throw new Error('ไฟล์เพลงพื้นหลัง (BGM) ไม่ถูกต้อง');
+      fs.mkdirSync(outputFolder, { recursive: true });
+
+      const footageCandidates = collectVideos(footageFolder)
+        .map((filePath: string) => ({ filePath, duration: probeDuration(filePath) }))
+        .filter((item: any) => item.duration > 0.6);
+      if (footageCandidates.length === 0) throw new Error('ไม่พบไฟล์วิดีโอที่อ่านความยาวได้ในโฟลเดอร์ footage');
+      send({ log: `📂 พบ footage ใช้งานได้ ${footageCandidates.length} ไฟล์ | เป้าหมาย ${durationSec} วินาที/คลิป` });
+
+      tempDir = path.join(outputFolder, `.quote_render_${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      send({ total: items.length, log: `🚀 เริ่มเรนเดอร์ทั้งหมด ${items.length} คลิป` });
+
+      const savedFiles: string[] = [];
+      for (let idx = 0; idx < items.length; idx++) {
+        if (quoteRenderStopped) break;
+        const item = items[idx];
+        const safeBase = cleanFilePart(item.fileNameBase || `quote_${idx + 1}`);
+        send({ progress: idx + 1, log: `──────── 🎬 คลิป ${idx + 1}/${items.length}: ${safeBase} ────────` });
+
+        // 1) เขียน overlay PNG ลง temp
+        const overlayPath = path.join(tempDir, `overlay_${idx}.png`);
+        const b64 = String(item.overlayPng || '').replace(/^data:image\/\w+;base64,/, '');
+        fs.writeFileSync(overlayPath, Buffer.from(b64, 'base64'));
+
+        // 2) สุ่ม footage ต่อกันให้ยาวครบ durationSec (Dynamic Looping)
+        send({ log: `🎲 สุ่มเรียงคลิปพื้นหลังให้ครบ ${durationSec} วินาที...` });
+        const selected: Array<{ filePath: string; start: number; duration: number }> = [];
+        let remaining = durationSec + 0.4;
+        let guard = 0;
+        while (remaining > 0.15 && guard < 1500) {
+          for (const clip of shuffle(footageCandidates)) {
+            if (remaining <= 0.15) break;
+            const take = Math.min(remaining, clip.duration, 3 + Math.random() * 4.5);
+            const dur = Math.max(0.4, take);
+            const maxStart = Math.max(0, clip.duration - dur);
+            const start = maxStart > 0 ? Math.random() * maxStart : 0;
+            selected.push({ filePath: clip.filePath, start, duration: dur });
+            remaining -= dur;
+          }
+          guard++;
+        }
+        if (selected.length === 0) throw new Error('สุ่ม footage ให้ครบความยาวไม่สำเร็จ');
+
+        // 3) เตรียม segment scale/crop เป็น 1080x1920
+        const segVf = `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,crop=${OUT_W}:${OUT_H},setsar=1,fps=30,format=yuv420p`;
+        const segmentPaths: string[] = [];
+        for (let i = 0; i < selected.length; i++) {
+          if (quoteRenderStopped) break;
+          const clip = selected[i];
+          const segPath = path.join(tempDir, `seg_${idx}_${String(i + 1).padStart(3, '0')}.mp4`);
+          segmentPaths.push(segPath);
+          await runFfmpeg([
+            '-y',
+            '-ss', clip.start.toFixed(2),
+            '-t', clip.duration.toFixed(2),
+            '-i', clip.filePath,
+            '-map', '0:v:0',
+            '-an',
+            '-vf', segVf,
+            '-c:v', 'libx264',
+            '-preset', 'veryfast',
+            '-crf', '21',
+            '-movflags', '+faststart',
+            segPath,
+          ], `เตรียมพื้นหลัง ${i + 1}/${selected.length}`);
+        }
+        if (quoteRenderStopped) break;
+
+        // 4) concat segment เป็นพื้นหลังตัวเดียว
+        const listPath = path.join(tempDir, `concat_${idx}.txt`);
+        fs.writeFileSync(listPath, segmentPaths.map(p => `file '${escapeConcatPath(p)}'`).join('\n'));
+        const bgPath = path.join(tempDir, `bg_${idx}.mp4`);
+        await runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', bgPath], 'รวมคลิปพื้นหลัง');
+        if (quoteRenderStopped) break;
+
+        // 5) composite overlay (+BGM) แล้วตัดที่ durationSec
+        const outputPath = path.join(outputFolder, `${safeBase}.mp4`);
+        const finalArgs = ['-y', '-i', bgPath, '-i', overlayPath];
+        if (bgmFile) finalArgs.push('-stream_loop', '-1', '-i', bgmFile);
+        const filterParts: string[] = [`[0:v][1:v]overlay=0:0:format=auto[vout]`];
+        if (bgmFile) {
+          filterParts.push(`[2:a]volume=${bgmVolume.toFixed(3)},atrim=0:${durationSec.toFixed(3)},asetpts=PTS-STARTPTS[aout]`);
+        }
+        finalArgs.push('-filter_complex', filterParts.join(';'), '-map', '[vout]');
+        if (bgmFile) finalArgs.push('-map', '[aout]', '-c:a', 'aac', '-b:a', '160k');
+        else finalArgs.push('-an');
+        finalArgs.push(
+          '-t', durationSec.toFixed(3),
+          '-c:v', 'libx264',
+          '-preset', 'fast',
+          '-crf', '20',
+          '-r', '30',
+          '-pix_fmt', 'yuv420p',
+          '-movflags', '+faststart',
+          '-shortest',
+          outputPath,
+        );
+        send({ log: `🎨 ประกอบตัวอักษร + พื้นหลัง${bgmFile ? ' + เพลง BGM' : ''}...` });
+        await runFfmpeg(finalArgs, `เรนเดอร์ ${idx + 1}/${items.length}`);
+
+        // ลบ temp ของคลิปนี้
+        for (const p of segmentPaths) { try { fs.rmSync(p, { force: true }); } catch {} }
+        try { fs.rmSync(bgPath, { force: true }); } catch {}
+        try { fs.rmSync(overlayPath, { force: true }); } catch {}
+        try { fs.rmSync(listPath, { force: true }); } catch {}
+
+        savedFiles.push(outputPath);
+        send({ done: idx + 1, filePath: outputPath, log: `✅ บันทึกแล้ว: ${outputPath}` });
+      }
+
+      if (quoteRenderStopped) {
+        send({ error: 'ถูกหยุดโดยผู้ใช้' });
+      } else {
+        send({ success: true, files: savedFiles, log: `🎉 เรนเดอร์ครบ ${savedFiles.length} คลิปเรียบร้อย!` });
+      }
+      if (!res.writableEnded) res.end();
+    } catch (e: any) {
+      send({ error: e.message || String(e) });
+      if (!res.writableEnded) res.end();
+    } finally {
+      quoteRenderProcess = null;
+      quoteRenderStream = null;
+      if (tempDir) {
+        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+      }
+    }
+  })();
+});
+
+const quotePauseHandler = (_req: any, res: any) => {
+  quoteRenderPaused = true;
+  if (quoteRenderProcess) { try { quoteRenderProcess.kill('SIGSTOP'); } catch {} }
+  if (quoteRenderStream) { try { quoteRenderStream.write(`data: ${JSON.stringify({ paused: true, log: '⏸ พักการเรนเดอร์ (ffmpeg หยุดชั่วคราว)' })}\n\n`); } catch {} }
+  res.json({ success: true });
+};
+app.post('/api/quote-render-pause', quotePauseHandler);
+
+const quoteResumeHandler = (_req: any, res: any) => {
+  quoteRenderPaused = false;
+  if (quoteRenderProcess) { try { quoteRenderProcess.kill('SIGCONT'); } catch {} }
+  if (quoteRenderStream) { try { quoteRenderStream.write(`data: ${JSON.stringify({ resumed: true, log: '▶ เรนเดอร์ต่อ' })}\n\n`); } catch {} }
+  res.json({ success: true });
+};
+app.post('/api/quote-render-resume', quoteResumeHandler);
+
+const quoteStopHandler = (_req: any, res: any) => {
+  quoteRenderStopped = true;
+  quoteRenderPaused = false;
+  if (quoteRenderProcess) {
+    try { quoteRenderProcess.kill('SIGCONT'); } catch {} // ปลุกจาก SIGSTOP ก่อนค่อยฆ่า
+    try { quoteRenderProcess.kill('SIGKILL'); } catch {}
+    quoteRenderProcess = null;
+  }
+  if (quoteRenderStream) {
+    try {
+      quoteRenderStream.write(`data: ${JSON.stringify({ error: 'ถูกหยุดโดยผู้ใช้' })}\n\n`);
+      quoteRenderStream.end();
+    } catch {}
+    quoteRenderStream = null;
+  }
+  res.json({ success: true });
+};
+app.post('/api/quote-render-stop', quoteStopHandler);
 
 // ── PodcastClip APIs ──
 let podcastClipProcess: any = null;

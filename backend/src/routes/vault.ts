@@ -2215,6 +2215,74 @@ router.post('/upload-temp-csv', async (req: Request, res: Response) => {
   }
 });
 
+// ============================================================================
+//  Media location (โฟลเดอร์เก็บรูปหนัก แยกต่อเครื่อง — ดู scripts/setup_media.sh)
+// ============================================================================
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
+const MEDIA_LOC_FILE = path.join(PROJECT_ROOT, 'media-location.txt');
+const MEDIA_SETUP_SCRIPT = path.join(PROJECT_ROOT, 'scripts', 'setup_media.sh');
+const MEDIA_SUBDIRS = ['generated_graphics', 'downloaded_media', 'logos'];
+
+/**
+ * GET /api/vault/media-location
+ * คืนตำแหน่งโฟลเดอร์ media ของเครื่องนี้ + สถานะ symlink
+ * status: 'ok' (พร้อมใช้) | 'broken' (symlink ชี้ที่หาย — เพิ่งก็อปมาเครื่องใหม่) | 'unset' (ยังไม่ตั้งค่า)
+ */
+router.get('/media-location', (_req: Request, res: Response) => {
+  try {
+    let mediaRoot = '';
+    try { mediaRoot = fs.readFileSync(MEDIA_LOC_FILE, 'utf-8').trim(); } catch { mediaRoot = ''; }
+
+    const subdirs = MEDIA_SUBDIRS.map((name) => {
+      const p = path.join(VAULT_EXTERNAL_ROOT, name);
+      let isSymlink = false;
+      let target = '';
+      let valid = false;
+      try {
+        const st = fs.lstatSync(p);
+        isSymlink = st.isSymbolicLink();
+        if (isSymlink) { target = fs.readlinkSync(p); valid = fs.existsSync(p); }
+        else { valid = st.isDirectory(); }
+      } catch { /* ไม่มีโฟลเดอร์ */ }
+      return { name, isSymlink, target, valid };
+    });
+
+    const anySymlink = subdirs.some((s) => s.isSymlink);
+    const allValid = subdirs.every((s) => s.valid);
+    let status: 'ok' | 'broken' | 'unset';
+    if (!mediaRoot && !anySymlink) status = 'unset';
+    else if (allValid) status = 'ok';
+    else status = 'broken';
+
+    res.json({ mediaRoot, status, subdirs });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * POST /api/vault/media-location  body: { mediaRoot }
+ * ย้าย media ไปโฟลเดอร์ใหม่ + ทำ symlink (เรียก scripts/setup_media.sh)
+ */
+router.post('/media-location', (req: Request, res: Response) => {
+  const mediaRoot = (req.body && req.body.mediaRoot ? String(req.body.mediaRoot) : '').trim();
+  if (!mediaRoot) { res.status(400).json({ success: false, error: 'ต้องระบุ mediaRoot' }); return; }
+  if (!fs.existsSync(MEDIA_SETUP_SCRIPT)) { res.status(500).json({ success: false, error: 'ไม่พบ scripts/setup_media.sh' }); return; }
+
+  const { spawn } = require('child_process');
+  const proc = spawn('bash', [MEDIA_SETUP_SCRIPT, mediaRoot], { cwd: PROJECT_ROOT });
+  let log = '';
+  proc.stdout.on('data', (d: Buffer) => { log += d.toString(); });
+  proc.stderr.on('data', (d: Buffer) => { log += d.toString(); });
+  proc.on('close', (code: number) => {
+    if (code === 0) res.json({ success: true, mediaRoot, log });
+    else res.status(500).json({ success: false, error: 'ตั้งค่า media ไม่สำเร็จ', log });
+  });
+  proc.on('error', (err: any) => {
+    if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
+  });
+});
+
 export default router;
 
 
