@@ -31,6 +31,8 @@ export interface CanvasElement {
   boxHeight?: number;             // ถ้ากำหนด = ความสูงกล่องคงที่ (% ของ canvas) แทนที่จะคิดจากจำนวนบรรทัด
   valign?: 'top' | 'center';      // จัดข้อความแนวตั้งในกล่อง (default 'top')
   bgBoxGradient?: { from: string; to: string; dir?: 'h' | 'v' }; // ไล่เฉดสีพื้นกล่อง (ทับ bgBoxColor)
+  autoFitText?: boolean;          // true = ขยาย/ย่อขนาดตัวอักษรให้เต็มกล่อง (ใช้คู่กับ boxHeight) โดยไม่ขยายกล่อง
+  autoFitMax?: number;            // เพดานขนาดฟอนต์ของ auto-fit (px) — ผู้ใช้เลือกขนาดที่ต้องการ; auto-fit จะย่อลงถ้าจำเป็นแต่ไม่เกินค่านี้
   role?: 'header' | 'block' | 'badge' | 'footer'; // ใช้ระบุบทบาท (เพื่ออ่านง่าย/ขยายภายหลัง)
 }
 
@@ -63,6 +65,9 @@ export interface QuoteCategoryConfig {
   tone: string;            // โทนการเล่า (เช่น trader_secrets | general | mystic | finance)
   brainId: string;         // id ของสมองที่เลือก (จากคลัง) หรือ 'custom'
   customBrainText: string; // system prompt ที่ผู้ใช้แก้เอง (สมองของหมวดนี้)
+  footerText: string;      // ข้อความล่างสุดของคลิป (เครดิตเพจ/โปรโมชั่น) — แสดงทุกคลิป
+  footerFontSize: number;  // ขนาดตัวอักษร footer
+  footerStyle: string;     // รูปแบบกล่อง footer (bar | gold | red | pill | plain)
 }
 
 // "สมอง" = ชุด system prompt ที่ผู้ใช้บันทึกไว้ใช้ซ้ำ/อัปเดตเรื่อยๆ

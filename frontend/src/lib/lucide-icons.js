@@ -571,8 +571,18 @@ var __iconNode45 = [
 ];
 var ShieldCheck = createLucideIcon("shield-check", __iconNode45);
 
-// node_modules/lucide-react/dist/esm/icons/sliders-vertical.mjs
+// node_modules/lucide-react/dist/esm/icons/shuffle.mjs
 var __iconNode46 = [
+  ["path", { d: "m18 14 4 4-4 4", key: "10pe0f" }],
+  ["path", { d: "m18 2 4 4-4 4", key: "pucp1d" }],
+  ["path", { d: "M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22", key: "1ailkh" }],
+  ["path", { d: "M2 6h1.972a4 4 0 0 1 3.6 2.2", key: "km57vx" }],
+  ["path", { d: "M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45", key: "os18l9" }]
+];
+var Shuffle = createLucideIcon("shuffle", __iconNode46);
+
+// node_modules/lucide-react/dist/esm/icons/sliders-vertical.mjs
+var __iconNode47 = [
   ["path", { d: "M10 8h4", key: "1sr2af" }],
   ["path", { d: "M12 21v-9", key: "17s77i" }],
   ["path", { d: "M12 8V3", key: "13r4qs" }],
@@ -583,10 +593,10 @@ var __iconNode46 = [
   ["path", { d: "M5 10V3", key: "cb8scm" }],
   ["path", { d: "M5 21v-7", key: "1w1uti" }]
 ];
-var SlidersVertical = createLucideIcon("sliders-vertical", __iconNode46);
+var SlidersVertical = createLucideIcon("sliders-vertical", __iconNode47);
 
 // node_modules/lucide-react/dist/esm/icons/sparkles.mjs
-var __iconNode47 = [
+var __iconNode48 = [
   [
     "path",
     {
@@ -598,16 +608,16 @@ var __iconNode47 = [
   ["path", { d: "M22 4h-4", key: "gwowj6" }],
   ["circle", { cx: "4", cy: "20", r: "2", key: "6kqj1y" }]
 ];
-var Sparkles = createLucideIcon("sparkles", __iconNode47);
+var Sparkles = createLucideIcon("sparkles", __iconNode48);
 
 // node_modules/lucide-react/dist/esm/icons/square.mjs
-var __iconNode48 = [
+var __iconNode49 = [
   ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" }]
 ];
-var Square = createLucideIcon("square", __iconNode48);
+var Square = createLucideIcon("square", __iconNode49);
 
 // node_modules/lucide-react/dist/esm/icons/star.mjs
-var __iconNode49 = [
+var __iconNode50 = [
   [
     "path",
     {
@@ -616,17 +626,17 @@ var __iconNode49 = [
     }
   ]
 ];
-var Star = createLucideIcon("star", __iconNode49);
+var Star = createLucideIcon("star", __iconNode50);
 
 // node_modules/lucide-react/dist/esm/icons/terminal.mjs
-var __iconNode50 = [
+var __iconNode51 = [
   ["path", { d: "M12 19h8", key: "baeox8" }],
   ["path", { d: "m4 17 6-6-6-6", key: "1yngyt" }]
 ];
-var Terminal = createLucideIcon("terminal", __iconNode50);
+var Terminal = createLucideIcon("terminal", __iconNode51);
 
 // node_modules/lucide-react/dist/esm/icons/thumbs-up.mjs
-var __iconNode51 = [
+var __iconNode52 = [
   [
     "path",
     {
@@ -636,67 +646,67 @@ var __iconNode51 = [
   ],
   ["path", { d: "M7 10v12", key: "1qc93n" }]
 ];
-var ThumbsUp = createLucideIcon("thumbs-up", __iconNode51);
+var ThumbsUp = createLucideIcon("thumbs-up", __iconNode52);
 
 // node_modules/lucide-react/dist/esm/icons/trash-2.mjs
-var __iconNode52 = [
+var __iconNode53 = [
   ["path", { d: "M10 11v6", key: "nco0om" }],
   ["path", { d: "M14 11v6", key: "outv1u" }],
   ["path", { d: "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", key: "miytrc" }],
   ["path", { d: "M3 6h18", key: "d0wm0j" }],
   ["path", { d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2", key: "e791ji" }]
 ];
-var Trash2 = createLucideIcon("trash-2", __iconNode52);
+var Trash2 = createLucideIcon("trash-2", __iconNode53);
 
 // node_modules/lucide-react/dist/esm/icons/trending-up.mjs
-var __iconNode53 = [
+var __iconNode54 = [
   ["path", { d: "M16 7h6v6", key: "box55l" }],
   ["path", { d: "m22 7-8.5 8.5-5-5L2 17", key: "1t1m79" }]
 ];
-var TrendingUp = createLucideIcon("trending-up", __iconNode53);
+var TrendingUp = createLucideIcon("trending-up", __iconNode54);
 
 // node_modules/lucide-react/dist/esm/icons/type.mjs
-var __iconNode54 = [
+var __iconNode55 = [
   ["path", { d: "M12 4v16", key: "1654pz" }],
   ["path", { d: "M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2", key: "e0r10z" }],
   ["path", { d: "M9 20h6", key: "s66wpe" }]
 ];
-var Type = createLucideIcon("type", __iconNode54);
+var Type = createLucideIcon("type", __iconNode55);
 
 // node_modules/lucide-react/dist/esm/icons/upload.mjs
-var __iconNode55 = [
+var __iconNode56 = [
   ["path", { d: "M12 3v12", key: "1x0j5s" }],
   ["path", { d: "m17 8-5-5-5 5", key: "7q97r8" }],
   ["path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", key: "ih7n3h" }]
 ];
-var Upload = createLucideIcon("upload", __iconNode55);
+var Upload = createLucideIcon("upload", __iconNode56);
 
 // node_modules/lucide-react/dist/esm/icons/user.mjs
-var __iconNode56 = [
+var __iconNode57 = [
   ["path", { d: "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2", key: "975kel" }],
   ["circle", { cx: "12", cy: "7", r: "4", key: "17ys0d" }]
 ];
-var User = createLucideIcon("user", __iconNode56);
+var User = createLucideIcon("user", __iconNode57);
 
 // node_modules/lucide-react/dist/esm/icons/user-check.mjs
-var __iconNode57 = [
+var __iconNode58 = [
   ["path", { d: "m16 11 2 2 4-4", key: "9rsbq5" }],
   ["path", { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", key: "1yyitq" }],
   ["circle", { cx: "9", cy: "7", r: "4", key: "nufk8" }]
 ];
-var UserCheck = createLucideIcon("user-check", __iconNode57);
+var UserCheck = createLucideIcon("user-check", __iconNode58);
 
 // node_modules/lucide-react/dist/esm/icons/users.mjs
-var __iconNode58 = [
+var __iconNode59 = [
   ["path", { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", key: "1yyitq" }],
   ["path", { d: "M16 3.128a4 4 0 0 1 0 7.744", key: "16gr8j" }],
   ["path", { d: "M22 21v-2a4 4 0 0 0-3-3.87", key: "kshegd" }],
   ["circle", { cx: "9", cy: "7", r: "4", key: "nufk8" }]
 ];
-var Users = createLucideIcon("users", __iconNode58);
+var Users = createLucideIcon("users", __iconNode59);
 
 // node_modules/lucide-react/dist/esm/icons/volume-2.mjs
-var __iconNode59 = [
+var __iconNode60 = [
   [
     "path",
     {
@@ -707,17 +717,36 @@ var __iconNode59 = [
   ["path", { d: "M16 9a5 5 0 0 1 0 6", key: "1q6k2b" }],
   ["path", { d: "M19.364 18.364a9 9 0 0 0 0-12.728", key: "ijwkga" }]
 ];
-var Volume2 = createLucideIcon("volume-2", __iconNode59);
+var Volume2 = createLucideIcon("volume-2", __iconNode60);
+
+// node_modules/lucide-react/dist/esm/icons/wand-sparkles.mjs
+var __iconNode61 = [
+  [
+    "path",
+    {
+      d: "m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72",
+      key: "ul74o6"
+    }
+  ],
+  ["path", { d: "m14 7 3 3", key: "1r5n42" }],
+  ["path", { d: "M5 6v4", key: "ilb8ba" }],
+  ["path", { d: "M19 14v4", key: "blhpug" }],
+  ["path", { d: "M10 2v2", key: "7u0qdc" }],
+  ["path", { d: "M7 8H3", key: "zfb6yr" }],
+  ["path", { d: "M21 16h-4", key: "1cnmox" }],
+  ["path", { d: "M11 3H9", key: "1obp7u" }]
+];
+var WandSparkles = createLucideIcon("wand-sparkles", __iconNode61);
 
 // node_modules/lucide-react/dist/esm/icons/x.mjs
-var __iconNode60 = [
+var __iconNode62 = [
   ["path", { d: "M18 6 6 18", key: "1bl5f8" }],
   ["path", { d: "m6 6 12 12", key: "d8bk6v" }]
 ];
-var X = createLucideIcon("x", __iconNode60);
+var X = createLucideIcon("x", __iconNode62);
 
 // node_modules/lucide-react/dist/esm/icons/zap.mjs
-var __iconNode61 = [
+var __iconNode63 = [
   [
     "path",
     {
@@ -726,7 +755,7 @@ var __iconNode61 = [
     }
   ]
 ];
-var Zap = createLucideIcon("zap", __iconNode61);
+var Zap = createLucideIcon("zap", __iconNode63);
 export {
   Activity,
   CircleAlert as AlertCircle,
@@ -773,6 +802,7 @@ export {
   Search,
   Settings,
   ShieldCheck,
+  Shuffle,
   SlidersVertical as Sliders,
   Sparkles,
   Square,
@@ -787,6 +817,7 @@ export {
   UserCheck,
   Users,
   Volume2,
+  WandSparkles as Wand2,
   X,
   Zap
 };
@@ -852,6 +883,7 @@ lucide-react/dist/esm/icons/scissors.mjs:
 lucide-react/dist/esm/icons/search.mjs:
 lucide-react/dist/esm/icons/settings.mjs:
 lucide-react/dist/esm/icons/shield-check.mjs:
+lucide-react/dist/esm/icons/shuffle.mjs:
 lucide-react/dist/esm/icons/sliders-vertical.mjs:
 lucide-react/dist/esm/icons/sliders.mjs:
 lucide-react/dist/esm/icons/sparkles.mjs:
@@ -867,6 +899,8 @@ lucide-react/dist/esm/icons/user.mjs:
 lucide-react/dist/esm/icons/user-check.mjs:
 lucide-react/dist/esm/icons/users.mjs:
 lucide-react/dist/esm/icons/volume-2.mjs:
+lucide-react/dist/esm/icons/wand-sparkles.mjs:
+lucide-react/dist/esm/icons/wand-2.mjs:
 lucide-react/dist/esm/icons/x.mjs:
 lucide-react/dist/esm/icons/zap.mjs:
   (**

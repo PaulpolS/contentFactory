@@ -86,6 +86,9 @@ function defaultConfig(id: CategoryId): QuoteCategoryConfig {
     tone: cat.tones[0].value,
     brainId: 'default',
     customBrainText: cat.defaultBrain,
+    footerText: '',
+    footerFontSize: 34,
+    footerStyle: 'gold',
   };
 }
 

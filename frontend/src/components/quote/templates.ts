@@ -28,6 +28,8 @@ const base = (e: Partial<CanvasElement>): CanvasElement => ({
   bgBoxMode: e.bgBoxMode ?? 'full',
   boxHeight: e.boxHeight,
   valign: e.valign,
+  autoFitText: e.autoFitText,
+  bgBoxGradient: e.bgBoxGradient,
   role: e.role,
 });
 
@@ -114,7 +116,7 @@ export const BUILT_IN_TEMPLATES: CanvasTemplate[] = [
       const els: CanvasElement[] = [header('หัวข้อเรื่องของคุณ', 60)];
       rowY.forEach((y, i) => {
         els.push(base({ id: `badge_${i}`, type: 'title', x: 5, y, width: 15, boxHeight: 12, valign: 'center', text: badges[i], fontSize: 72, bold: true, color: '#FFFFFF', textAlign: 'center', bgBox: true, bgBoxColor: badgeColors[i], bgBoxRadius: 20 }));
-        els.push(base({ id: `block_${i}`, type: 'text-block', x: 22, y, width: 73, boxHeight: 12, valign: 'center', text: defaults[i], fontSize: 33, textAlign: 'left', bgBox: true, bgBoxColor: 'rgba(0,0,0,0.55)', bgBoxRadius: 18, bgBoxPaddingX: 24, bgBoxPaddingY: 14 }));
+        els.push(base({ id: `block_${i}`, type: 'text-block', x: 22, y, width: 73, boxHeight: 12, valign: 'center', text: defaults[i], fontSize: 33, autoFitText: true, textAlign: 'left', bgBox: true, bgBoxColor: 'rgba(0,0,0,0.55)', bgBoxRadius: 18, bgBoxPaddingX: 24, bgBoxPaddingY: 14 }));
       });
       return els;
     })(),
@@ -132,16 +134,16 @@ export const BUILT_IN_TEMPLATES: CanvasTemplate[] = [
     autoStack: false,
     elements: (() => {
       const signs = ['เมษ', 'พฤษภ', 'เมถุน', 'กรกฎ', 'สิงห์', 'กันย์', 'ตุลย์', 'พิจิก', 'ธนู', 'มังกร', 'กุมภ์', 'มีน'];
-      const els: CanvasElement[] = [header('12 ราศี', 56)];
-      const startY = 14;
-      const rowH = 13.8;   // % ต่อแถว (6 แถว)
+      const els: CanvasElement[] = [header('ทายนิสัย 12 ราศี', 56)];
+      const startY = 13.5;
+      const rowH = 14;     // % ต่อแถว (6 แถว) — เต็มความสูง
       for (let i = 0; i < 12; i++) {
         const col = i % 2;
         const row = Math.floor(i / 2);
-        const x = col === 0 ? 4 : 51;
+        const x = col === 0 ? 2 : 51;   // ขอบบางลง — เต็มความกว้าง
         const y = startY + row * rowH;
-        els.push(base({ id: `block_${i}`, type: 'text-block', x, y, width: 45, boxHeight: rowH - 1.5, valign: 'center', textAlign: 'center', fontSize: 28, bgBox: true, bgBoxColor: 'rgba(0,0,0,0.55)', bgBoxRadius: 16, bgBoxPaddingX: 16, bgBoxPaddingY: 10,
-          text: `ราศี${signs[i]}\nคำทำนายสั้นๆ ของราศีนี้` }));
+        els.push(base({ id: `block_${i}`, type: 'text-block', x, y, width: 47, boxHeight: rowH - 0.8, valign: 'center', textAlign: 'center', fontSize: 29, autoFitText: true, bgBox: true, bgBoxColor: 'rgba(0,0,0,0.55)', bgBoxRadius: 16, bgBoxPaddingX: 14, bgBoxPaddingY: 8,
+          text: `ราศี${signs[i]}\nนิสัยเด่นของราศีนี้` }));
       }
       return els;
     })(),
@@ -171,7 +173,7 @@ export const BUILT_IN_TEMPLATES: CanvasTemplate[] = [
         const row = Math.floor(i / 2);
         const x = col === 0 ? 4 : 51;
         const y = startY + row * rowH;
-        els.push(base({ id: `block_${i}`, type: 'text-block', x, y, width: 45, boxHeight: rowH - 2, valign: 'center', textAlign: 'center', fontSize: 27, bold: false, bgBox: true, bgBoxColor: cardColors[i], bgBoxRadius: 18, bgBoxPaddingX: 16, bgBoxPaddingY: 12,
+        els.push(base({ id: `block_${i}`, type: 'text-block', x, y, width: 45, boxHeight: rowH - 2, valign: 'center', textAlign: 'center', fontSize: 27, autoFitText: true, bold: false, bgBox: true, bgBoxColor: cardColors[i], bgBoxRadius: 18, bgBoxPaddingX: 16, bgBoxPaddingY: 12,
           text: `${titles[i]}\nสิ่งที่ขาดไม่ได้ของคนวันนี้` }));
       }
       return els;
@@ -208,9 +210,9 @@ export const BUILT_IN_TEMPLATES: CanvasTemplate[] = [
     family: 'card-grid', canvasWidth: W, canvasHeight: H, overlayOpacity: 0.5, fontFamily: '"Kanit", sans-serif', autoStack: false,
     elements: [
       base({ id: 'title_main', type: 'title', x: 4, y: 4, width: 92, fontSize: 56, bold: true, color: '#FFFFFF', textAlign: 'center', bgBox: true, bgBoxGradient: GRAD.redDeep, bgBoxRadius: 22, bgBoxPaddingX: 26, bgBoxPaddingY: 20, text: 'หัวข้อเรื่องของคุณ' }),
-      base({ id: 'block_0', type: 'text-block', x: 6, y: 22, width: 88, boxHeight: 20, valign: 'center', fontSize: 36, bold: false, color: '#FFFFFF', textAlign: 'center', bgBox: true, bgBoxGradient: GRAD.purplePink, bgBoxRadius: 22, bgBoxPaddingX: 28, bgBoxPaddingY: 16, text: 'ข้อที่ 1\nรายละเอียดสั้นๆ' }),
-      base({ id: 'block_1', type: 'text-block', x: 6, y: 46, width: 88, boxHeight: 20, valign: 'center', fontSize: 36, color: '#FFFFFF', textAlign: 'center', bgBox: true, bgBoxGradient: GRAD.cyanBlue, bgBoxRadius: 22, bgBoxPaddingX: 28, bgBoxPaddingY: 16, text: 'ข้อที่ 2\nรายละเอียดสั้นๆ' }),
-      base({ id: 'block_2', type: 'text-block', x: 6, y: 70, width: 88, boxHeight: 20, valign: 'center', fontSize: 36, color: '#FFFFFF', textAlign: 'center', bgBox: true, bgBoxGradient: GRAD.emerald, bgBoxRadius: 22, bgBoxPaddingX: 28, bgBoxPaddingY: 16, text: 'ข้อที่ 3\nรายละเอียดสั้นๆ' }),
+      base({ id: 'block_0', type: 'text-block', x: 6, y: 22, width: 88, boxHeight: 20, valign: 'center', fontSize: 36, autoFitText: true, bold: false, color: '#FFFFFF', textAlign: 'center', bgBox: true, bgBoxGradient: GRAD.purplePink, bgBoxRadius: 22, bgBoxPaddingX: 28, bgBoxPaddingY: 16, text: 'ข้อที่ 1\nรายละเอียดสั้นๆ' }),
+      base({ id: 'block_1', type: 'text-block', x: 6, y: 46, width: 88, boxHeight: 20, valign: 'center', fontSize: 36, autoFitText: true, color: '#FFFFFF', textAlign: 'center', bgBox: true, bgBoxGradient: GRAD.cyanBlue, bgBoxRadius: 22, bgBoxPaddingX: 28, bgBoxPaddingY: 16, text: 'ข้อที่ 2\nรายละเอียดสั้นๆ' }),
+      base({ id: 'block_2', type: 'text-block', x: 6, y: 70, width: 88, boxHeight: 20, valign: 'center', fontSize: 36, autoFitText: true, color: '#FFFFFF', textAlign: 'center', bgBox: true, bgBoxGradient: GRAD.emerald, bgBoxRadius: 22, bgBoxPaddingX: 28, bgBoxPaddingY: 16, text: 'ข้อที่ 3\nรายละเอียดสั้นๆ' }),
     ],
   },
 

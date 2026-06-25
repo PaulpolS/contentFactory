@@ -132,14 +132,30 @@ export function renderOverlay(
       }
     };
 
-    ctx.font = `${el.bold ? 'bold' : 'normal'} ${el.fontSize}px ${tpl.fontFamily}`;
     const innerW = pw - (el.bgBox ? el.bgBoxPaddingX * 2 : 0);
+    const fixedBoxH = el.boxHeight ? (el.boxHeight / 100) * H : 0;
+
+    // ขนาดฟอนต์: ปกติใช้ค่าที่ตั้งไว้ — แต่ถ้า autoFitText + กล่องสูงคงที่ จะขยาย/ย่อตัวอักษรให้เต็มกล่อง (โดยไม่ขยายกล่อง)
+    let fz = el.fontSize;
+    if (el.autoFitText && fixedBoxH > 0) {
+      const availH = fixedBoxH - (el.bgBox ? el.bgBoxPaddingY * 2 : 0);
+      const minFz = 16, maxFz = el.autoFitMax ?? 60;
+      fz = minFz;
+      for (let s = maxFz; s >= minFz; s--) {
+        ctx.font = `${el.bold ? 'bold' : 'normal'} ${s}px ${tpl.fontFamily}`;
+        const wl = wrapTextLines(ctx, el.text, innerW);
+        const th = wl.length * s * 1.35;
+        let mw = 0; for (const l of wl) { const w = ctx.measureText(l).width; if (w > mw) mw = w; }
+        if (th <= availH && mw <= innerW) { fz = s; break; }
+      }
+    }
+
+    ctx.font = `${el.bold ? 'bold' : 'normal'} ${fz}px ${tpl.fontFamily}`;
     const lines = wrapTextLines(ctx, el.text, innerW);
-    const lineHeight = el.fontSize * 1.35;
+    const lineHeight = fz * 1.35;
     const totalTextH = lines.length * lineHeight;
 
     // ความสูงกล่อง: คงที่ (boxHeight) หรือคิดจากข้อความ
-    const fixedBoxH = el.boxHeight ? (el.boxHeight / 100) * H : 0;
     const autoBoxH = totalTextH + (el.bgBox ? el.bgBoxPaddingY * 2 : 0);
     const boxH = fixedBoxH > 0 ? fixedBoxH : autoBoxH;
 
@@ -174,7 +190,7 @@ export function renderOverlay(
     } else {
       textTop = py + (el.bgBox ? el.bgBoxPaddingY : 0);
     }
-    const baseY = textTop + el.fontSize;
+    const baseY = textTop + fz;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -195,14 +211,14 @@ export function renderOverlay(
         if (el.textAlign === 'center') lineBoxX = textStartX + innerW / 2 - lineBoxW / 2;
         else if (el.textAlign === 'right') lineBoxX = textStartX + innerW - lineBoxW + el.bgBoxPaddingX;
         else lineBoxX = textStartX - el.bgBoxPaddingX;
-        const lineBoxH = el.fontSize + el.bgBoxPaddingY * 2;
-        const lineBoxY = ly - el.fontSize - el.bgBoxPaddingY;
+        const lineBoxH = fz + el.bgBoxPaddingY * 2;
+        const lineBoxY = ly - fz - el.bgBoxPaddingY;
         setBoxFill(lineBoxX, lineBoxY, lineBoxW, lineBoxH);
         drawRoundedRect(ctx, lineBoxX, lineBoxY, lineBoxW, lineBoxH, el.bgBoxRadius || 0);
       }
 
       ctx.save();
-      ctx.font = `${el.bold ? 'bold' : 'normal'} ${el.fontSize}px ${tpl.fontFamily}`;
+      ctx.font = `${el.bold ? 'bold' : 'normal'} ${fz}px ${tpl.fontFamily}`;
       ctx.fillStyle = el.color;
       if (!el.bgBox) {
         // ตัวอักษรลอยบนวิดีโอ → ใช้ "เงานุ่ม" + เส้นขอบบางๆ ให้อ่านง่ายแบบพรีเมียม
@@ -210,10 +226,10 @@ export function renderOverlay(
         ctx.lineJoin = 'round';
         ctx.miterLimit = 2;
         ctx.shadowColor = 'rgba(0,0,0,0.8)';
-        ctx.shadowBlur = el.fontSize * 0.28;
+        ctx.shadowBlur = fz * 0.28;
         ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = el.fontSize * 0.05;
-        ctx.lineWidth = el.fontSize * 0.055;
+        ctx.shadowOffsetY = fz * 0.05;
+        ctx.lineWidth = fz * 0.055;
         ctx.strokeStyle = 'rgba(0,0,0,0.5)';
         ctx.strokeText(line, drawX, ly);
         ctx.shadowColor = 'transparent';
