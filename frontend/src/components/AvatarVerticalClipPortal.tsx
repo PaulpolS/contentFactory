@@ -419,6 +419,11 @@ export function AvatarVerticalClipPortal() {
 
   // ลาก/ย่อขยายวงกลม crop บนเฟรมตัวอย่าง (อ้างอิงกรอบรูปที่แสดง)
   const cropBoxRef = useRef<HTMLDivElement | null>(null);
+  // จุดยึดสำหรับเลื่อนจอลงไปยังแถบปุ่มเรนเดอร์ (ใช้ตอนกด "ใช้ค่า Crop นี้")
+  const renderActionsRef = useRef<HTMLDivElement | null>(null);
+  const goToRenderActions = () => {
+    renderActionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
   const startCropDrag = (e: React.PointerEvent) => {
     e.preventDefault(); e.stopPropagation();
     const box = cropBoxRef.current; if (!box) return;
@@ -1906,7 +1911,7 @@ export function AvatarVerticalClipPortal() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-5 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-5 items-start min-w-0">
               {/* เฟรม + วงกลม crop ลาก/ย่อขยายได้ */}
               <div
                 ref={cropBoxRef}
@@ -1950,7 +1955,7 @@ export function AvatarVerticalClipPortal() {
               </div>
 
               {/* สไลเดอร์ปรับละเอียด */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 min-w-0">
                 <SliderField label="ซูม/ขนาด crop" value={circleCropSizePct} unit="%" min={30} max={100} onChange={setCircleCropSizePct} hint="เล็ก = ซูมเข้าหน้ามาก" />
                 <SliderField label="ตำแหน่ง crop — ซ้าย/ขวา" value={circleCropXPct} unit="%" min={0} max={100} onChange={setCircleCropXPct} hint="เลื่อน crop ในเฟรมต้นฉบับ" />
                 <SliderField label="ตำแหน่ง crop — บน/ล่าง" value={circleCropYPct} unit="%" min={0} max={100} onChange={setCircleCropYPct} hint="ดันขึ้นเพื่อจับใบหน้า" />
@@ -1958,6 +1963,20 @@ export function AvatarVerticalClipPortal() {
                   💡 ลากวงกลมม่วงบนภาพเพื่อเลือกตำแหน่งหน้า และลากจุดมุมเพื่อย่อ/ขยาย — ค่านี้จะถูกใช้กับ <b>ทุกคลิป</b> เหมือนกัน (เพราะ Avatar นั่งตำแหน่งเดิม) วงกลมที่เห็น = ส่วนที่จะโชว์จริงในคลิป
                 </div>
               </div>
+            </div>
+
+            {/* ค่า Crop เป็นการตั้งค่าสด (ใช้ตอนเรนเดอร์อัตโนมัติ) — ไม่ต้องเซฟ แค่กดไปต่อ */}
+            <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                ✅ ปรับ Crop พอใจแล้ว? ค่านี้ถูกบันทึกอัตโนมัติและจะใช้ตอนเรนเดอร์ — กดปุ่มเพื่อไปยังขั้นตอนเรนเดอร์ได้เลย
+              </p>
+              <button
+                onClick={goToRenderActions}
+                className="self-start sm:self-auto shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm text-white shadow-md transition-all hover:scale-[1.02] cursor-pointer"
+                style={{ backgroundColor: '#a855f7' }}
+              >
+                ✅ ใช้ค่า Crop นี้ — ไปขั้นตอนเรนเดอร์ ↓
+              </button>
             </div>
           </div>
         )}
@@ -2323,6 +2342,9 @@ export function AvatarVerticalClipPortal() {
           </div>
         )}
       </div>
+
+      {/* จุดยึดเลื่อนจอจากปุ่ม "ใช้ค่า Crop นี้" มายังแถบปุ่มเรนเดอร์ */}
+      <div ref={renderActionsRef} className="scroll-mt-4" />
 
       {shopeeMode && (
         <div className="flex flex-wrap gap-3 items-center justify-between p-4 rounded-2xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
