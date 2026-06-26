@@ -78,6 +78,9 @@ __pycache__/
 public/models/
 public/temp_render/
 
+# App-data key-value store (brains/ข้อมูลแอป — เป็นข้อมูลผู้ใช้ ไม่ commit)
+public/app_data/
+
 # Stock media files (generated/downloaded at runtime)
 public/Voice_stock/*.mp3
 public/Video_stock/

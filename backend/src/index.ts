@@ -85,6 +85,68 @@ app.get('/api/open-folder', (req, res) => {
   }
 });
 
+// === Generic key-value app-data store (ใช้เก็บคลังสมอง/brains และข้อมูลแอปอื่นๆ) ===
+// เก็บเป็นไฟล์ JSON แยกตาม key ใน public/app_data เพื่อให้สอดคล้องกับ cache อื่นๆ ของระบบ
+const APP_DATA_DIR = path.resolve(__dirname, '../../public/app_data');
+
+const appDataFilePath = (key: string): string => {
+  // sanitize key กัน path traversal — อนุญาตเฉพาะ ตัวอักษร/ตัวเลข/ขีด
+  const safeKey = String(key).replace(/[^A-Za-z0-9_-]/g, '');
+  return path.join(APP_DATA_DIR, `${safeKey}.json`);
+};
+
+// โหลดข้อมูลตาม key — ถ้ายังไม่เคยบันทึกจะคืน [] (ฝั่ง frontend เช็ค data.length)
+app.get('/api/get-app-data', (req, res) => {
+  const key = String((req.query as any).key || '').trim();
+  if (!key) return res.status(400).json({ error: 'Missing key' });
+  try {
+    const filePath = appDataFilePath(key);
+    if (!fs.existsSync(filePath)) {
+      return res.json([]);
+    }
+    const raw = fs.readFileSync(filePath, 'utf8');
+    let parsed: any = [];
+    try { parsed = JSON.parse(raw); } catch { parsed = []; }
+    res.json(parsed);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// บันทึกข้อมูลตาม key — body: { key, data }
+app.post('/api/save-app-data', (req, res) => {
+  const { key, data } = req.body || {};
+  if (!key) return res.status(400).json({ error: 'Missing key' });
+  try {
+    if (!fs.existsSync(APP_DATA_DIR)) {
+      fs.mkdirSync(APP_DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(appDataFilePath(key), JSON.stringify(data ?? [], null, 2), 'utf8');
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// === Serve ไฟล์รูป/วิดีโอ จาก absolute path บนเครื่อง (พรีวิวคลิป/รูปที่เรนเดอร์แล้ว) ===
+// รองรับ HTTP Range อัตโนมัติผ่าน res.sendFile เพื่อให้ <video> เล่น/seek ได้
+app.get('/api/local-stock-image', (req, res) => {
+  const target = String((req.query as any).path || '').trim();
+  if (!target) return res.status(400).json({ error: 'Missing path' });
+  try {
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
+      return res.status(404).json({ error: 'ไม่พบไฟล์' });
+    }
+    res.sendFile(path.resolve(target), (err: any) => {
+      if (err && !res.headersSent) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+  } catch (err: any) {
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/find-local-folder', (req, res) => {
   const { folderName, fileSignatures } = req.body;
   if (!folderName) {
