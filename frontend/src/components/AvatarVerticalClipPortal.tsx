@@ -138,18 +138,46 @@ function autoTitleFromFileName(fileName: string) {
 // ── พรีวิวพาดหัวให้ "ตรงกับ output จริง" ──
 // มิเรอร์ logic ของ backend (makeTitle → wrapTitleLine(26) → 3 บรรทัด)
 // เพื่อให้การตัดบรรทัด + ขนาดฟอนต์ auto ในพรีวิวตรงกับวิดีโอที่เรนเดอร์ออกมา
+function segmentGraphemes(str: string): string[] {
+  const regex = /[^\u0e30-\u0e39\u0e47-\u0e4c\u0e4d\u0e4e][\u0e30-\u0e39\u0e47-\u0e4c\u0e4d\u0e4e]*/g;
+  return str.match(regex) || Array.from(str);
+}
+
+function wrapWord(word: string, maxChars: number): string[] {
+  const graphemes = segmentGraphemes(word);
+  const chunks: string[] = [];
+  for (let i = 0; i < graphemes.length; i += maxChars) {
+    chunks.push(graphemes.slice(i, i + maxChars).join(''));
+  }
+  return chunks;
+}
+
 function wrapTitleLineForPreview(line: string, maxChars = 26): string[] {
   const words = line.split(' ').filter(Boolean);
-  if (words.length <= 1) return [line];
+  if (words.length === 0) return [];
   const out: string[] = [];
   let current = '';
   for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (Array.from(next).length > maxChars && current && out.length < 2) {
-      out.push(current);
-      current = word;
+    const wordGraphemes = segmentGraphemes(word);
+    if (wordGraphemes.length > maxChars) {
+      if (current) {
+        out.push(current);
+        current = '';
+      }
+      const subWords = wrapWord(word, maxChars);
+      for (let i = 0; i < subWords.length - 1; i++) {
+        out.push(subWords[i]);
+      }
+      current = subWords[subWords.length - 1];
     } else {
-      current = next;
+      const next = current ? `${current} ${word}` : word;
+      const nextGraphemes = segmentGraphemes(next);
+      if (nextGraphemes.length > maxChars && current) {
+        out.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
     }
   }
   if (current) out.push(current);
@@ -1915,8 +1943,8 @@ export function AvatarVerticalClipPortal() {
               {/* เฟรม + วงกลม crop ลาก/ย่อขยายได้ */}
               <div
                 ref={cropBoxRef}
-                className="relative rounded-xl overflow-hidden border select-none mx-auto"
-                style={{ width: 300, maxWidth: '100%', aspectRatio: cropFrameImage ? 'auto' : '16 / 9', backgroundColor: '#000', borderColor: 'var(--border-color)', touchAction: 'none' }}
+                className="relative rounded-xl border select-none mx-auto"
+                style={{ width: 300, maxWidth: '100%', aspectRatio: cropFrameImage ? 'auto' : '16 / 9', backgroundColor: '#000', borderColor: 'var(--border-color)', touchAction: 'none', overflow: 'hidden' }}
               >
                 {cropFrameImage ? (
                   <img src={cropFrameImage} alt="avatar frame" className="block w-full h-auto pointer-events-none" />
@@ -2875,7 +2903,7 @@ export function AvatarVerticalClipPortal() {
                   let simulatedFontSize = headlineFontSize;
                   if (simulatedFontSize === 0) {
                     const lines = text.split('\n').filter(Boolean);
-                    const longestLine = Math.max(...lines.map(line => Array.from(line).length), 1);
+                    const longestLine = Math.max(...lines.map(line => segmentGraphemes(line).length), 1);
                     simulatedFontSize = Math.max(42, Math.min(82, Math.floor(1500 / longestLine)));
                   }
 

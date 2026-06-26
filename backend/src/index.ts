@@ -2054,22 +2054,50 @@ const normalizeTitleText = (value: string) => {
     .join('\n');
 };
 
+const segmentGraphemes = (str: string): string[] => {
+  const regex = /[^\u0e30-\u0e39\u0e47-\u0e4c\u0e4d\u0e4e][\u0e30-\u0e39\u0e47-\u0e4c\u0e4d\u0e4e]*/g;
+  return str.match(regex) || Array.from(str);
+};
+
+const wrapWord = (word: string, maxChars: number): string[] => {
+  const graphemes = segmentGraphemes(word);
+  const chunks: string[] = [];
+  for (let i = 0; i < graphemes.length; i += maxChars) {
+    chunks.push(graphemes.slice(i, i + maxChars).join(''));
+  }
+  return chunks;
+};
+
 const wrapTitleLine = (line: string, maxChars: number) => {
   const words = line.split(' ').filter(Boolean);
-  if (words.length <= 1) return [line];
-  const lines: string[] = [];
+  if (words.length === 0) return [];
+  const out: string[] = [];
   let current = '';
   for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (Array.from(next).length > maxChars && current && lines.length < 2) {
-      lines.push(current);
-      current = word;
+    const wordGraphemes = segmentGraphemes(word);
+    if (wordGraphemes.length > maxChars) {
+      if (current) {
+        out.push(current);
+        current = '';
+      }
+      const subWords = wrapWord(word, maxChars);
+      for (let i = 0; i < subWords.length - 1; i++) {
+        out.push(subWords[i]);
+      }
+      current = subWords[subWords.length - 1];
     } else {
-      current = next;
+      const next = current ? `${current} ${word}` : word;
+      const nextGraphemes = segmentGraphemes(next);
+      if (nextGraphemes.length > maxChars && current) {
+        out.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
     }
   }
-  if (current) lines.push(current);
-  return lines;
+  if (current) out.push(current);
+  return out;
 };
 
 const makeTitle = (fileName: string, customTitle?: string) => {
@@ -2555,7 +2583,7 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
       const titleAssPath = path.join(tempDir, 'title.ass');
       const titleText = makeTitle(avatarFile, customTitleText);
       const titleLines = titleText.split('\n').filter(Boolean);
-      const longestLine = Math.max(...titleLines.map(line => Array.from(line).length), 1);
+      const longestLine = Math.max(...titleLines.map(line => segmentGraphemes(line).length), 1);
       const fontSize = Math.max(42, Math.min(82, Math.floor(1500 / longestLine)));
       const hlFontSize = hlFontSizeOverride > 0 ? hlFontSizeOverride : fontSize;
       // WYSIWYG: ใช้ตำแหน่ง Y ตามที่ผู้ใช้ตั้ง/ลากในพรีวิวตรง ๆ (เลิก override ค่า default
