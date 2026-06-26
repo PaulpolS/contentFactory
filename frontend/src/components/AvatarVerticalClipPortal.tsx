@@ -44,6 +44,11 @@ const AVATAR_VERTICAL_KEYS = {
   isVerticalAvatar: 'avatar_vertical_is_vertical_avatar',
   useGreenScreenKeying: 'avatar_vertical_use_green_screen_keying',
   headlineAiEnabled: 'avatar_vertical_headline_ai_enabled',
+  avatarLayout: 'avatar_vertical_avatar_layout',
+  shopeeMode: 'avatar_vertical_shopee_mode',
+  shopeeProductFolder: 'avatar_vertical_shopee_product_folder',
+  shopeeAvatarFolder: 'avatar_vertical_shopee_avatar_folder',
+  shopeeHeadlines: 'avatar_vertical_shopee_headlines',
 };
 
 const SUBTITLE_STYLES = [
@@ -83,6 +88,29 @@ const SUBTITLE_STYLE_DEFAULT_SIZES: Record<string, number> = {
   'cinema-box': 52,
   'neon-blue': 56,
 };
+
+// เลย์เอาต์การแสดง Avatar — ตรงกับ switch ใน backend (/api/render-avatar-vertical-clip)
+const AVATAR_LAYOUTS = [
+  { id: 'split', label: 'แบ่งบน-ล่าง', icon: '🔲', desc: 'footage ด้านบน + Avatar ด้านล่าง (ของเดิม)' },
+  { id: 'bottom-band', label: 'แถบล่าง', icon: '📺', desc: 'footage เต็มจอ + คลิป Avatar แนวนอนวางแถบล่าง' },
+  { id: 'circle', label: 'วงกลม Face-cam', icon: '⭕', desc: 'footage เต็มจอ + หน้า Avatar crop วงกลม' },
+  { id: 'greenscreen-full', label: 'กรีนสกรีนเต็มจอ', icon: '🟩', desc: 'Avatar เจาะพื้นหลังเขียวซ้อนเต็มจอ' },
+];
+
+// ป้ายกำกับสไตล์พาดหัว 3 แบบที่ AI สร้าง (ตรงลำดับกับ generateAiHeadline ใน backend)
+const HEADLINE_STYLE_LABELS = ['🧠 สุขุม/ปรัชญา', '🔥 Clickbait', '✅ บอกประโยชน์'];
+
+// ฟอนต์พาดหัว — family name ต้องตรงกับไฟล์ใน public/Font_stock
+const HEADLINE_FONTS = [
+  { id: 'Prompt', label: 'Prompt (ค่าเริ่มต้น)' },
+  { id: 'Kanit', label: 'Kanit' },
+  { id: 'Mitr', label: 'Mitr' },
+  { id: 'Mali', label: 'Mali' },
+  { id: 'Sarabun', label: 'Sarabun' },
+  { id: 'Chonburi', label: 'Chonburi' },
+  { id: 'Itim', label: 'Itim (ลายมือ)' },
+  { id: 'Noto Sans Thai', label: 'Noto Sans Thai' },
+];
 
 function autoTitleFromFileName(fileName: string) {
   const base = fileName
@@ -173,9 +201,47 @@ export function AvatarVerticalClipPortal() {
   const [subtitleYPosition, setSubtitleYPosition] = useState(() => Number(localStorage.getItem('avatar_vertical_subtitle_y_position') || 1750));
   
   // New Layout & AI Headline settings state
-  const [isVerticalAvatar, setIsVerticalAvatar] = useState(() => localStorage.getItem(AVATAR_VERTICAL_KEYS.isVerticalAvatar) === 'true');
   const [useGreenScreenKeying, setUseGreenScreenKeying] = useState(() => localStorage.getItem(AVATAR_VERTICAL_KEYS.useGreenScreenKeying) === 'true');
   const [headlineAiEnabled, setHeadlineAiEnabled] = useState(() => localStorage.getItem(AVATAR_VERTICAL_KEYS.headlineAiEnabled) === 'true');
+
+  // เลย์เอาต์ Avatar (split | bottom-band | circle | greenscreen-full) — map ย้อนหลังจาก flag เดิม
+  const [avatarLayout, setAvatarLayout] = useState(() => {
+    const saved = localStorage.getItem(AVATAR_VERTICAL_KEYS.avatarLayout);
+    if (saved) return saved;
+    return localStorage.getItem(AVATAR_VERTICAL_KEYS.isVerticalAvatar) === 'true' ? 'greenscreen-full' : 'split';
+  });
+  // สไลเดอร์ขนาดต่อเลย์เอาต์
+  const [footageRatioPct, setFootageRatioPct] = useState(() => Number(localStorage.getItem('avatar_vertical_footage_ratio_pct') || 54));
+  const [avatarScalePct, setAvatarScalePct] = useState(() => Number(localStorage.getItem('avatar_vertical_avatar_scale_pct') || 100));
+  const [bandHeightPct, setBandHeightPct] = useState(() => Number(localStorage.getItem('avatar_vertical_band_height_pct') || 32));
+  const [bandPosYPct, setBandPosYPct] = useState(() => Number(localStorage.getItem('avatar_vertical_band_pos_y_pct') || 0));
+  const [circleDiameterPct, setCircleDiameterPct] = useState(() => Number(localStorage.getItem('avatar_vertical_circle_diameter_pct') || 38));
+  const [circlePosXPct, setCirclePosXPct] = useState(() => Number(localStorage.getItem('avatar_vertical_circle_pos_x_pct') || 50));
+  const [circlePosYPct, setCirclePosYPct] = useState(() => Number(localStorage.getItem('avatar_vertical_circle_pos_y_pct') || 72));
+  // Crop ใบหน้าในวงกลม (ตั้งครั้งเดียวใช้ทุกคลิป): size=ซูม, X/Y=ตำแหน่งใน source frame
+  const [circleCropSizePct, setCircleCropSizePct] = useState(() => Number(localStorage.getItem('avatar_vertical_circle_crop_size_pct') || 80));
+  const [circleCropXPct, setCircleCropXPct] = useState(() => Number(localStorage.getItem('avatar_vertical_circle_crop_x_pct') || 50));
+  const [circleCropYPct, setCircleCropYPct] = useState(() => Number(localStorage.getItem('avatar_vertical_circle_crop_y_pct') || 32));
+  // เฟรมตัวอย่างสำหรับเครื่องมือเลือก crop หน้า
+  const [cropFrameImage, setCropFrameImage] = useState('');
+  const [cropFrameAspect, setCropFrameAspect] = useState(16 / 9); // w/h ของเฟรมต้นฉบับ
+  const [isLoadingFrame, setIsLoadingFrame] = useState(false);
+
+  // โหมด Shopee (จับคู่ footage สินค้า ↔ Avatar เป็นชุด)
+  const [shopeeMode, setShopeeMode] = useState(() => localStorage.getItem(AVATAR_VERTICAL_KEYS.shopeeMode) === 'true');
+  const [shopeeProductFolder, setShopeeProductFolder] = useState(() => localStorage.getItem(AVATAR_VERTICAL_KEYS.shopeeProductFolder) || '');
+  const [shopeeAvatarFolder, setShopeeAvatarFolder] = useState(() => localStorage.getItem(AVATAR_VERTICAL_KEYS.shopeeAvatarFolder) || '');
+  const [shopeePairs, setShopeePairs] = useState<any[]>([]);
+  const [shopeeProductOptions, setShopeeProductOptions] = useState<any[]>([]);
+  const [shopeeSelected, setShopeeSelected] = useState<string[]>([]);
+  const [shopeeHeadlines, setShopeeHeadlines] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem(AVATAR_VERTICAL_KEYS.shopeeHeadlines) || '{}'); } catch { return {}; }
+  });
+  const [shopeeStatus, setShopeeStatus] = useState<Record<string, { status: string; message?: string; outputPath?: string }>>({});
+  // สถานะถอดซับแยกขั้นตอน (idle | transcribing | done | error) — แคชไว้เพื่อเรนเดอร์ซ้ำไม่ต้องถอดเสียงใหม่
+  const [shopeeSubStatus, setShopeeSubStatus] = useState<Record<string, 'idle' | 'transcribing' | 'done' | 'error'>>({});
+  const [isPairing, setIsPairing] = useState(false);
+  const [isTranscribingAll, setIsTranscribingAll] = useState(false);
 
   // Interactive AI Headline Modal state
   const [isHeadlineModalOpen, setIsHeadlineModalOpen] = useState(false);
@@ -195,6 +261,10 @@ export function AvatarVerticalClipPortal() {
     return saved !== null ? Number(saved) : 82;
   });
   const [headlineYPosition, setHeadlineYPosition] = useState(() => Number(localStorage.getItem('avatar_vertical_headline_y_position') || 220));
+  const [headlineFont, setHeadlineFont] = useState(() => localStorage.getItem('avatar_vertical_headline_font') || 'Prompt');
+  // กล่องพาดหัวกำหนดขนาดเอง (0 = อัตโนมัติตามตัวอักษร)
+  const [headlineBoxWidth, setHeadlineBoxWidth] = useState(() => Number(localStorage.getItem('avatar_vertical_headline_box_width') || 0));
+  const [headlineBoxHeight, setHeadlineBoxHeight] = useState(() => Number(localStorage.getItem('avatar_vertical_headline_box_height') || 0));
 
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [avatarFiles, setAvatarFiles] = useState<string[]>([]);
@@ -234,6 +304,151 @@ export function AvatarVerticalClipPortal() {
     window.addEventListener('pointerup', onUp);
   };
 
+  // ── ลาก/ปรับขนาด Avatar overlay บนพรีวิว (ตรงกับพิกัดที่ backend ใช้เรนเดอร์) ──
+  const [avatarPreviewMode, setAvatarPreviewMode] = useState<'idle' | 'drag' | 'resize'>('idle');
+  const clampNum = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(v)));
+
+  // วงกลม Face-cam: ลากย้ายจุดศูนย์กลาง
+  const startCircleDrag = (e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const screen = previewScreenRef.current; if (!screen) return;
+    setAvatarPreviewMode('drag');
+    const onMove = (ev: PointerEvent) => {
+      const rect = screen.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      setCirclePosXPct(clampNum(((ev.clientX - rect.left) / rect.width) * 100, 0, 100));
+      setCirclePosYPct(clampNum(((ev.clientY - rect.top) / rect.height) * 100, 0, 100));
+    };
+    const onUp = () => { setAvatarPreviewMode('idle'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+  // วงกลม Face-cam: ลากที่ขอบเพื่อย่อ/ขยาย (เส้นผ่านศูนย์กลาง = 2 × ระยะจากศูนย์กลางถึงเมาส์)
+  const startCircleResize = (e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const screen = previewScreenRef.current; if (!screen) return;
+    setAvatarPreviewMode('resize');
+    const rect0 = screen.getBoundingClientRect();
+    const cxPx = rect0.left + (circlePosXPct / 100) * rect0.width;
+    const cyPx = rect0.top + (circlePosYPct / 100) * rect0.height;
+    const onMove = (ev: PointerEvent) => {
+      const rect = screen.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const distPx = Math.hypot(ev.clientX - cxPx, ev.clientY - cyPx);
+      setCircleDiameterPct(clampNum(((distPx * 2) / rect.width) * 100, 18, 70));
+    };
+    const onUp = () => { setAvatarPreviewMode('idle'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  // แถบล่าง: ลากขึ้น/ลงเพื่อปรับระยะห่างจากขอบล่าง
+  const startBandDrag = (e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const screen = previewScreenRef.current; if (!screen) return;
+    setAvatarPreviewMode('drag');
+    const onMove = (ev: PointerEvent) => {
+      const rect = screen.getBoundingClientRect();
+      if (rect.height <= 0) return;
+      const centerFromBottomPct = ((rect.bottom - ev.clientY) / rect.height) * 100;
+      setBandPosYPct(clampNum(centerFromBottomPct - bandHeightPct / 2, 0, 40));
+    };
+    const onUp = () => { setAvatarPreviewMode('idle'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+  // แถบล่าง: ลากขอบบนเพื่อปรับความสูง
+  const startBandResize = (e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const screen = previewScreenRef.current; if (!screen) return;
+    setAvatarPreviewMode('resize');
+    const onMove = (ev: PointerEvent) => {
+      const rect = screen.getBoundingClientRect();
+      if (rect.height <= 0) return;
+      const bandBottomPx = rect.bottom - (bandPosYPct / 100) * rect.height;
+      const heightPx = bandBottomPx - ev.clientY;
+      setBandHeightPct(clampNum((heightPx / rect.height) * 100, 15, 60));
+    };
+    const onUp = () => { setAvatarPreviewMode('idle'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+  // กรีนสกรีน: ลากขอบเพื่อปรับสเกล Avatar (อิงความกว้าง)
+  const startGreenscreenResize = (e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const screen = previewScreenRef.current; if (!screen) return;
+    setAvatarPreviewMode('resize');
+    const onMove = (ev: PointerEvent) => {
+      const rect = screen.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const halfWidthPx = Math.abs(ev.clientX - (rect.left + rect.width / 2));
+      setAvatarScalePct(clampNum(((halfWidthPx * 2) / rect.width) * 100, 40, 120));
+    };
+    const onUp = () => { setAvatarPreviewMode('idle'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  // โหลดเฟรมตัวอย่างจากคลิป Avatar ตัวแรก (โหมด Shopee = คู่แรกที่จับได้, โหมดปกติ = ไฟล์แรก)
+  const loadCropFrame = async () => {
+    let videoPath = '';
+    if (shopeeMode) {
+      const p = shopeePairs.find((x: any) => x.matched && x.avatarVideoFile) || shopeePairs.find((x: any) => x.avatarVideoFile);
+      if (p) videoPath = `${p.avatarVideoDir}/${p.avatarVideoFile}`;
+    } else if (avatarFolder && avatarFiles.length > 0) {
+      videoPath = `${avatarFolder}/${avatarFiles[0]}`;
+    }
+    if (!videoPath) { alert('ยังไม่มีคลิป Avatar ให้โหลดเฟรม — เลือกโฟลเดอร์ Avatar ก่อนครับ'); return; }
+    setIsLoadingFrame(true);
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/extract-avatar-frame`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoPath }),
+      });
+      const data = await res.json();
+      if (data.success && data.image) {
+        setCropFrameImage(data.image);
+        if (data.width > 0 && data.height > 0) setCropFrameAspect(data.width / data.height);
+        addLog('🖼️ โหลดเฟรมตัวอย่างสำหรับตั้งค่า Crop หน้าแล้ว');
+      }
+      else addLog(`❌ โหลดเฟรมไม่สำเร็จ: ${data.error || 'unknown'}`);
+    } catch (e: any) {
+      addLog(`❌ โหลดเฟรมผิดพลาด: ${e.message || e}`);
+    } finally { setIsLoadingFrame(false); }
+  };
+
+  // ลาก/ย่อขยายวงกลม crop บนเฟรมตัวอย่าง (อ้างอิงกรอบรูปที่แสดง)
+  const cropBoxRef = useRef<HTMLDivElement | null>(null);
+  const startCropDrag = (e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const box = cropBoxRef.current; if (!box) return;
+    const onMove = (ev: PointerEvent) => {
+      const rect = box.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      setCircleCropXPct(clampNum(((ev.clientX - rect.left) / rect.width) * 100, 0, 100));
+      setCircleCropYPct(clampNum(((ev.clientY - rect.top) / rect.height) * 100, 0, 100));
+    };
+    const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+  const startCropResize = (e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const box = cropBoxRef.current; if (!box) return;
+    const rect0 = box.getBoundingClientRect();
+    const minSide = Math.min(rect0.width, rect0.height);
+    const cxPx = rect0.left + (circleCropXPct / 100) * rect0.width;
+    const cyPx = rect0.top + (circleCropYPct / 100) * rect0.height;
+    const onMove = (ev: PointerEvent) => {
+      const distPx = Math.hypot(ev.clientX - cxPx, ev.clientY - cyPx);
+      // distPx = รัศมีของวง → ด้านสี่เหลี่ยม = 2*distPx ; แปลงเป็น % ของด้านสั้น
+      setCircleCropSizePct(clampNum(((distPx * 2) / minSide) * 100, 30, 100));
+    };
+    const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
   useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.avatarFolder, avatarFolder); }, [avatarFolder]);
   useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.footageFolder, footageFolder); }, [footageFolder]);
   useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.outputFolder, outputFolder); }, [outputFolder]);
@@ -250,19 +465,41 @@ export function AvatarVerticalClipPortal() {
   useEffect(() => { localStorage.setItem('avatar_vertical_subtitle_font_size', String(subtitleFontSize)); }, [subtitleFontSize]);
   useEffect(() => { localStorage.setItem('avatar_vertical_subtitle_y_position', String(subtitleYPosition)); }, [subtitleYPosition]);
   
-  useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.isVerticalAvatar, String(isVerticalAvatar)); }, [isVerticalAvatar]);
+  useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.avatarLayout, avatarLayout); }, [avatarLayout]);
   useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.useGreenScreenKeying, String(useGreenScreenKeying)); }, [useGreenScreenKeying]);
   useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.headlineAiEnabled, String(headlineAiEnabled)); }, [headlineAiEnabled]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_footage_ratio_pct', String(footageRatioPct)); }, [footageRatioPct]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_avatar_scale_pct', String(avatarScalePct)); }, [avatarScalePct]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_band_height_pct', String(bandHeightPct)); }, [bandHeightPct]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_band_pos_y_pct', String(bandPosYPct)); }, [bandPosYPct]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_circle_diameter_pct', String(circleDiameterPct)); }, [circleDiameterPct]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_circle_pos_x_pct', String(circlePosXPct)); }, [circlePosXPct]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_circle_pos_y_pct', String(circlePosYPct)); }, [circlePosYPct]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_circle_crop_size_pct', String(circleCropSizePct)); }, [circleCropSizePct]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_circle_crop_x_pct', String(circleCropXPct)); }, [circleCropXPct]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_circle_crop_y_pct', String(circleCropYPct)); }, [circleCropYPct]);
+
+  useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.shopeeMode, String(shopeeMode)); }, [shopeeMode]);
+  useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.shopeeProductFolder, shopeeProductFolder); }, [shopeeProductFolder]);
+  useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.shopeeAvatarFolder, shopeeAvatarFolder); }, [shopeeAvatarFolder]);
+  useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.shopeeHeadlines, JSON.stringify(shopeeHeadlines)); }, [shopeeHeadlines]);
 
   useEffect(() => { localStorage.setItem('avatar_vertical_headline_style', headlineStyle); }, [headlineStyle]);
   useEffect(() => { localStorage.setItem('avatar_vertical_headline_padding', String(headlinePadding)); }, [headlinePadding]);
   useEffect(() => { localStorage.setItem('avatar_vertical_headline_opacity', String(headlineOpacity)); }, [headlineOpacity]);
   useEffect(() => { localStorage.setItem('avatar_vertical_headline_font_size', String(headlineFontSize)); }, [headlineFontSize]);
   useEffect(() => { localStorage.setItem('avatar_vertical_headline_y_position', String(headlineYPosition)); }, [headlineYPosition]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_headline_font', headlineFont); }, [headlineFont]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_headline_box_width', String(headlineBoxWidth)); }, [headlineBoxWidth]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_headline_box_height', String(headlineBoxHeight)); }, [headlineBoxHeight]);
 
   useEffect(() => {
     if (avatarFolder) void refreshAvatarFiles(avatarFolder);
   }, [avatarFolder, outputFolder]);
+
+  useEffect(() => {
+    if (shopeeMode && shopeeProductFolder && shopeeAvatarFolder) void refreshShopeePairs(shopeeProductFolder, shopeeAvatarFolder);
+  }, [shopeeMode, shopeeProductFolder, shopeeAvatarFolder]);
 
   const addLog = (text: string) => {
     const stamp = new Date().toLocaleTimeString('th-TH', { hour12: false });
@@ -636,8 +873,19 @@ export function AvatarVerticalClipPortal() {
           bgmFile,
           bgmVolume: Math.max(0, Math.min(100, bgmVolume)) / 100,
           titleText: titleTexts[item.name] || autoTitleFromFileName(item.name),
-          isVerticalAvatar,
+          avatarLayout,
+          isVerticalAvatar: avatarLayout !== 'split',
           useGreenScreenKeying,
+          footageRatioPct,
+          avatarScalePct,
+          bandHeightPct,
+          bandPosYPct,
+          circleDiameterPct,
+          circlePosXPct,
+          circlePosYPct,
+          circleCropSizePct,
+          circleCropXPct,
+          circleCropYPct,
           headlineAiEnabled,
           subtitle: {
             enabled: subtitleEnabled,
@@ -658,7 +906,10 @@ export function AvatarVerticalClipPortal() {
             padding: headlinePadding,
             opacity: headlineOpacity,
             fontSize: headlineFontSize,
-            yPosition: headlineYPosition
+            yPosition: headlineYPosition,
+            font: headlineFont,
+            boxWidth: headlineBoxWidth,
+            boxHeight: headlineBoxHeight
           },
         }),
         signal: controller.signal,
@@ -906,6 +1157,248 @@ export function AvatarVerticalClipPortal() {
     await fetch(`${BACKEND_BASE}/api/open-folder?type=${encodeURIComponent(outputFolder)}`);
   };
 
+  // ── โหมด Shopee: จับคู่โฟลเดอร์ย่อย footage สินค้า ↔ Avatar ──
+  const refreshShopeePairs = async (productFolder = shopeeProductFolder, avatarFolderParent = shopeeAvatarFolder) => {
+    if (!productFolder || !avatarFolderParent) return;
+    setIsPairing(true);
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/shopee-pair-folders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productFolder, avatarFolder: avatarFolderParent }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        addLog(`❌ จับคู่โฟลเดอร์ Shopee ไม่สำเร็จ: ${data.error || 'unknown'}`);
+        setShopeePairs([]);
+        return;
+      }
+      const pairs = data.pairs || [];
+      setShopeePairs(pairs);
+      setShopeeProductOptions(data.productFolders || []);
+      // เลือกทุกคู่ที่จับได้โดยอัตโนมัติ
+      setShopeeSelected(pairs.filter((p: any) => p.matched).map((p: any) => p.avatarSubfolder));
+
+      // กู้สถานะ "ถอดซับแล้ว" จากแคช เพื่อจะได้ไม่ต้องถอดซ้ำ
+      const subsCache = readShopeeSubsCache();
+      const subStatusInit: Record<string, 'done'> = {};
+      pairs.forEach((p: any) => {
+        if (subsCache[p.avatarSubfolderPath] && subsCache[p.avatarSubfolderPath].length > 0) subStatusInit[p.avatarSubfolder] = 'done';
+      });
+      setShopeeSubStatus(subStatusInit);
+
+      const matchedCount = pairs.filter((p: any) => p.matched).length;
+      const cachedCount = Object.keys(subStatusInit).length;
+      addLog(`🛒 พบ Avatar ${pairs.length} ชุด, จับคู่สำเร็จ ${matchedCount} ชุด${cachedCount ? ` · ถอดซับไว้แล้ว ${cachedCount} ชุด` : ''}`);
+    } catch (e: any) {
+      addLog(`❌ จับคู่โฟลเดอร์ Shopee ผิดพลาด: ${e.message || e}`);
+    } finally {
+      setIsPairing(false);
+    }
+  };
+
+  const overrideShopeeProduct = (avatarSubfolder: string, productPath: string) => {
+    const opt = shopeeProductOptions.find(o => o.path === productPath);
+    setShopeePairs(prev => prev.map(p => p.avatarSubfolder === avatarSubfolder ? {
+      ...p,
+      productSubfolderPath: productPath,
+      productSubfolder: opt ? opt.name : '',
+      productClipCount: opt ? opt.clipCount : 0,
+      matched: !!productPath && !!p.avatarVideoFile,
+    } : p));
+  };
+
+  // แคชซับ Shopee (key = avatarSubfolderPath) เพื่อให้เรนเดอร์ซ้ำไม่ต้องถอดเสียงใหม่
+  const readShopeeSubsCache = (): Record<string, any[]> => {
+    try { return JSON.parse(localStorage.getItem('avatar_vertical_shopee_subs_cache') || '{}'); } catch { return {}; }
+  };
+  const writeShopeeSubsCache = (key: string, segs: any[]) => {
+    try { const c = readShopeeSubsCache(); c[key] = segs; localStorage.setItem('avatar_vertical_shopee_subs_cache', JSON.stringify(c)); } catch {}
+  };
+  const readShopeeHooksCache = (): Record<string, string[]> => {
+    try { return JSON.parse(localStorage.getItem('avatar_vertical_shopee_hooks_cache') || '{}'); } catch { return {}; }
+  };
+  const writeShopeeHooksCache = (key: string, hooks: string[]) => {
+    try { const c = readShopeeHooksCache(); c[key] = hooks; localStorage.setItem('avatar_vertical_shopee_hooks_cache', JSON.stringify(c)); } catch {}
+  };
+
+  // ── ขั้นที่ 1: ถอดซับ (+ คิดพาดหัว AI) ของ Avatar แล้วแคชไว้ ──
+  //   fillHeadline=true → เติมพาดหัวสไตล์สุขุมลงช่องด้วย (ปุ่ม "AI ช่วยคิด")
+  //   fillHeadline=false → ถอดซับอย่างเดียว เก็บแคชไว้ (ปุ่ม "ถอดซับ")
+  const prepareShopeePair = async (pair: any, fillHeadline: boolean) => {
+    const openRouterKey = getActiveOpenRouterKey();
+    if (!openRouterKey) { alert('กรุณากรอก OpenRouter Key ในการตั้งค่าก่อนใช้งานครับ'); return false; }
+    if (!pair.avatarVideoFile) { alert('ไม่พบไฟล์วิดีโอ Avatar ในโฟลเดอร์นี้'); return false; }
+
+    setShopeeSubStatus(prev => ({ ...prev, [pair.avatarSubfolder]: 'transcribing' }));
+    if (fillHeadline) setShopeeStatus(prev => ({ ...prev, [pair.avatarSubfolder]: { status: 'ai', message: '🎙️ ถอดซับ + คิดพาดหัว...' } }));
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/generate-avatar-headline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatarFolder: pair.avatarVideoDir, avatarFile: pair.avatarVideoFile, openRouterKey }),
+      });
+      if (!res.ok) throw new Error(`เซิร์ฟเวอร์ตอบกลับผิดปกติ (${res.status})`);
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('ไม่สนับสนุนการอ่านแบบ Stream');
+      const decoder = new TextDecoder();
+      let done = false, buffer = '', finalData: any = null;
+      while (!done) {
+        const { value, done: dr } = await reader.read();
+        done = dr;
+        if (value) {
+          buffer += decoder.decode(value, { stream: !done });
+          const parts = buffer.split('\n'); buffer = parts.pop() || '';
+          for (const line of parts) {
+            const t = line.trim();
+            if (!t.startsWith('data: ')) continue;
+            try {
+              const parsed = JSON.parse(t.slice(6));
+              if (parsed.log) addLog(`[${pair.avatarSubfolder}] ${parsed.log}`);
+              if (parsed.success) finalData = parsed;
+              else if (parsed.success === false && parsed.error) throw new Error(parsed.error);
+            } catch {}
+          }
+        }
+      }
+      if (finalData && finalData.success) {
+        const segments = finalData.segments || [];
+        const hooks: string[] = finalData.headlines || [];
+        writeShopeeSubsCache(pair.avatarSubfolderPath, segments);
+        if (hooks.length > 0) writeShopeeHooksCache(pair.avatarSubfolderPath, hooks);
+        setShopeeSubStatus(prev => ({ ...prev, [pair.avatarSubfolder]: 'done' }));
+        addLog(`✅ [${pair.avatarSubfolder}] ถอดซับสำเร็จ (${segments.length} ประโยค) — แคชไว้แล้ว`);
+
+        if (fillHeadline && hooks.length > 0) {
+          setShopeeHeadlines(prev => ({ ...prev, [pair.avatarSubfolder]: hooks[0] }));
+          setShopeeStatus(prev => ({ ...prev, [pair.avatarSubfolder]: { status: 'idle', message: '✅ ถอดซับ + ได้พาดหัว' } }));
+          addLog(`💡 [${pair.avatarSubfolder}] พาดหัว AI 3 สไตล์ (ก๊อปแบบอื่นไปวางในช่องได้):`);
+          hooks.slice(0, 3).forEach((h, i) => addLog(`    ${HEADLINE_STYLE_LABELS[i] || `แบบ ${i + 1}`}: ${h}`));
+        } else {
+          setShopeeStatus(prev => ({ ...prev, [pair.avatarSubfolder]: { status: 'idle', message: '✅ ถอดซับเรียบร้อย' } }));
+        }
+        return true;
+      }
+      throw new Error('ไม่ได้รับผลลัพธ์จากเซิร์ฟเวอร์');
+    } catch (e: any) {
+      setShopeeSubStatus(prev => ({ ...prev, [pair.avatarSubfolder]: 'error' }));
+      setShopeeStatus(prev => ({ ...prev, [pair.avatarSubfolder]: { status: 'error', message: e.message || String(e) } }));
+      addLog(`❌ [${pair.avatarSubfolder}] ถอดซับ/พาดหัวล้มเหลว: ${e.message || e}`);
+      return false;
+    }
+  };
+
+  // ปุ่ม "AI ช่วยคิด" = ถอดซับ + เติมพาดหัว
+  const generateShopeeHeadlineAI = (pair: any) => prepareShopeePair(pair, true);
+
+  // ถอดซับทั้งหมดของคู่ที่เลือก (ขั้นที่ 1 แบบ batch)
+  const runShopeeTranscribeAll = async () => {
+    const openRouterKey = getActiveOpenRouterKey();
+    if (!openRouterKey) { alert('กรุณากรอก OpenRouter Key ในการตั้งค่าก่อนใช้งานครับ'); return; }
+    const targets = shopeePairs.filter(p => shopeeSelected.includes(p.avatarSubfolder) && p.matched);
+    const subsCache = readShopeeSubsCache();
+    const pending = targets.filter(p => !(subsCache[p.avatarSubfolderPath] && subsCache[p.avatarSubfolderPath].length > 0) && shopeeSubStatus[p.avatarSubfolder] !== 'done');
+    if (pending.length === 0) { addLog('💡 ทุกคู่ที่เลือกถอดซับไว้แล้ว ไม่ต้องทำซ้ำครับ'); return; }
+    setIsTranscribingAll(true);
+    addLog(`🎙️ [Shopee] เริ่มถอดซับ ${pending.length} คลิป (ขั้นที่ 1)...`);
+    for (const p of pending) await prepareShopeePair(p, true);
+    setIsTranscribingAll(false);
+    addLog('✨ [Shopee] ถอดซับครบแล้ว — ปรับฟอนต์/เลย์เอาต์แล้วกดตัดต่อได้เลย ไม่ต้องถอดซ้ำ');
+  };
+
+  const renderOneShopeePair = async (pair: any, controller: AbortController) => {
+    const openRouterKey = subtitleAiPolish ? getActiveOpenRouterKey() : '';
+    const cachedSubs = readShopeeSubsCache()[pair.avatarSubfolderPath];
+    const hasCachedSubs = Array.isArray(cachedSubs) && cachedSubs.length > 0;
+    setShopeeStatus(prev => ({ ...prev, [pair.avatarSubfolder]: { status: 'rendering', message: '🎬 กำลังตัดต่อ...' } }));
+    addLog(`🎬 [${pair.avatarSubfolder}] เริ่มตัดต่อ (footage: ${pair.productSubfolder})${hasCachedSubs ? ' · ใช้ซับที่ถอดไว้แล้ว' : ''}...`);
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/render-avatar-vertical-clip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          avatarFolder: pair.avatarVideoDir,
+          avatarFile: pair.avatarVideoFile,
+          footageFolder: pair.productSubfolderPath,
+          outputFolder,
+          bgmFile,
+          bgmVolume: Math.max(0, Math.min(100, bgmVolume)) / 100,
+          titleText: shopeeHeadlines[pair.avatarSubfolder] || '',
+          avatarLayout,
+          isVerticalAvatar: avatarLayout !== 'split',
+          useGreenScreenKeying,
+          footageRatioPct, avatarScalePct, bandHeightPct, bandPosYPct,
+          circleDiameterPct, circlePosXPct, circlePosYPct, circleCropSizePct, circleCropXPct, circleCropYPct,
+          headlineAiEnabled,
+          subtitle: {
+            enabled: subtitleEnabled, style: subtitleStyle, language: subtitleLanguage,
+            model: subtitleModel, aiPolish: subtitleAiPolish, openRouterKey,
+            openRouterModel: 'google/gemini-2.5-flash', density: subtitleDensity,
+            position: subtitlePosition, fontSize: subtitleFontSize, yPosition: subtitleYPosition,
+            precomputedSubtitles: hasCachedSubs ? cachedSubs : undefined,
+          },
+          headlineOptions: {
+            style: headlineStyle, padding: headlinePadding, opacity: headlineOpacity,
+            fontSize: headlineFontSize, yPosition: headlineYPosition, font: headlineFont,
+            boxWidth: headlineBoxWidth, boxHeight: headlineBoxHeight,
+          },
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`renderer ตอบกลับผิดปกติ (${res.status})`);
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('Stream not supported');
+      const decoder = new TextDecoder();
+      let done = false, outPath = '', errMsg = '';
+      while (!done) {
+        const { value, done: dr } = await reader.read();
+        done = dr;
+        if (!value) continue;
+        for (const line of decoder.decode(value, { stream: true }).split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.log) addLog(`[${pair.avatarSubfolder}] ${data.log}`);
+            if (data.success) outPath = data.filePath;
+            if (data.error) errMsg = data.error;
+          } catch {}
+        }
+      }
+      if (outPath) {
+        setShopeeStatus(prev => ({ ...prev, [pair.avatarSubfolder]: { status: 'done', message: '✅ สำเร็จ', outputPath: outPath } }));
+      } else {
+        throw new Error(errMsg || 'ไม่มีผลลัพธ์จาก renderer');
+      }
+    } catch (e: any) {
+      setShopeeStatus(prev => ({ ...prev, [pair.avatarSubfolder]: { status: 'error', message: e.name === 'AbortError' ? 'ถูกหยุด' : (e.message || String(e)) } }));
+    }
+  };
+
+  const runShopeeRenderAll = async (onlyPending = false) => {
+    if (!outputFolder) return alert('กรุณาเลือกโฟลเดอร์ Output');
+    let targets = shopeePairs.filter(p => shopeeSelected.includes(p.avatarSubfolder) && p.matched);
+    if (onlyPending) targets = targets.filter(p => shopeeStatus[p.avatarSubfolder]?.status !== 'done');
+    if (targets.length === 0) return alert(onlyPending ? 'ทุกคลิปที่เลือกตัดต่อเสร็จหมดแล้วครับ' : 'ไม่มีคู่ที่จับคู่สำเร็จและถูกเลือกให้ตัดต่อครับ');
+    const missingHeadline = targets.filter(p => !(shopeeHeadlines[p.avatarSubfolder] || '').trim());
+    if (missingHeadline.length > 0) {
+      const ok = confirm(`มี ${missingHeadline.length} คลิปที่ยังไม่ได้ใส่พาดหัว จะดำเนินการต่อโดยใช้พาดหัวจากชื่อไฟล์หรือไม่?`);
+      if (!ok) return;
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setIsRendering(true);
+    setProgress(0);
+    addLog(`🚀 [Shopee] เริ่มตัดต่อ ${targets.length} คลิป...`);
+    for (let i = 0; i < targets.length; i++) {
+      if (controller.signal.aborted) break;
+      await renderOneShopeePair(targets[i], controller);
+      setProgress(Math.round(((i + 1) / targets.length) * 100));
+    }
+    setIsRendering(false);
+    abortRef.current = null;
+    if (!controller.signal.aborted) addLog('✨ [Shopee] ตัดต่อครบทุกคลิปที่เลือกแล้ว');
+  };
+
   const handleGenerateHeadlineInteractive = async (fileName: string) => {
     setModalAvatarFile(fileName);
     setModalTranscript('');
@@ -1122,7 +1615,19 @@ export function AvatarVerticalClipPortal() {
         border: '0.1cqw solid rgba(239,68,68,0.3)',
       };
     }
-    if (headlineStyle === 'no-box-shadow') {
+    if (headlineStyle === 'shopee-orange') {
+      return { ...styleObj, color: '#ffffff', backgroundColor: `rgba(238, 77, 45, ${opacityValue})`, border: '0.1cqw solid rgba(238,77,45,0.3)' };
+    }
+    if (headlineStyle === 'mint-green') {
+      return { ...styleObj, color: '#0e1a23', backgroundColor: `rgba(20, 184, 166, ${opacityValue})`, border: '0.1cqw solid rgba(20,184,166,0.3)' };
+    }
+    if (headlineStyle === 'pastel-blue') {
+      return { ...styleObj, color: '#11304b', backgroundColor: `rgba(191, 219, 254, ${opacityValue})`, border: '0.1cqw solid rgba(59,130,246,0.2)' };
+    }
+    if (headlineStyle === 'rich-gold') {
+      return { ...styleObj, color: '#0e1a23', backgroundColor: `rgba(224, 176, 68, ${opacityValue})`, border: '0.1cqw solid rgba(180,131,42,0.4)' };
+    }
+    if (headlineStyle === 'no-box-shadow' || headlineStyle === 'outline-minimal') {
       return {
         ...styleObj,
         color: '#ffffff',
@@ -1210,8 +1715,26 @@ export function AvatarVerticalClipPortal() {
             สุ่ม footage ปิดเสียงไว้ด้านบน ใส่ชื่อจากไฟล์ Avatar แล้ววางคลิป Avatar แนวนอนไว้ด้านล่างเป็นวิดีโอ 9:16
           </p>
         </div>
-        <div className="rounded-2xl border px-4 py-3 text-xs" style={{ borderColor: 'rgba(168,85,247,0.35)', backgroundColor: 'rgba(168,85,247,0.09)', color: 'var(--text-secondary)' }}>
-          Output: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>ชื่อไฟล์ Avatar + _output.mp4</span>
+        <div className="flex flex-col gap-3 items-stretch">
+          <label className="flex items-center gap-3 cursor-pointer select-none rounded-2xl border px-4 py-3 transition-all"
+            style={{ borderColor: shopeeMode ? '#ee4d2d' : 'var(--border-color)', backgroundColor: shopeeMode ? 'rgba(238,77,45,0.10)' : 'var(--bg-body)' }}>
+            <input
+              type="checkbox"
+              checked={shopeeMode}
+              onChange={e => setShopeeMode(e.target.checked)}
+              className="w-5 h-5 cursor-pointer"
+              style={{ accentColor: '#ee4d2d' }}
+            />
+            <div>
+              <div className="font-bold text-sm flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                🛒 ใช้ตัดต่อเพื่อ Shopee (โหมดจับคู่สินค้า)
+              </div>
+              <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>จับคู่ footage สินค้ากับ Avatar เป็นชุด แล้วตัดต่อทีละหลายคลิป</div>
+            </div>
+          </label>
+          <div className="rounded-2xl border px-4 py-2.5 text-xs" style={{ borderColor: 'rgba(168,85,247,0.35)', backgroundColor: 'rgba(168,85,247,0.09)', color: 'var(--text-secondary)' }}>
+            Output: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{shopeeMode ? 'พาดหัว + _output.mp4 ต่อ Avatar' : 'ชื่อไฟล์ Avatar + _output.mp4'}</span>
+          </div>
         </div>
       </div>
 
@@ -1220,23 +1743,43 @@ export function AvatarVerticalClipPortal() {
           <Settings className="w-5 h-5" style={{ color: '#a855f7' }} />
           ตั้งค่าโฟลเดอร์และเสียง
         </h2>
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-          <FolderField
-            label="โฟลเดอร์คลิป Avatar"
-            value={avatarFolder}
-            onPick={() => pickFolder('เลือกโฟลเดอร์คลิป Avatar แนวนอน', setAvatarFolder, refreshAvatarFiles)}
-          />
-          <FolderField
-            label="โฟลเดอร์ footage พื้นหลัง"
-            value={footageFolder}
-            onPick={() => pickFolder('เลือกโฟลเดอร์ footage สำหรับสุ่มต่อด้านบน', setFootageFolder)}
-          />
-          <FolderField
-            label="โฟลเดอร์ Output"
-            value={outputFolder}
-            onPick={() => pickFolder('เลือกโฟลเดอร์ปลายทางสำหรับคลิป _output', setOutputFolder)}
-          />
-        </div>
+        {shopeeMode ? (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <FolderField
+              label="📦 โฟลเดอร์คลิปสินค้า (มีโฟลเดอร์ย่อยต่อสินค้า)"
+              value={shopeeProductFolder}
+              onPick={() => pickFolder('เลือกโฟลเดอร์หลักของคลิปสินค้า (ข้างในมีโฟลเดอร์ย่อย เช่น 001_RiceWarmerGlove)', setShopeeProductFolder)}
+            />
+            <FolderField
+              label="🧑‍💼 โฟลเดอร์ Avatar (มีโฟลเดอร์ย่อยต่อสคริปต์)"
+              value={shopeeAvatarFolder}
+              onPick={() => pickFolder('เลือกโฟลเดอร์หลักของ Avatar (ข้างในมีโฟลเดอร์ย่อย เช่น 001_RiceWarmerGlove_script1)', setShopeeAvatarFolder)}
+            />
+            <FolderField
+              label="โฟลเดอร์ Output"
+              value={outputFolder}
+              onPick={() => pickFolder('เลือกโฟลเดอร์ปลายทางสำหรับคลิป _output', setOutputFolder)}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <FolderField
+              label="โฟลเดอร์คลิป Avatar"
+              value={avatarFolder}
+              onPick={() => pickFolder('เลือกโฟลเดอร์คลิป Avatar แนวนอน', setAvatarFolder, refreshAvatarFiles)}
+            />
+            <FolderField
+              label="โฟลเดอร์ footage พื้นหลัง"
+              value={footageFolder}
+              onPick={() => pickFolder('เลือกโฟลเดอร์ footage สำหรับสุ่มต่อด้านบน', setFootageFolder)}
+            />
+            <FolderField
+              label="โฟลเดอร์ Output"
+              value={outputFolder}
+              onPick={() => pickFolder('เลือกโฟลเดอร์ปลายทางสำหรับคลิป _output', setOutputFolder)}
+            />
+          </div>
+        )}
 
         <div className="mt-5 grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-5">
           <div>
@@ -1282,40 +1825,58 @@ export function AvatarVerticalClipPortal() {
       <div className="p-6 rounded-3xl border shadow-sm" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
         <h2 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
           <Settings className="w-5 h-5" style={{ color: '#a855f7' }} />
-          ตั้งค่ารูปแบบวิดีโอ & AI Hook Headline
+          🎬 รูปแบบการแสดง Avatar (Layout) &amp; ขนาด
         </h2>
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-          <label className="flex flex-col gap-2 p-4 rounded-2xl border cursor-pointer select-none transition-all hover:bg-black/5 dark:hover:bg-white/5" style={{ borderColor: isVerticalAvatar ? '#a855f7' : 'var(--border-color)', backgroundColor: isVerticalAvatar ? 'rgba(168,85,247,0.05)' : 'var(--bg-body)' }}>
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={isVerticalAvatar}
-                onChange={event => {
-                  setIsVerticalAvatar(event.target.checked);
-                  if (!event.target.checked) setUseGreenScreenKeying(false);
-                }}
-                className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
-              />
-              <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>วิดีโอแนวตั้งแบบซ้อนทับ (Overlay)</span>
-            </div>
-            <p className="text-xs text-gray-500 pl-8 leading-tight">สเกลวิดีโอ Avatar และ B-Roll วางซ้อนทับเป็นแบบ 9:16 เต็มจอ แทนรูปแบบแบ่งครึ่ง บน-ล่าง</p>
-          </label>
 
-          <label className={`flex flex-col gap-2 p-4 rounded-2xl border select-none transition-all ${!isVerticalAvatar ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-black/5 dark:hover:bg-white/5'}`} style={{ borderColor: useGreenScreenKeying ? '#a855f7' : 'var(--border-color)', backgroundColor: useGreenScreenKeying ? 'rgba(168,85,247,0.05)' : 'var(--bg-body)' }}>
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                disabled={!isVerticalAvatar}
-                checked={useGreenScreenKeying}
-                onChange={event => setUseGreenScreenKeying(event.target.checked)}
-                className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 disabled:opacity-50"
-              />
-              <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>เจาะคีย์กรีนสกรีน (Chroma Key)</span>
-            </div>
-            <p className="text-xs text-gray-500 pl-8 leading-tight">เจาะลบพื้นหลังสีเขียว #00FF00 ออกจากวิดีโอ Avatar เพื่อโชว์ฟุตเทจ B-Roll ด้านหลัง</p>
-          </label>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+          {AVATAR_LAYOUTS.map(layout => (
+            <button
+              key={layout.id}
+              type="button"
+              onClick={() => setAvatarLayout(layout.id)}
+              className="rounded-2xl border p-4 text-left transition-all hover:scale-[1.02] flex flex-col gap-1.5 cursor-pointer"
+              style={{
+                borderColor: avatarLayout === layout.id ? '#a855f7' : 'var(--border-color)',
+                backgroundColor: avatarLayout === layout.id ? 'rgba(168,85,247,0.12)' : 'var(--bg-body)',
+              }}
+            >
+              <div className="text-2xl">{layout.icon}</div>
+              <div className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{layout.label}</div>
+              <div className="text-[10px] leading-tight" style={{ color: 'var(--text-secondary)' }}>{layout.desc}</div>
+            </button>
+          ))}
+        </div>
 
-          <label className="flex flex-col gap-2 p-4 rounded-2xl border cursor-pointer select-none transition-all hover:bg-black/5 dark:hover:bg-white/5" style={{ borderColor: headlineAiEnabled ? '#a855f7' : 'var(--border-color)', backgroundColor: headlineAiEnabled ? 'rgba(168,85,247,0.05)' : 'var(--bg-body)' }}>
+        {/* สไลเดอร์ขนาดตามเลย์เอาต์ที่เลือก */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {avatarLayout === 'split' && (
+            <SliderField label="สัดส่วนความสูง footage (ด้านบน)" value={footageRatioPct} unit="%" min={30} max={75} onChange={setFootageRatioPct} hint="ยิ่งมาก footage ยิ่งสูง — ส่วนที่เหลือคือ Avatar ด้านล่าง" />
+          )}
+          {avatarLayout === 'greenscreen-full' && (
+            <>
+              <SliderField label="สเกลขนาด Avatar" value={avatarScalePct} unit="%" min={40} max={120} onChange={setAvatarScalePct} hint="ขยาย/ย่อ Avatar ที่เจาะกรีนสกรีน วางชิดล่างกึ่งกลาง" />
+              <label className="flex items-center gap-3 p-4 rounded-2xl border cursor-pointer select-none self-start mt-6"
+                style={{ borderColor: useGreenScreenKeying ? '#a855f7' : 'var(--border-color)', backgroundColor: useGreenScreenKeying ? 'rgba(168,85,247,0.05)' : 'var(--bg-body)' }}>
+                <input type="checkbox" checked={useGreenScreenKeying} onChange={e => setUseGreenScreenKeying(e.target.checked)} className="w-5 h-5" />
+                <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>เจาะคีย์กรีนสกรีน (#00FF00)</span>
+              </label>
+            </>
+          )}
+          {avatarLayout === 'bottom-band' && (
+            <>
+              <SliderField label="ความสูงแถบ Avatar" value={bandHeightPct} unit="%" min={15} max={60} onChange={setBandHeightPct} hint="ความสูงของแถบคลิป Avatar แนวนอนด้านล่าง" />
+              <SliderField label="ระยะห่างจากขอบล่าง" value={bandPosYPct} unit="%" min={0} max={40} onChange={setBandPosYPct} hint="ดันแถบขึ้นจากขอบล่าง (0 = ชิดขอบล่างสุด)" />
+            </>
+          )}
+          {avatarLayout === 'circle' && (
+            <>
+              <SliderField label="ขนาดวงกลม (เส้นผ่านศูนย์กลาง)" value={circleDiameterPct} unit="%" min={18} max={70} onChange={setCircleDiameterPct} hint="ขนาดวงบนจอ 9:16 (อิงความกว้างจอ)" />
+              <SliderField label="ตำแหน่งวงบนจอ — แนวนอน (X)" value={circlePosXPct} unit="%" min={0} max={100} onChange={setCirclePosXPct} hint="0 = ซ้าย, 50 = กลาง, 100 = ขวา" />
+              <SliderField label="ตำแหน่งวงบนจอ — แนวตั้ง (Y)" value={circlePosYPct} unit="%" min={0} max={100} onChange={setCirclePosYPct} hint="0 = บนสุด, 100 = ล่างสุด" />
+            </>
+          )}
+
+          <label className="flex flex-col gap-2 p-4 rounded-2xl border cursor-pointer select-none transition-all hover:bg-black/5 dark:hover:bg-white/5 self-start" style={{ borderColor: headlineAiEnabled ? '#a855f7' : 'var(--border-color)', backgroundColor: headlineAiEnabled ? 'rgba(168,85,247,0.05)' : 'var(--bg-body)' }}>
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
@@ -1325,9 +1886,81 @@ export function AvatarVerticalClipPortal() {
               />
               <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>ใช้ AI เจนพาดหัวอัตโนมัติ (Hook)</span>
             </div>
-            <p className="text-xs text-gray-500 pl-8 leading-tight">ส่งสคริปต์ไปให้ LLM วิเคราะห์และคิดหัวข้อไวรัล (Hook) ดึงดูดความสนใจให้อัตโนมัติในตอนเรนเดอร์</p>
+            <p className="text-xs text-gray-500 pl-8 leading-tight">ส่งสคริปต์ให้ LLM คิดหัวข้อไวรัลให้อัตโนมัติตอนเรนเดอร์ (เมื่อยังไม่ได้กรอกพาดหัวเอง)</p>
           </label>
         </div>
+
+        {avatarLayout === 'circle' && (
+          <div className="mt-5 pt-5 border-t" style={{ borderColor: 'var(--border-color)' }}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                🎯 ตั้งค่า Crop ใบหน้า (ใช้กับทุกคลิป)
+              </div>
+              <button
+                onClick={loadCropFrame}
+                disabled={isLoadingFrame}
+                className="self-start px-3 py-1.5 rounded-lg font-bold text-xs border transition-all disabled:opacity-50 cursor-pointer"
+                style={{ borderColor: '#a855f7', color: '#a855f7', backgroundColor: 'rgba(168,85,247,0.06)' }}
+              >
+                {isLoadingFrame ? 'กำลังโหลด...' : (cropFrameImage ? '🔄 โหลดเฟรมใหม่' : '🖼️ โหลดเฟรมตัวอย่าง')}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-5 items-start">
+              {/* เฟรม + วงกลม crop ลาก/ย่อขยายได้ */}
+              <div
+                ref={cropBoxRef}
+                className="relative rounded-xl overflow-hidden border select-none mx-auto"
+                style={{ width: 300, maxWidth: '100%', aspectRatio: cropFrameImage ? 'auto' : '16 / 9', backgroundColor: '#000', borderColor: 'var(--border-color)', touchAction: 'none' }}
+              >
+                {cropFrameImage ? (
+                  <img src={cropFrameImage} alt="avatar frame" className="block w-full h-auto pointer-events-none" />
+                ) : (
+                  <div className="flex items-center justify-center text-center text-[11px] text-gray-400 p-6" style={{ aspectRatio: '16 / 9' }}>
+                    กดปุ่ม "โหลดเฟรมตัวอย่าง" เพื่อดูภาพจริงจากคลิป Avatar แล้วลากวงกลมเลือก crop หน้า
+                  </div>
+                )}
+                {cropFrameImage && (() => {
+                  // เส้นผ่านศูนย์กลางวง = size% ของด้านสั้นของเฟรม (ตรงกับ ffmpeg ที่ใช้ min(iw,ih))
+                  // landscape (aspect>=1): ด้านสั้น=สูง → ใช้ height% ; portrait: ด้านสั้น=กว้าง → ใช้ width%
+                  const isLandscape = cropFrameAspect >= 1;
+                  const sizeStyle = isLandscape
+                    ? { height: `${circleCropSizePct}%`, width: 'auto' as const, aspectRatio: '1 / 1' }
+                    : { width: `${circleCropSizePct}%`, height: 'auto' as const, aspectRatio: '1 / 1' };
+                  return (
+                    <div
+                      onPointerDown={startCropDrag}
+                      className="absolute"
+                      style={{
+                        left: `${circleCropXPct}%`,
+                        top: `${circleCropYPct}%`,
+                        ...sizeStyle,
+                        transform: 'translate(-50%, -50%)',
+                        borderRadius: '9999px',
+                        border: '2px solid #a855f7',
+                        boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)',
+                        cursor: 'grab',
+                        touchAction: 'none',
+                      }}
+                    >
+                      <div onPointerDown={startCropResize} title="ลากเพื่อย่อ/ขยาย" className="absolute" style={{ right: '6%', bottom: '6%', width: 16, height: 16, borderRadius: 9999, background: '#a855f7', border: '2px solid white', cursor: 'nwse-resize', touchAction: 'none' }} />
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* สไลเดอร์ปรับละเอียด */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <SliderField label="ซูม/ขนาด crop" value={circleCropSizePct} unit="%" min={30} max={100} onChange={setCircleCropSizePct} hint="เล็ก = ซูมเข้าหน้ามาก" />
+                <SliderField label="ตำแหน่ง crop — ซ้าย/ขวา" value={circleCropXPct} unit="%" min={0} max={100} onChange={setCircleCropXPct} hint="เลื่อน crop ในเฟรมต้นฉบับ" />
+                <SliderField label="ตำแหน่ง crop — บน/ล่าง" value={circleCropYPct} unit="%" min={0} max={100} onChange={setCircleCropYPct} hint="ดันขึ้นเพื่อจับใบหน้า" />
+                <div className="sm:col-span-3 text-[10px] text-gray-500 leading-relaxed">
+                  💡 ลากวงกลมม่วงบนภาพเพื่อเลือกตำแหน่งหน้า และลากจุดมุมเพื่อย่อ/ขยาย — ค่านี้จะถูกใช้กับ <b>ทุกคลิป</b> เหมือนกัน (เพราะ Avatar นั่งตำแหน่งเดิม) วงกลมที่เห็น = ส่วนที่จะโชว์จริงในคลิป
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="p-6 rounded-3xl border shadow-sm" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
@@ -1347,7 +1980,12 @@ export function AvatarVerticalClipPortal() {
             { id: 'modern-white', label: 'ขาวสะอาดคลีน', text: '#111827', bg: '#ffffff', border: 'rgba(0,0,0,0.1)', desc: 'เรียบง่าย สบายตา' },
             { id: 'neon-purple', label: 'ม่วงนีออนล้ำๆ', text: '#ffffff', bg: '#7c3aed', desc: 'สะดุดตา สายไอที/การตลาด' },
             { id: 'attention-red', label: 'แดงดึงดูดสายตา', text: '#ffffff', bg: '#ef4444', desc: 'เน้นประกาศ ด่วน สำคัญ!' },
+            { id: 'shopee-orange', label: 'ส้ม Shopee', text: '#ffffff', bg: '#ee4d2d', desc: 'โทนแบรนด์ Shopee ขายของ' },
+            { id: 'mint-green', label: 'เขียวมิ้นต์สดใส', text: '#0e1a23', bg: '#14b8a6', desc: 'สดชื่น สายสุขภาพ/ความงาม' },
+            { id: 'pastel-blue', label: 'ฟ้าพาสเทลละมุน', text: '#11304b', bg: '#bfdbfe', desc: 'นุ่มนวล อ่านง่าย สบายตา' },
+            { id: 'rich-gold', label: 'ทองหรูพรีเมียม', text: '#0e1a23', bg: '#e0b044', desc: 'ดูแพง สินค้าพรีเมียม' },
             { id: 'no-box-shadow', label: 'ตัวหนังสือขอบดำ (ไม่มีกล่อง)', text: '#ffffff', bg: 'transparent', border: 'rgba(255,255,255,0.3)', desc: 'ฟิลช่องทีวี ขอบหนา' },
+            { id: 'outline-minimal', label: 'ขอบบางมินิมอล (ไม่มีกล่อง)', text: '#ffffff', bg: 'transparent', border: 'rgba(255,255,255,0.3)', desc: 'เรียบบางๆ ไม่รบกวนภาพ' },
           ].map(style => (
             <button
               key={style.id}
@@ -1366,7 +2004,7 @@ export function AvatarVerticalClipPortal() {
                   color: style.text,
                   backgroundColor: style.bg,
                   border: style.border ? `1px solid ${style.border}` : 'none',
-                  textShadow: style.id === 'no-box-shadow' ? '0 1px 0 #000, 0 -1px 0 #000, 1px 0 #000, -1px 0 #000' : 'none'
+                  textShadow: (style.id === 'no-box-shadow' || style.id === 'outline-minimal') ? '0 1px 0 #000, 0 -1px 0 #000, 1px 0 #000, -1px 0 #000' : 'none'
                 }}
               >
                 หัวข้อตัวอย่าง
@@ -1387,7 +2025,7 @@ export function AvatarVerticalClipPortal() {
               min={8}
               max={64}
               value={headlinePadding}
-              disabled={headlineStyle === 'no-box-shadow'}
+              disabled={headlineStyle === 'no-box-shadow' || headlineStyle === 'outline-minimal'}
               onChange={event => setHeadlinePadding(Number(event.target.value))}
               className="w-full disabled:opacity-50"
             />
@@ -1404,7 +2042,7 @@ export function AvatarVerticalClipPortal() {
               min={20}
               max={100}
               value={headlineOpacity}
-              disabled={headlineStyle === 'no-box-shadow'}
+              disabled={headlineStyle === 'no-box-shadow' || headlineStyle === 'outline-minimal'}
               onChange={event => setHeadlineOpacity(Number(event.target.value))}
               className="w-full disabled:opacity-50"
             />
@@ -1413,21 +2051,35 @@ export function AvatarVerticalClipPortal() {
 
           <div>
             <div className="flex justify-between items-center text-sm font-semibold mb-2">
-              <span style={{ color: 'var(--text-secondary)' }}>ขนาดตัวอักษรพาดหัว</span>
-              <span className="font-mono text-purple-500 font-bold">
-                {headlineFontSize === 0 ? 'Auto (คำนวณตามยาว)' : `${headlineFontSize}px`}
-              </span>
+              <span style={{ color: 'var(--text-secondary)' }}>🔠 ขนาดฟอนต์พาดหัว</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-purple-500 font-bold">
+                  {headlineFontSize === 0 ? 'Auto' : `${headlineFontSize}px`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setHeadlineFontSize(headlineFontSize === 0 ? 82 : 0)}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-md border transition-all cursor-pointer"
+                  style={{
+                    borderColor: headlineFontSize === 0 ? '#a855f7' : 'var(--border-color)',
+                    backgroundColor: headlineFontSize === 0 ? 'rgba(168,85,247,0.14)' : 'transparent',
+                    color: headlineFontSize === 0 ? '#a855f7' : 'var(--text-secondary)',
+                  }}
+                >
+                  Auto
+                </button>
+              </div>
             </div>
             <input
               type="range"
-              min={0}
-              max={120}
-              step={headlineFontSize === 0 ? 30 : 2}
-              value={headlineFontSize}
+              min={28}
+              max={160}
+              step={2}
+              value={headlineFontSize === 0 ? 82 : headlineFontSize}
               onChange={event => setHeadlineFontSize(Number(event.target.value))}
-              className="w-full"
+              className="w-full cursor-pointer"
             />
-            <div className="text-[10px] text-gray-500 mt-1">ตั้งค่าขนาดอักษรคงที่ (ปรับเป็น 0 หากต้องการให้ AI ขยายตามความยาวหัวข้อ)</div>
+            <div className="text-[10px] text-gray-500 mt-1">ลากเพื่อกำหนดขนาดตัวอักษรพาดหัว (กดปุ่ม Auto ให้คำนวณตามความยาวหัวข้อ)</div>
           </div>
 
           <div>
@@ -1445,6 +2097,56 @@ export function AvatarVerticalClipPortal() {
               className="w-full"
             />
             <div className="text-[10px] text-gray-500 mt-1">ความสูงของป้าย (เช่น 100=บนสุด, 220=ขอบบนหน้าผาก, 1400=ล่างสุด)</div>
+          </div>
+        </div>
+
+        {/* ฟอนต์ + ขนาดกล่องกำหนดเอง */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-5 pt-5 border-t" style={{ borderColor: 'var(--border-color)' }}>
+          <div>
+            <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>ฟอนต์พาดหัว</div>
+            <select
+              value={headlineFont}
+              onChange={e => setHeadlineFont(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none font-semibold cursor-pointer"
+              style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}
+            >
+              {HEADLINE_FONTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+            <div className="text-[10px] text-gray-500 mt-1">เลือกฟอนต์สำหรับป้ายพาดหัว (มีให้เลือกหลายแบบ)</div>
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center text-sm font-semibold mb-2">
+              <span style={{ color: 'var(--text-secondary)' }}>ความกว้างกล่อง</span>
+              <span className="font-mono text-purple-500 font-bold">{headlineBoxWidth === 0 ? 'อัตโนมัติ' : `${headlineBoxWidth}px`}</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1080}
+              step={20}
+              value={headlineBoxWidth}
+              onChange={e => setHeadlineBoxWidth(Number(e.target.value))}
+              className="w-full"
+            />
+            <div className="text-[10px] text-gray-500 mt-1">0 = ปรับตามตัวอักษร · ตั้งค่า &gt; 0 เพื่อกำหนดกว้างกล่องเอง (ต้องตั้งความสูงด้วย)</div>
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center text-sm font-semibold mb-2">
+              <span style={{ color: 'var(--text-secondary)' }}>ความสูงกล่อง</span>
+              <span className="font-mono text-purple-500 font-bold">{headlineBoxHeight === 0 ? 'อัตโนมัติ' : `${headlineBoxHeight}px`}</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={600}
+              step={10}
+              value={headlineBoxHeight}
+              onChange={e => setHeadlineBoxHeight(Number(e.target.value))}
+              className="w-full"
+            />
+            <div className="text-[10px] text-gray-500 mt-1">0 = ปรับตามตัวอักษร · ตั้งค่า &gt; 0 เพื่อกำหนดสูงกล่องเอง (วาดกล่องสี่เหลี่ยมขนาดคงที่)</div>
           </div>
         </div>
       </div>
@@ -1622,6 +2324,75 @@ export function AvatarVerticalClipPortal() {
         )}
       </div>
 
+      {shopeeMode && (
+        <div className="flex flex-wrap gap-3 items-center justify-between p-4 rounded-2xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => refreshShopeePairs()}
+              disabled={!shopeeProductFolder || !shopeeAvatarFolder || isPairing || isRendering}
+              className="px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all disabled:opacity-50 border text-xs cursor-pointer"
+              style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}
+            >
+              <RefreshCw className={`w-4 h-4 ${isPairing ? 'animate-spin' : ''}`} />
+              จับคู่โฟลเดอร์ใหม่
+            </button>
+            {!isRendering && (
+              <button
+                onClick={runShopeeTranscribeAll}
+                disabled={shopeeSelected.length === 0 || isTranscribingAll || isRendering}
+                className="px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all disabled:opacity-50 text-xs shadow-md cursor-pointer"
+                style={{ backgroundColor: '#a855f7', color: 'white' }}
+              >
+                🎙️ {isTranscribingAll ? 'กำลังถอดซับ...' : `ทำซับต่อ (อันที่ยังไม่เสร็จ)`}
+              </button>
+            )}
+            {!isRendering ? (
+              <>
+                <button
+                  onClick={() => runShopeeRenderAll(false)}
+                  disabled={!outputFolder || shopeeSelected.length === 0 || isRendering || isTranscribingAll}
+                  className="px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all disabled:opacity-50 text-xs shadow-md cursor-pointer"
+                  style={{ backgroundColor: '#ee4d2d', color: 'white' }}
+                >
+                  🎬 ตัดต่อใหม่ทั้งหมด ({shopeeSelected.length})
+                </button>
+                <button
+                  onClick={() => runShopeeRenderAll(true)}
+                  disabled={!outputFolder || shopeeSelected.length === 0 || isRendering || isTranscribingAll}
+                  className="px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all disabled:opacity-50 text-xs shadow-md cursor-pointer"
+                  style={{ backgroundColor: '#f59e0b', color: 'white' }}
+                >
+                  ▶️ ตัดต่อเฉพาะที่ยังไม่เสร็จ
+                </button>
+              </>
+            ) : (
+              <button onClick={stopRender} className="px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all text-xs shadow-md bg-red-500 text-white cursor-pointer">
+                <Square className="w-4 h-4 animate-pulse" />
+                หยุดทำงาน
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {outputFolder && (
+              <button onClick={openOutputFolder} className="px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all border text-xs cursor-pointer" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}>
+                <FolderOpen className="w-4 h-4" />
+                เปิด Output
+              </button>
+            )}
+            {isRendering && (
+              <div className="px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2" style={{ backgroundColor: 'rgba(238,77,45,0.1)', color: '#ee4d2d' }}>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                </span>
+                กำลังตัดต่อ {progress}%
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!shopeeMode && (
       <div className="flex flex-wrap gap-3 items-center justify-between p-4 rounded-2xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
         <div className="flex flex-wrap gap-3">
           <button
@@ -1706,8 +2477,26 @@ export function AvatarVerticalClipPortal() {
           )}
         </div>
       </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_0.7fr] gap-6">
+        {shopeeMode ? (
+        <ShopeePairingCard
+          pairs={shopeePairs}
+          productOptions={shopeeProductOptions}
+          selected={shopeeSelected}
+          setSelected={setShopeeSelected}
+          headlines={shopeeHeadlines}
+          setHeadlines={setShopeeHeadlines}
+          statusMap={shopeeStatus}
+          subStatusMap={shopeeSubStatus}
+          onTranscribe={(pair: any) => prepareShopeePair(pair, false)}
+          onAiHeadline={generateShopeeHeadlineAI}
+          onRenderOne={(pair: any) => { const c = new AbortController(); abortRef.current = c; setIsRendering(true); renderOneShopeePair(pair, c).finally(() => { setIsRendering(false); abortRef.current = null; }); }}
+          onOverrideProduct={overrideShopeeProduct}
+          isBusy={isRendering || isPairing || isTranscribingAll}
+        />
+        ) : (
         <div className="p-6 rounded-3xl border shadow-sm flex flex-col overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
             <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
@@ -1832,7 +2621,7 @@ export function AvatarVerticalClipPortal() {
                               style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}
                             >
                               {(item.headlines || []).map((h, i) => (
-                                <option key={i} value={h}>🔥 Hook {i + 1}: {h.substring(0, 35)}...</option>
+                                <option key={i} value={h}>{HEADLINE_STYLE_LABELS[i] || `🔥 Hook ${i + 1}`}: {h.substring(0, 32)}...</option>
                               ))}
                               <option value={autoTitleFromFileName(item.name)}>ดึงจากชื่อไฟล์: {autoTitleFromFileName(item.name).substring(0, 35)}...</option>
                             </select>
@@ -1957,6 +2746,7 @@ export function AvatarVerticalClipPortal() {
             </table>
           </div>
         </div>
+        )}
 
         <div className="space-y-6 flex flex-col">
           <div className="p-6 rounded-3xl border shadow-sm flex flex-col items-center" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
@@ -1978,38 +2768,73 @@ export function AvatarVerticalClipPortal() {
                 className="relative overflow-hidden bg-black flex flex-col select-none"
                 style={{ width: '100%', height: '100%', borderRadius: 28, containerType: 'inline-size' }}
               >
-                {isVerticalAvatar ? (
-                  <div className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
-                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/60 to-purple-900/60 flex items-center justify-center text-center">
-                      <div className="font-bold text-gray-300" style={{ opacity: 0.35, fontSize: '3cqw' }}>
-                        🎬 B-Roll Background (เต็มจอ)
-                      </div>
-                    </div>
-                    <div className="absolute inset-x-0 bottom-0 flex items-end justify-center" style={{ height: '60%' }}>
-                      {useGreenScreenKeying ? (
-                        <div className="absolute bottom-0 bg-green-500/20 flex items-center justify-center"
-                          style={{ width: '80%', height: '90%', border: '2px solid rgba(34,197,94,0.5)', borderBottom: 'none', borderTopLeftRadius: 9999, borderTopRightRadius: 9999 }}>
-                          <span className="font-bold text-green-400" style={{ fontSize: '3.2cqw' }}>Chroma Keyed Avatar</span>
-                        </div>
-                      ) : (
-                        <div className="absolute bottom-0 bg-purple-950/40 flex items-center justify-center"
-                          style={{ width: '100%', height: '100%', borderTop: '1px solid rgba(168,85,247,0.3)' }}>
-                          <span className="font-bold text-purple-300" style={{ fontSize: '3.2cqw' }}>Avatar Overlay (เต็มจอ)</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
+                {avatarLayout === 'split' && (
                   <div className="absolute inset-0 flex flex-col" style={{ width: '100%', height: '100%' }}>
                     <div className="w-full bg-gradient-to-br from-indigo-950 to-indigo-900 flex flex-col items-center justify-center relative"
-                      style={{ height: '54.17%', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                      style={{ height: `${footageRatioPct}%`, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                       <div className="font-bold text-indigo-300" style={{ opacity: 0.6, fontSize: '3cqw' }}>🎬 B-Roll (วิดีโอประกอบ)</div>
-                      <div className="text-indigo-400/50" style={{ marginTop: 4, fontSize: '2.4cqw' }}>1080 × 1040 (54%)</div>
+                      <div className="text-indigo-400/50" style={{ marginTop: 4, fontSize: '2.4cqw' }}>footage {footageRatioPct}%</div>
                     </div>
                     <div className="w-full bg-gradient-to-tr from-purple-950 to-purple-900 flex flex-col items-center justify-center relative"
-                      style={{ height: '45.83%' }}>
+                      style={{ height: `${100 - footageRatioPct}%` }}>
                       <div className="font-bold text-purple-300" style={{ opacity: 0.6, fontSize: '3cqw' }}>👤 Avatar (คลิปพูดหลัก)</div>
-                      <div className="text-purple-400/50" style={{ marginTop: 4, fontSize: '2.4cqw' }}>1080 × 880 (46%)</div>
+                      <div className="text-purple-400/50" style={{ marginTop: 4, fontSize: '2.4cqw' }}>Avatar {100 - footageRatioPct}%</div>
+                    </div>
+                  </div>
+                )}
+                {avatarLayout === 'greenscreen-full' && (
+                  <div className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/60 to-purple-900/60 flex items-center justify-center text-center">
+                      <div className="font-bold text-gray-300" style={{ opacity: 0.35, fontSize: '3cqw' }}>🎬 B-Roll Background (เต็มจอ)</div>
+                    </div>
+                    <div className="absolute left-1/2 bottom-0 flex items-end justify-center"
+                      style={{ width: `${avatarScalePct}%`, transform: 'translateX(-50%)', height: '85%', zIndex: 5 }}>
+                      <div className={`absolute bottom-0 flex items-center justify-center ${useGreenScreenKeying ? 'bg-green-500/20' : 'bg-purple-950/40'}`}
+                        style={{ width: '100%', height: '100%', border: avatarPreviewMode === 'resize' ? '0.4cqw dashed rgba(168,85,247,0.95)' : (useGreenScreenKeying ? '2px solid rgba(34,197,94,0.5)' : '1px solid rgba(168,85,247,0.3)'), borderBottom: 'none', borderTopLeftRadius: '20cqw', borderTopRightRadius: '20cqw' }}>
+                        <span className={`font-bold ${useGreenScreenKeying ? 'text-green-400' : 'text-purple-300'}`} style={{ fontSize: '3cqw' }}>{useGreenScreenKeying ? 'Avatar กรีนสกรีน' : 'Avatar Overlay'} · {avatarScalePct}%</span>
+                      </div>
+                      {/* ที่จับย่อ/ขยายซ้าย-ขวา */}
+                      <div onPointerDown={startGreenscreenResize} title="ลากเพื่อย่อ/ขยายขนาด" className="absolute" style={{ left: '-1.4cqw', top: '50%', transform: 'translateY(-50%)', width: '3cqw', height: '3cqw', borderRadius: '9999px', background: '#a855f7', border: '0.3cqw solid white', cursor: 'ew-resize', touchAction: 'none', zIndex: 6 }} />
+                      <div onPointerDown={startGreenscreenResize} title="ลากเพื่อย่อ/ขยายขนาด" className="absolute" style={{ right: '-1.4cqw', top: '50%', transform: 'translateY(-50%)', width: '3cqw', height: '3cqw', borderRadius: '9999px', background: '#a855f7', border: '0.3cqw solid white', cursor: 'ew-resize', touchAction: 'none', zIndex: 6 }} />
+                    </div>
+                  </div>
+                )}
+                {avatarLayout === 'bottom-band' && (
+                  <div className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/60 to-purple-900/60 flex items-center justify-center text-center">
+                      <div className="font-bold text-gray-300" style={{ opacity: 0.35, fontSize: '3cqw' }}>🎬 footage เต็มจอ</div>
+                    </div>
+                    <div onPointerDown={startBandDrag} title="ลากขึ้น/ลงเพื่อจัดตำแหน่ง"
+                      className="absolute left-1/2 bg-black/70 flex items-center justify-center"
+                      style={{ width: '94%', transform: 'translateX(-50%)', height: `${bandHeightPct}%`, bottom: `${bandPosYPct}%`, borderRadius: '2cqw', border: avatarPreviewMode !== 'idle' ? '0.4cqw dashed rgba(168,85,247,0.95)' : '1px solid rgba(255,255,255,0.15)', cursor: avatarPreviewMode === 'drag' ? 'grabbing' : 'grab', touchAction: 'none', zIndex: 5 }}>
+                      <span className="font-bold text-white" style={{ fontSize: '3cqw' }}>📺 คลิป Avatar · สูง {bandHeightPct}% · ล่าง {bandPosYPct}%</span>
+                      {/* ที่จับปรับความสูง (ขอบบน) */}
+                      <div onPointerDown={startBandResize} title="ลากเพื่อปรับความสูงแถบ" className="absolute" style={{ left: '50%', top: '-1.4cqw', transform: 'translateX(-50%)', width: '8cqw', height: '2.6cqw', borderRadius: '9999px', background: '#a855f7', border: '0.3cqw solid white', cursor: 'ns-resize', touchAction: 'none' }} />
+                    </div>
+                  </div>
+                )}
+                {avatarLayout === 'circle' && (
+                  <div className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/60 to-purple-900/60 flex items-center justify-center text-center">
+                      <div className="font-bold text-gray-300" style={{ opacity: 0.35, fontSize: '3cqw' }}>🎬 footage เต็มจอ</div>
+                    </div>
+                    <div onPointerDown={startCircleDrag} title="ลากเพื่อย้ายตำแหน่งวงกลม"
+                      className="absolute bg-purple-900/70 flex items-center justify-center text-center"
+                      style={{
+                        width: `${circleDiameterPct}%`,
+                        aspectRatio: '1 / 1',
+                        left: `${circlePosXPct}%`,
+                        top: `${circlePosYPct}%`,
+                        transform: 'translate(-50%, -50%)',
+                        borderRadius: '9999px',
+                        border: avatarPreviewMode !== 'idle' ? '0.5cqw dashed rgba(168,85,247,0.95)' : '0.4cqw solid rgba(255,255,255,0.85)',
+                        cursor: avatarPreviewMode === 'drag' ? 'grabbing' : 'grab',
+                        touchAction: 'none',
+                        zIndex: 5,
+                      }}>
+                      <span className="font-bold text-white pointer-events-none" style={{ fontSize: '2.4cqw' }}>⭕ หน้า Avatar<br />{circleDiameterPct}%</span>
+                      {/* ที่จับย่อ/ขยาย (มุมล่างขวา) */}
+                      <div onPointerDown={startCircleResize} title="ลากเพื่อย่อ/ขยายวงกลม" className="absolute" style={{ right: '4%', bottom: '4%', width: '3.4cqw', height: '3.4cqw', borderRadius: '9999px', background: '#a855f7', border: '0.3cqw solid white', cursor: 'nwse-resize', touchAction: 'none' }} />
                     </div>
                   </div>
                 )}
@@ -2053,7 +2878,9 @@ export function AvatarVerticalClipPortal() {
                         className="font-extrabold leading-snug whitespace-pre-line break-words text-center flex items-center justify-center"
                         style={{
                           ...getPreviewBannerStyle(simulatedFontSize),
-                          maxWidth: '100%',
+                          ...(headlineBoxWidth > 0 && headlineBoxHeight > 0 && headlineStyle !== 'no-box-shadow' && headlineStyle !== 'outline-minimal'
+                            ? { width: `${(headlineBoxWidth / 1080) * 100}cqw`, height: `${(headlineBoxHeight / 1080) * 100}cqw`, maxWidth: 'none', padding: '0.4cqw' }
+                            : { maxWidth: '100%' }),
                           outline: isDraggingHeadline ? '2px dashed rgba(168,85,247,0.9)' : 'none',
                           outlineOffset: '2px',
                         }}
@@ -2082,7 +2909,7 @@ export function AvatarVerticalClipPortal() {
             </div>
 
             <div className="text-gray-500 mt-3 text-center leading-normal" style={{ fontSize: 11, maxWidth: 260 }}>
-              🖱️ <b>ลากพาดหัว</b> บนจอเพื่อจัดตำแหน่งได้เลย หรือใช้สไลเดอร์ <b>ตำแหน่ง Y</b> ก็ได้ — พรีวิวตรงกับวิดีโอจริง
+              🖱️ <b>ลากพาดหัว</b> และ <b>ลาก/ย่อขยาย Avatar</b> (วงกลม/แถบล่าง/กรีนสกรีน) บนจอได้เลย จุดสีม่วงคือที่จับปรับขนาด — ทุกค่าตรงกับตำแหน่ง/ขนาดในวิดีโอที่เรนเดอร์จริง
             </div>
           </div>
 
@@ -2209,6 +3036,166 @@ export function AvatarVerticalClipPortal() {
   );
 }
 
+function ShopeePairingCard({ pairs, productOptions, selected, setSelected, headlines, setHeadlines, statusMap, subStatusMap, onTranscribe, onAiHeadline, onRenderOne, onOverrideProduct, isBusy }: {
+  pairs: any[];
+  productOptions: any[];
+  selected: string[];
+  setSelected: React.Dispatch<React.SetStateAction<string[]>>;
+  headlines: Record<string, string>;
+  setHeadlines: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  statusMap: Record<string, { status: string; message?: string; outputPath?: string }>;
+  subStatusMap: Record<string, 'idle' | 'transcribing' | 'done' | 'error'>;
+  onTranscribe: (pair: any) => void;
+  onAiHeadline: (pair: any) => void;
+  onRenderOne: (pair: any) => void;
+  onOverrideProduct: (avatarSubfolder: string, productPath: string) => void;
+  isBusy: boolean;
+}) {
+  const matchedPairs = pairs.filter(p => p.matched);
+  return (
+    <div className="p-6 rounded-3xl border shadow-sm flex flex-col overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
+        <h2 className="text-lg font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+          🛒 ตารางจับคู่ Shopee ({pairs.length} ชุด · จับคู่ได้ {matchedPairs.length})
+        </h2>
+        <div className="text-[10px] text-gray-500">จำนวนคลิป = จำนวนโฟลเดอร์ Avatar · ใส่พาดหัวต่อแถวได้เลย</div>
+      </div>
+
+      {pairs.length === 0 ? (
+        <div className="text-center py-12 text-sm text-gray-500">
+          ยังไม่มีข้อมูล — เลือกโฟลเดอร์คลิปสินค้าและ Avatar ด้านบน ระบบจะจับคู่ให้อัตโนมัติ
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: 'var(--border-color)' }}>
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-left text-xs">
+            <thead style={{ backgroundColor: 'var(--bg-body)' }}>
+              <tr>
+                <th className="px-3 py-3 font-semibold text-center w-12 text-gray-500">
+                  <input
+                    type="checkbox"
+                    className="rounded cursor-pointer w-4 h-4"
+                    style={{ accentColor: '#ee4d2d' }}
+                    checked={selected.length === matchedPairs.length && matchedPairs.length > 0}
+                    onChange={e => setSelected(e.target.checked ? matchedPairs.map(p => p.avatarSubfolder) : [])}
+                  />
+                </th>
+                <th className="px-4 py-3 font-semibold text-gray-500">คลิป footage (สินค้า)</th>
+                <th className="px-4 py-3 font-semibold text-gray-500">clip Avatar (script)</th>
+                <th className="px-4 py-3 font-semibold text-gray-500 w-32">ขั้นที่ 1: ถอดซับ</th>
+                <th className="px-4 py-3 font-semibold text-gray-500">ข้อความพาดหัว</th>
+                <th className="px-3 py-3 font-semibold text-gray-500 text-center w-32">ขั้นที่ 2: เรนเดอร์</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-800" style={{ backgroundColor: 'var(--bg-card)' }}>
+              {pairs.map((pair, idx) => {
+                const st = statusMap[pair.avatarSubfolder];
+                const subSt = subStatusMap[pair.avatarSubfolder] || 'idle';
+                return (
+                  <tr key={pair.avatarSubfolder} className={`transition-colors ${!pair.matched ? 'bg-amber-50 dark:bg-amber-950/20' : 'hover:bg-black/5 dark:hover:bg-white/5'}`}>
+                    <td className="px-3 py-3 text-center">
+                      <div className="flex flex-col items-center gap-1">
+                        <input
+                          type="checkbox"
+                          disabled={!pair.matched}
+                          className="rounded cursor-pointer w-4 h-4 disabled:opacity-40"
+                          style={{ accentColor: '#ee4d2d' }}
+                          checked={selected.includes(pair.avatarSubfolder)}
+                          onChange={e => setSelected(prev => e.target.checked ? [...prev, pair.avatarSubfolder] : prev.filter(n => n !== pair.avatarSubfolder))}
+                        />
+                        <span className="text-[10px] font-mono text-gray-400">{idx + 1}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 min-w-[200px]">
+                      {pair.matched ? (
+                        <div className="font-bold flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                          📦 {pair.productSubfolder}
+                          <span className="text-[10px] font-normal text-gray-400">({pair.productClipCount} คลิป)</span>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="text-[11px] font-bold text-amber-600 mb-1">⚠️ จับคู่ไม่ได้ — เลือกเอง</div>
+                          <select
+                            value={pair.productSubfolderPath || ''}
+                            onChange={e => onOverrideProduct(pair.avatarSubfolder, e.target.value)}
+                            className="w-full px-2 py-1 rounded-md text-[11px] border outline-none cursor-pointer"
+                            style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}
+                          >
+                            <option value="">— เลือกโฟลเดอร์สินค้า —</option>
+                            {productOptions.map(o => <option key={o.path} value={o.path}>{o.name} ({o.clipCount})</option>)}
+                          </select>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 min-w-[160px]">
+                      <div className="font-semibold truncate max-w-[180px]" style={{ color: 'var(--text-primary)' }} title={pair.avatarSubfolder}>
+                        🧑‍💼 {pair.avatarSubfolder}
+                      </div>
+                      <div className="text-[10px] text-gray-400 truncate max-w-[180px]" title={pair.avatarVideoFile}>{pair.avatarVideoFile || 'ไม่พบวิดีโอ!'}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {subSt === 'transcribing' ? (
+                        <span className="text-[11px] px-2 py-0.5 rounded font-semibold bg-purple-100 dark:bg-purple-950/40 text-purple-600 animate-pulse">🎙️ กำลังถอด...</span>
+                      ) : subSt === 'done' ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[11px] px-2 py-0.5 rounded font-semibold bg-green-100 dark:bg-green-950/40 text-green-600 w-max">✅ ถอดซับแล้ว</span>
+                          <button onClick={() => onTranscribe(pair)} disabled={isBusy || !pair.avatarVideoFile} className="self-start text-[10px] underline text-gray-400 hover:text-purple-500 disabled:opacity-40 cursor-pointer">ถอดใหม่</button>
+                        </div>
+                      ) : subSt === 'error' ? (
+                        <button onClick={() => onTranscribe(pair)} disabled={isBusy || !pair.avatarVideoFile} className="px-2.5 py-1 rounded-lg border text-[11px] font-bold text-red-500 disabled:opacity-40 cursor-pointer" style={{ borderColor: 'var(--border-color)' }}>⚠️ ลองใหม่</button>
+                      ) : (
+                        <button onClick={() => onTranscribe(pair)} disabled={isBusy || !pair.avatarVideoFile} className="px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all hover:bg-purple-500/5 disabled:opacity-40 cursor-pointer" style={{ borderColor: 'var(--border-color)', color: '#a855f7' }}>🎙️ ถอดซับ</button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 min-w-[220px]">
+                      <div className="flex flex-col gap-1.5">
+                        <textarea
+                          value={headlines[pair.avatarSubfolder] || ''}
+                          onChange={e => setHeadlines(prev => ({ ...prev, [pair.avatarSubfolder]: e.target.value }))}
+                          rows={2}
+                          placeholder="พิมพ์ข้อความพาดหัว..."
+                          className="w-full px-2 py-1 rounded-md text-[11px] border outline-none resize-none font-medium leading-tight"
+                          style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}
+                        />
+                        <button
+                          onClick={() => onAiHeadline(pair)}
+                          disabled={isBusy || !pair.avatarVideoFile}
+                          className="self-start px-2 py-1 rounded-md text-[10px] font-bold border transition-all hover:bg-purple-500/5 disabled:opacity-50 cursor-pointer"
+                          style={{ borderColor: 'var(--border-color)', color: '#a855f7' }}
+                          title="ถอดซับ + ให้ AI คิดพาดหัวสไตล์สุขุมให้ (ถอดซับด้วยในตัว)"
+                        >
+                          💡 AI ช่วยคิด (+ถอดซับ)
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      {st?.status === 'rendering' && <span className="text-[11px] text-indigo-500 font-semibold animate-pulse">🎬 ตัดต่อ...</span>}
+                      {st?.status === 'ai' && <span className="text-[11px] text-purple-500 font-semibold animate-pulse">🧠 คิด...</span>}
+                      {st?.status === 'done' && <span className="text-[11px] text-green-600 font-semibold">✅ สำเร็จ</span>}
+                      {st?.status === 'error' && <span className="text-[11px] text-red-500 font-semibold" title={st.message}>⚠️ ผิดพลาด</span>}
+                      {(!st || st.status === 'idle') && (
+                        <button
+                          onClick={() => onRenderOne(pair)}
+                          disabled={isBusy || !pair.matched}
+                          className="px-2.5 py-1 rounded bg-orange-500 hover:bg-orange-600 text-white font-bold text-[10px] disabled:opacity-40 transition-all cursor-pointer"
+                        >
+                          🎬 ตัดเดี่ยว
+                        </button>
+                      )}
+                      {st?.message && st.status !== 'rendering' && st.status !== 'ai' && (
+                        <div className="text-[9px] text-gray-400 mt-1 truncate max-w-[120px]" title={st.message}>{st.message}</div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FolderField({ label, value, onPick }: { label: string; value: string; onPick: () => void }) {
   return (
     <div>
@@ -2227,6 +3214,29 @@ function FolderField({ label, value, onPick }: { label: string; value: string; o
           เลือก
         </button>
       </div>
+    </div>
+  );
+}
+
+function SliderField({ label, value, unit, min, max, step = 1, onChange, hint }: {
+  label: string; value: number; unit?: string; min: number; max: number; step?: number; onChange: (v: number) => void; hint?: string;
+}) {
+  return (
+    <div>
+      <div className="flex justify-between items-center text-sm font-semibold mb-2">
+        <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+        <span className="font-mono text-purple-500 font-bold">{value}{unit || ''}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        className="w-full cursor-pointer"
+      />
+      {hint && <div className="text-[10px] text-gray-500 mt-1">{hint}</div>}
     </div>
   );
 }

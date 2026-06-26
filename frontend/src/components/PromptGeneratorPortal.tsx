@@ -22,7 +22,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Volume2
+  Volume2,
+  Star
 } from 'lucide-react';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
@@ -79,9 +80,32 @@ interface ClickbaitPostItem {
 
 interface VoiceoverResult {
   id: string;
-  topic: string;
+  topic: string;        // ชื่อสินค้า / หัวข้อ
+  scriptName?: string;  // ชื่อไฟล์สคริปต์ เช่น Chair_script1 (เฉพาะแท็บรีวิวสินค้า)
+  detail?: string;      // รายละเอียดสินค้า (จาก CSV)
   script: string;
   presetId: string;
+  lengthId: string;
+  error?: string;
+  createdAt: string;
+}
+
+interface VoiceoverPreset {
+  id: string;
+  label: string;
+  description: string;
+  promptGuideline?: string;
+}
+
+// ผลลัพธ์ของแท็บ "รีวิวสินค้า Shopee" (แยก Hook / ชื่อคลิป / Script ออกจากกัน)
+interface ProductScriptResult {
+  id: string;
+  productName: string;   // ชื่อสินค้าเดิม (จาก CSV)
+  englishName: string;   // ชื่ออังกฤษ PascalCase เช่น RiceWarmerGlove
+  clipName: string;      // ชื่อคลิป เช่น 001_RiceWarmerGlove_script1
+  hooks: string[];       // พาดหัว 5 ข้อ
+  script: string;        // เนื้อ voiceover ล้วน (ไม่มีวงเล็บการกระทำ/หัวข้อ)
+  detail?: string;       // รายละเอียดสินค้า
   lengthId: string;
   error?: string;
   createdAt: string;
@@ -128,9 +152,85 @@ const DEFAULT_PAGE_CONFIGS: PageConfig[] = [
   }
 ];
 
-const VOICEOVER_PRESETS = [
-  { 
-    id: 'business_mentor', 
+// บุคลิก "ผู้ดีจิบไวน์" รีวิวสินค้า Shopee แนวสารคดี+ปรัชญา+มุกบากิ (อ้างอิง role_shopee.txt)
+const ROLE_SHOPEE_TEMPLATE = `# ROLE
+คุณคือชายวัย 40-50 ปี สวมสูท นั่งจิบไวน์หรือกาแฟในห้องหนังสือ
+มีบุคลิกสุขุม พูดช้า น้ำเสียงจริงจัง ราวกับกำลังเล่าเรื่องสำคัญระดับโลก แต่แท้จริงแล้วกำลังรีวิวสินค้า
+สไตล์การเล่าคล้ายสารคดี ผสมปรัชญา และการเปรียบเปรยแบบเกินจริง
+ผู้ฟังควรรู้สึกว่า "ฟังดูมีเหตุผล" และ "เดี๋ยวนะ...นี่มึงกำลังโม้อยู่ใช่ไหม" ในเวลาเดียวกัน
+
+# OBJECTIVE
+นำรายละเอียดสินค้าที่ได้รับ มาสร้างเป็นสคริปต์รีวิวความยาว 30-60 วินาที
+ห้ามเปิดเรื่องด้วยการขายสินค้าโดยตรง ต้องเริ่มจากแนวคิด ปรัชญา ปัญหา หรือการเปรียบเทียบก่อนเสมอ แล้วค่อยเชื่อมโยงเข้าสินค้า
+
+# STYLE
+ใช้ประโยคสั้น ขึ้นบรรทัดใหม่บ่อย เว้นจังหวะให้คนอ่านตามทัน
+ตัวอย่าง:
+มีคนจำนวนมากเชื่อว่า...
+แสงแดดเป็นเพียงแสง
+ซึ่งก็ไม่ต่างอะไรจากการบอกว่า
+เสือเป็นเพียงแมว
+ความคิดนั้นฟังดูถูกต้อง
+จนกระทั่งท่านเข้าใกล้มันมากพอ
+
+# HUMOR RULES
+ให้ใช้มุกแบบ "บากิ" โดยมีหลักดังนี้
+1. เริ่มจากเรื่องธรรมดา
+2. ขยายให้กลายเป็นเรื่องระดับสงคราม
+3. เปรียบเทียบกับสัตว์ ธรรมชาติ วิทยาศาสตร์ หรือประวัติศาสตร์
+4. พูดด้วยน้ำเสียงจริงจังราวกับเป็นข้อเท็จจริงระดับโลก
+5. จบด้วยข้อสรุปที่ฟังดูมีเหตุผล แต่แอบเวอร์เกินจริง
+ตัวอย่าง:
+"บางคนคิดว่าไม่จำเป็นต้องพกแบตสำรอง นั่นก็ไม่ต่างจากนักดำน้ำ ที่คิดว่าตนเองไม่จำเป็นต้องหายใจ"
+"หลายคนเชื่อว่าฝุ่นเป็นเพียงผงเล็กๆ ซึ่งก็ไม่ต่างจากการบอกว่า ฉลามเป็นเพียงปลา"
+
+# LANGUAGE STYLE
+ใช้คำสุภาพ แต่มีความกวนแบบผู้ใหญ่ สามารถใช้คำต่อไปนี้ได้เป็นครั้งคราว (ห้ามใช้บ่อยเกินไป):
+ท่านผู้ชม, ข้าพเจ้า, น่าพิศวง, ความคิดนั้นฟังดูถูกต้อง, หาเป็นเช่นนั้นไม่, ข้าขออวยพร, ท่านพูดจาโป้ปดสมสู่อาชา, ฟังดูมีความหวัง แต่ข้อมูลไม่รองรับ, นั่นเป็นความกล้าหาญ หรือไม่ก็ประมาท
+
+# HOOK GENERATION
+ก่อนเริ่มสคริปต์ สร้างพาดหัวจำนวน 5 ข้อ โดยใช้รูปแบบดังนี้
+* ดวงอาทิตย์ไม่ได้เกลียดคุณ...แต่มันก็ไม่ได้ปรานีคุณ
+* การออกจากบ้านโดยไม่ป้องกันผิว คือการพนันรูปแบบหนึ่ง
+* บางคนต่อสู้กับดวงอาทิตย์ด้วยหน้าเปล่า
+* นี่อาจเป็นการต่อสู้ที่คุณแพ้ทุกวัน
+* ศัตรูตัวนี้โจมตีคุณตั้งแต่เกิด
+พาดหัวต้องชวนสงสัย และไม่ดูเหมือนกำลังขายสินค้า
+
+# STRUCTURE
+1. Hook — เริ่มจากข้อคิด ปรัชญา หรือการเปรียบเทียบ
+2. Escalation — ขยายเรื่องให้ดูยิ่งใหญ่เกินจริง เหมือนกำลังเล่าเรื่องสงครามหรือสารคดี
+3. Product Reveal — เปิดเผยสินค้า พร้อมเชื่อมโยงว่าสินค้านี้ช่วยแก้ปัญหาได้อย่างไร
+4. Closing — จบด้วยประโยคคมๆ ประชดเบาๆ หรือข้อคิดที่ทำให้คนยิ้ม
+ตัวอย่าง Closing:
+"แน่นอน... ท่านอาจไม่เชื่อข้า แต่ข้าก็ไม่คิดว่า ดวงอาทิตย์จะสนใจความเห็นของท่านเช่นกัน"
+
+# INPUT
+รายละเอียดสินค้า:
+{{PRODUCT_INFORMATION}}
+
+# OUTPUT
+ส่งกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นนอก JSON และห้ามครอบด้วย \`\`\`:
+{
+  "englishName": "ชื่อสินค้าเป็นภาษาอังกฤษแบบ PascalCase ไม่มีเว้นวรรค ไม่มีอักขระพิเศษ เช่น RiceWarmerGlove, SunscreenSPF50",
+  "hooks": ["พาดหัวข้อ 1", "พาดหัวข้อ 2", "พาดหัวข้อ 3", "พาดหัวข้อ 4", "พาดหัวข้อ 5"],
+  "script": "บทพูด voiceover ล้วนๆ พร้อมพากย์เสียงทันที"
+}
+
+กฎของ "hooks": พาดหัว 5 ข้อ ชวนสงสัย ไม่ดูเหมือนกำลังขายสินค้า
+
+กฎเหล็กของ "script" (สำคัญมาก):
+- ใส่เฉพาะ "คำพูดที่จะพากย์จริง" เท่านั้น
+- ห้ามมีคำเกริ่นนำ เช่น "นี่คือสคริปต์...", "ข้าพเจ้าขอเลือกสินค้า..."
+- ห้ามมีหัวข้อหรือมาร์กดาวน์ เช่น #, **, "1. พาดหัว", "สคริปต์รีวิว:", "(ความยาว...)"
+- ห้ามมีคำบรรยายการกระทำหรือฉากในวงเล็บเด็ดขาด เช่น (ภาพเปิด: ...), *(หยิบแก้วไวน์)*, *(ดับไฟ)*
+- ห้ามนำพาดหัว (hooks) มาใส่ซ้ำในตัว script
+- ขึ้นบรรทัดใหม่ได้ตามจังหวะการพูด เริ่มด้วยประโยคดึงดูด ปิดท้ายชวนคิด
+- ชื่อสินค้าที่กล่าวถึงใน script ให้เป็นภาษาอังกฤษ`;
+
+const VOICEOVER_PRESETS: VoiceoverPreset[] = [
+  {
+    id: 'business_mentor',
     label: '👔 ผู้ใหญ่สอนบริหาร', 
     description: 'สุขุม ตรงประเด็น เหมือนที่ปรึกษาธุรกิจรุ่นใหญ่',
     promptGuideline: 'สไตล์ผู้ใหญ่สอนบริหาร: ใช้น้ำเสียงสุขุม สุภาพ ตรงประเด็น เหมือนที่ปรึกษาธุรกิจรุ่นใหญ่ วิเคราะห์เจาะลึกกลยุทธ์การบริหารและการจัดการด้วยประสบการณ์ช่ำชอง'
@@ -232,7 +332,7 @@ export default function PromptGeneratorPortal() {
   const [activeTab, setActiveTab] = useState<'stock' | 'prompt-builder'>('stock');
 
   // Module 1 Tab states
-  const [stockSubTab, setStockSubTab] = useState<'api-image' | 'clickbait' | 'csv-clickbait' | 'voiceover'>('api-image');
+  const [stockSubTab, setStockSubTab] = useState<'api-image' | 'clickbait' | 'csv-clickbait' | 'voiceover' | 'product-review'>('api-image');
 
   // Direct keys loading from localStorage
   const openRouterKey = localStorage.getItem('openrouter_key')?.trim() || '';
@@ -587,7 +687,7 @@ ${row.article.slice(0, 5000)}
 - แนวการพูด/บุคลิก: ${activePreset.label} (${activePreset.description})
 - รายละเอียดบุคลิกและคำสั่งเฉพาะ: ${activePreset.promptGuideline || ''}
 - ความยาวเป้าหมาย: ${activeLength.label} (${activeLength.description})
-- ห้ามมีคำนำทาง เช่น "นี่คือบทพูด" หรือ "สวัสดีผู้รับชม" 
+- ห้ามมีคำนำทาง เช่น "นี่คือบทพูด" หรือ "สวัสดีผู้รับชม"
 - ห้ามมีคำอธิบายวงเล็บ เช่น (ดนตรีขึ้น), [ภาพตัดไป]
 - ห้ามมี Markdown, เครื่องหมาย # หรือหัวข้อเรื่องเด็ดขาด
 - ให้เริ่มต้นด้วยประโยคดึงดูดความสนใจทันที และปิดจบด้วยการทิ้งท้ายชวนคิด
@@ -628,7 +728,7 @@ ${row.article.slice(0, 5000)}
   const exportVoToCSV = (rows: VoiceoverResult[]) => {
     const escape = (s: string) => `"${(s || '').replace(/"/g, '""')}"`;
     const header = ['ID', 'Topic', 'Script', 'Persona', 'Length', 'Created At'];
-    
+
     const body = rows.map(r => {
       return [
         r.id,
@@ -646,6 +746,220 @@ ${row.article.slice(0, 5000)}
     const a    = document.createElement('a');
     a.href     = url;
     a.download = `voiceover_scripts_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // -------------------------------------------------------------
+  // M1 SUB-TAB 5: \u0e23\u0e35\u0e27\u0e34\u0e27\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32 Shopee (CSV \u2192 \u0e2b\u0e25\u0e32\u0e22 Script \u0e15\u0e48\u0e2d\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32)
+  // \u0e43\u0e0a\u0e49\u0e1a\u0e38\u0e04\u0e25\u0e34\u0e01 "\u0e1c\u0e39\u0e49\u0e14\u0e35\u0e08\u0e34\u0e1a\u0e44\u0e27\u0e19\u0e4c" (ROLE_SHOPEE_TEMPLATE) \u0e42\u0e14\u0e22\u0e40\u0e09\u0e1e\u0e32\u0e30 \u0e41\u0e22\u0e01\u0e08\u0e32\u0e01\u0e41\u0e17\u0e47\u0e1a Voiceover \u0e40\u0e14\u0e34\u0e21
+  // -------------------------------------------------------------
+  const [prProducts, setPrProducts] = useState<{ name: string; detail: string }[]>([]);
+  const [prCsvFileName, setPrCsvFileName] = useState('');
+  const [prScriptsPerItem, setPrScriptsPerItem] = useState(3);
+  const [prLength, setPrLength] = useState('medium');
+  const [prResults, setPrResults] = useState<ProductScriptResult[]>([]);
+  const [prIsRunning, setPrIsRunning] = useState(false);
+  const [prLogs, setPrLogs] = useState<string[]>([]);
+  const prFileRef = useRef<HTMLInputElement>(null);
+
+  const logPr = (msg: string) => {
+    const time = new Date().toLocaleTimeString();
+    setPrLogs(prev => [...prev, `[${time}] ${msg}`]);
+  };
+
+  // CSV parser \u0e41\u0e1a\u0e1a\u0e23\u0e2d\u0e07\u0e23\u0e31\u0e1a field \u0e17\u0e35\u0e48\u0e21\u0e35 comma / newline \u0e20\u0e32\u0e22\u0e43\u0e19\u0e40\u0e04\u0e23\u0e37\u0e48\u0e2d\u0e07\u0e2b\u0e21\u0e32\u0e22\u0e04\u0e33\u0e1e\u0e39\u0e14
+  const parseCsvRecords = (text: string): string[][] => {
+    const records: string[][] = [];
+    let row: string[] = [];
+    let field = '';
+    let inQuotes = false;
+    const src = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (src[i + 1] === '"') { field += '"'; i++; }
+          else inQuotes = false;
+        } else field += c;
+      } else if (c === '"') {
+        inQuotes = true;
+      } else if (c === ',') {
+        row.push(field); field = '';
+      } else if (c === '\n') {
+        row.push(field); field = '';
+        if (row.some(f => f.trim() !== '')) records.push(row);
+        row = [];
+      } else field += c;
+    }
+    if (field !== '' || row.length) {
+      row.push(field);
+      if (row.some(f => f.trim() !== '')) records.push(row);
+    }
+    return records;
+  };
+
+  // \u0e41\u0e1b\u0e25\u0e07\u0e40\u0e1b\u0e47\u0e19\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32: \u0e04\u0e2d\u0e25\u0e31\u0e21\u0e19\u0e4c 1 = \u0e0a\u0e37\u0e48\u0e2d\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32, \u0e04\u0e2d\u0e25\u0e31\u0e21\u0e19\u0e4c 2 = \u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32
+  const parseProductCSV = (text: string): { name: string; detail: string }[] => {
+    const records = parseCsvRecords(text);
+    if (!records.length) return [];
+    const first = (records[0][0] || '').toLowerCase();
+    const isHeader = first.includes('\u0e0a\u0e37\u0e48\u0e2d\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32') || first.includes('\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32') || first.includes('name') || first.includes('product');
+    const rows = isHeader ? records.slice(1) : records;
+    return rows
+      .map(r => ({ name: (r[0] || '').trim(), detail: (r[1] || '').trim() }))
+      .filter(p => p.name);
+  };
+
+  // \u0e41\u0e1b\u0e25\u0e07\u0e0a\u0e37\u0e48\u0e2d\u0e2d\u0e31\u0e07\u0e01\u0e24\u0e29\u0e43\u0e2b\u0e49\u0e40\u0e1b\u0e47\u0e19 PascalCase \u0e1b\u0e25\u0e2d\u0e14\u0e20\u0e31\u0e22\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e0a\u0e37\u0e48\u0e2d\u0e04\u0e25\u0e34\u0e1b \u0e40\u0e0a\u0e48\u0e19 "Rice Warmer Glove" \u2192 "RiceWarmerGlove"
+  const toPascalEnglish = (s: string) => {
+    const cleaned = (s || '').replace(/[^A-Za-z0-9]+/g, ' ').trim();
+    if (!cleaned) return '';
+    return cleaned.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('').slice(0, 40);
+  };
+
+  // \u0e15\u0e31\u0e14\u0e2a\u0e48\u0e27\u0e19\u0e17\u0e35\u0e48\u0e44\u0e21\u0e48\u0e43\u0e0a\u0e48\u0e1a\u0e17\u0e1e\u0e39\u0e14\u0e2d\u0e2d\u0e01\u0e08\u0e32\u0e01 script (\u0e04\u0e33\u0e40\u0e01\u0e23\u0e34\u0e48\u0e19/\u0e2b\u0e31\u0e27\u0e02\u0e49\u0e2d/\u0e27\u0e07\u0e40\u0e25\u0e47\u0e1a\u0e01\u0e32\u0e23\u0e01\u0e23\u0e30\u0e17\u0e33) \u0e40\u0e1c\u0e37\u0e48\u0e2d AI \u0e2b\u0e25\u0e38\u0e14\u0e21\u0e32
+  const cleanVoiceScript = (raw: string) =>
+    (raw || '')
+      .replace(/```(?:json)?/gi, '')
+      .replace(/^\s*#{1,6}\s.*$/gm, '')          // \u0e2b\u0e31\u0e27\u0e02\u0e49\u0e2d\u0e21\u0e32\u0e23\u0e4c\u0e01\u0e14\u0e32\u0e27\u0e19\u0e4c # ...
+      .replace(/\*\([^)]*\)\*/g, '')             // *(\u0e04\u0e33\u0e1a\u0e23\u0e23\u0e22\u0e32\u0e22\u0e01\u0e32\u0e23\u0e01\u0e23\u0e30\u0e17\u0e33)*
+      .replace(/^\s*\*?\([^)]*\)\*?\s*$/gm, '')  // \u0e17\u0e31\u0e49\u0e07\u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14\u0e17\u0e35\u0e48\u0e40\u0e1b\u0e47\u0e19\u0e27\u0e07\u0e40\u0e25\u0e47\u0e1a\u0e01\u0e32\u0e23\u0e01\u0e23\u0e30\u0e17\u0e33
+      .replace(/\*\*/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+  const handlePrCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const products = parseProductCSV(String(reader.result || ''));
+      if (!products.length) {
+        alert('\u0e44\u0e21\u0e48\u0e1e\u0e1a\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32\u0e43\u0e19\u0e44\u0e1f\u0e25\u0e4c CSV (\u0e04\u0e32\u0e14\u0e2b\u0e27\u0e31\u0e07\u0e04\u0e2d\u0e25\u0e31\u0e21\u0e19\u0e4c: \u0e0a\u0e37\u0e48\u0e2d\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32, \u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32)');
+        return;
+      }
+      setPrProducts(products);
+      setPrCsvFileName(file.name);
+      logPr(`\ud83d\udce5 \u0e42\u0e2b\u0e25\u0e14\u0e44\u0e1f\u0e25\u0e4c "${file.name}" \u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08 \u0e1e\u0e1a\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32 ${products.length} \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23`);
+    };
+    reader.readAsText(file, 'utf-8');
+    e.target.value = '';
+  };
+
+  const clearPrProducts = () => {
+    setPrProducts([]);
+    setPrCsvFileName('');
+  };
+
+  const generateProductScripts = async () => {
+    if (!prProducts.length) {
+      alert('\u0e01\u0e23\u0e38\u0e13\u0e32\u0e2d\u0e31\u0e1b\u0e42\u0e2b\u0e25\u0e14\u0e44\u0e1f\u0e25\u0e4c CSV \u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32\u0e01\u0e48\u0e2d\u0e19 (\u0e04\u0e2d\u0e25\u0e31\u0e21\u0e19\u0e4c 1 = \u0e0a\u0e37\u0e48\u0e2d\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32, \u0e04\u0e2d\u0e25\u0e31\u0e21\u0e19\u0e4c 2 = \u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32)');
+      return;
+    }
+    if (!openRouterKey) {
+      alert('\u0e01\u0e23\u0e38\u0e13\u0e32\u0e01\u0e23\u0e2d\u0e01 OpenRouter Key \u0e43\u0e19\u0e41\u0e17\u0e47\u0e1a \u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e23\u0e30\u0e1a\u0e1a \u0e01\u0e48\u0e2d\u0e19\u0e17\u0e33\u0e01\u0e34\u0e08\u0e01\u0e23\u0e23\u0e21\u0e19\u0e35\u0e49');
+      return;
+    }
+
+    const perItem = Math.max(1, Math.min(20, prScriptsPerItem || 1));
+    const activeLength = VOICEOVER_LENGTHS.find(l => l.id === prLength) || VOICEOVER_LENGTHS[1];
+    const totalJobs = prProducts.length * perItem;
+
+    setPrIsRunning(true);
+    setPrLogs([]);
+    logPr(`\u0e40\u0e23\u0e34\u0e48\u0e21\u0e1c\u0e25\u0e34\u0e15\u0e2a\u0e04\u0e23\u0e34\u0e1b\u0e15\u0e4c\u0e23\u0e35\u0e27\u0e34\u0e27: ${prProducts.length} \u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32 \u00d7 ${perItem} \u0e2a\u0e04\u0e23\u0e34\u0e1b\u0e15\u0e4c = ${totalJobs} \u0e0a\u0e34\u0e49\u0e19`);
+
+    let currentIdx = 1;
+    for (let p = 0; p < prProducts.length; p++) {
+      const product = prProducts[p];
+      const productNo = String(p + 1).padStart(3, '0');   // 001, 002, ... \u0e15\u0e32\u0e21\u0e25\u0e33\u0e14\u0e31\u0e1a\u0e43\u0e19\u0e44\u0e1f\u0e25\u0e4c (\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e1f\u0e25\u0e40\u0e14\u0e2d\u0e23\u0e4c)
+      let englishName = '';                                 // \u0e01\u0e33\u0e2b\u0e19\u0e14\u0e04\u0e23\u0e31\u0e49\u0e07\u0e40\u0e14\u0e35\u0e22\u0e27\u0e15\u0e48\u0e2d\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32 \u0e43\u0e2b\u0e49\u0e0a\u0e37\u0e48\u0e2d\u0e04\u0e25\u0e34\u0e1b\u0e17\u0e38\u0e01 script \u0e02\u0e2d\u0e07\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32\u0e19\u0e35\u0e49\u0e2a\u0e2d\u0e14\u0e04\u0e25\u0e49\u0e2d\u0e07\u0e01\u0e31\u0e19
+      const fallbackName = `Product${productNo}`;
+      const productInfo = product.detail
+        ? `\u0e0a\u0e37\u0e48\u0e2d\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32: ${product.name}\n\u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32: ${product.detail}`
+        : product.name;
+
+      for (let i = 1; i <= perItem; i++) {
+        const variationNote = perItem > 1
+          ? `\n\n[\u0e2b\u0e21\u0e32\u0e22\u0e40\u0e2b\u0e15\u0e38] \u0e19\u0e35\u0e48\u0e04\u0e37\u0e2d\u0e2a\u0e04\u0e23\u0e34\u0e1b\u0e15\u0e4c\u0e0a\u0e38\u0e14\u0e17\u0e35\u0e48 ${i} \u0e08\u0e32\u0e01\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14 ${perItem} \u0e0a\u0e38\u0e14\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a "${product.name}" \u2014 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e2a\u0e23\u0e49\u0e32\u0e07\u0e1e\u0e32\u0e14\u0e2b\u0e31\u0e27\u0e41\u0e25\u0e30\u0e21\u0e38\u0e21\u0e21\u0e2d\u0e07\u0e43\u0e2b\u0e49\u0e41\u0e15\u0e01\u0e15\u0e48\u0e32\u0e07\u0e08\u0e32\u0e01\u0e0a\u0e38\u0e14\u0e2d\u0e37\u0e48\u0e19\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e0a\u0e31\u0e14\u0e40\u0e08\u0e19`
+          : '';
+        let item: ProductScriptResult;
+
+        try {
+          logPr(`[${currentIdx}/${totalJobs}] \u0e01\u0e33\u0e25\u0e31\u0e07\u0e40\u0e02\u0e35\u0e22\u0e19\u0e2a\u0e04\u0e23\u0e34\u0e1b\u0e15\u0e4c\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32 #${productNo} "${product.name}" (\u0e0a\u0e38\u0e14\u0e17\u0e35\u0e48 ${i}/${perItem})...`);
+          const prompt = ROLE_SHOPEE_TEMPLATE.replace('{{PRODUCT_INFORMATION}}', productInfo)
+            + `\n\n[\u0e1b\u0e23\u0e31\u0e1a\u0e04\u0e27\u0e32\u0e21\u0e22\u0e32\u0e27] ${activeLength.description} (~${activeLength.targetChars} \u0e15\u0e31\u0e27\u0e2d\u0e31\u0e01\u0e29\u0e23)`
+            + variationNote;
+
+          const raw = await callOpenRouterAI([{ role: 'user', content: prompt }], 'google/gemini-3.5-flash');
+          const parsed = JSON.parse(cleanClickbaitText(raw));
+
+          // \u0e43\u0e0a\u0e49\u0e0a\u0e37\u0e48\u0e2d\u0e2d\u0e31\u0e07\u0e01\u0e24\u0e29\u0e08\u0e32\u0e01\u0e2a\u0e04\u0e23\u0e34\u0e1b\u0e15\u0e4c\u0e0a\u0e38\u0e14\u0e41\u0e23\u0e01\u0e40\u0e1b\u0e47\u0e19\u0e21\u0e32\u0e15\u0e23\u0e10\u0e32\u0e19\u0e02\u0e2d\u0e07\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32\u0e19\u0e35\u0e49\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14
+          if (!englishName) englishName = toPascalEnglish(parsed.englishName) || fallbackName;
+
+          const hooks: string[] = Array.isArray(parsed.hooks)
+            ? parsed.hooks.map((h: any) => String(h).trim()).filter(Boolean)
+            : [];
+
+          const clipName = `${productNo}_${englishName}_script${i}`;
+          logPr(`[\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08] ${clipName} \u0e40\u0e02\u0e35\u0e22\u0e19\u0e40\u0e2a\u0e23\u0e47\u0e08\u0e40\u0e23\u0e35\u0e22\u0e1a\u0e23\u0e49\u0e2d\u0e22!`);
+          item = {
+            id: `pr-${Date.now()}-${currentIdx}`,
+            productName: product.name,
+            englishName,
+            clipName,
+            hooks,
+            script: cleanVoiceScript(String(parsed.script || '')),
+            detail: product.detail,
+            lengthId: prLength,
+            createdAt: new Date().toLocaleDateString('th-TH')
+          };
+        } catch (err: any) {
+          if (!englishName) englishName = fallbackName;
+          const clipName = `${productNo}_${englishName}_script${i}`;
+          logPr(`\u274c [\u0e25\u0e49\u0e21\u0e40\u0e2b\u0e25\u0e27] ${clipName}: ${err.message}`);
+          item = {
+            id: `pr-${Date.now()}-${currentIdx}`,
+            productName: product.name,
+            englishName,
+            clipName,
+            hooks: [],
+            script: `[\u0e25\u0e49\u0e21\u0e40\u0e2b\u0e25\u0e27\u0e43\u0e19\u0e01\u0e32\u0e23\u0e40\u0e02\u0e35\u0e22\u0e19\u0e2a\u0e04\u0e23\u0e34\u0e1b\u0e15\u0e4c: ${err.message}]`,
+            detail: product.detail,
+            lengthId: prLength,
+            error: err.message,
+            createdAt: new Date().toLocaleDateString('th-TH')
+          };
+        }
+        setPrResults(prev => [...prev, item]);
+        currentIdx++;
+      }
+    }
+
+    logPr(`\ud83c\udf89 \u0e40\u0e2a\u0e23\u0e47\u0e08\u0e2a\u0e34\u0e49\u0e19\u0e01\u0e32\u0e23\u0e1c\u0e25\u0e34\u0e15\u0e2a\u0e04\u0e23\u0e34\u0e1b\u0e15\u0e4c\u0e23\u0e35\u0e27\u0e34\u0e27\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14 ${totalJobs} \u0e0a\u0e34\u0e49\u0e19\u0e41\u0e25\u0e49\u0e27!`);
+    setPrIsRunning(false);
+  };
+
+  const exportPrToCSV = (rows: ProductScriptResult[]) => {
+    const escape = (s: string) => `"${(s || '').replace(/"/g, '""')}"`;
+    const header = ['Clip Name', 'Product', 'Hook', 'Script', 'Length', 'Created At'];
+
+    const body = rows.map(r => [
+      r.clipName,
+      r.productName,
+      (r.hooks || []).join('\n'),
+      r.script,
+      r.lengthId,
+      r.createdAt || ''
+    ].map(escape).join(','));
+
+    const csv = '\ufeff' + [header.map(escape).join(','), ...body].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `shopee_review_scripts_${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -1055,6 +1369,13 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
             >
               <Volume2 className="w-4 h-4" />
               <span>Avatar Voiceover Script</span>
+            </button>
+            <button
+              className={`prompt-tab ${stockSubTab === 'product-review' ? 'active' : ''}`}
+              onClick={() => setStockSubTab('product-review')}
+            >
+              <Star className="w-4 h-4" />
+              <span>รีวิวสินค้า Shopee (CSV)</span>
             </button>
           </div>
 
@@ -1583,9 +1904,9 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                             <span className="text-[10px] bg-emerald-950/60 border border-emerald-800 text-emerald-400 px-2.5 py-0.5 rounded-full font-bold">
                               {script.topic}
                             </span>
-                            
+
                             <div className="flex items-center gap-2">
-                              <button 
+                              <button
                                 className="text-[10px] text-emerald-400 hover:underline font-bold"
                                 onClick={() => {
                                   navigator.clipboard.writeText(script.script);
@@ -1611,6 +1932,214 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                               setVoResults(prev => prev.map(s => s.id === script.id ? { ...s, script: text } : s));
                             }}
                           />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SUB-TAB 5: รีวิวสินค้า Shopee (CSV → หลาย Script ต่อสินค้า) */}
+            {stockSubTab === 'product-review' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1 space-y-4">
+                  <div className="glass-panel p-5 space-y-4">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Star className="text-amber-400 w-4.5 h-4.5" />
+                      <span>รีวิวสินค้า Shopee จาก CSV</span>
+                    </h3>
+
+                    <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                      <div className="text-[11px] font-extrabold text-amber-400">🍷 บุคลิก: ผู้ดีจิบไวน์</div>
+                      <div className="text-[9px] text-slate-400 mt-1 leading-normal">
+                        ชายสูทจิบไวน์ เล่าแบบสารคดี+ปรัชญา+มุกบากิ ขำหน้าตาย เปิดด้วยพาดหัว 5 ข้อ แล้วค่อยเฉลยสินค้า (อ้างอิง role_shopee.txt)
+                      </div>
+                    </div>
+
+                    {/* อัปโหลด CSV สินค้า: ชื่อสินค้า | รายละเอียดสินค้า */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-2">
+                        อัปโหลดไฟล์สินค้า (.csv)
+                        <span className="text-[9px] text-slate-500 font-normal block mt-0.5">คอลัมน์ 1 = ชื่อสินค้า, คอลัมน์ 2 = รายละเอียดสินค้า</span>
+                      </label>
+                      <input
+                        ref={prFileRef}
+                        type="file"
+                        accept=".csv,text/csv"
+                        className="hidden"
+                        onChange={handlePrCsvUpload}
+                      />
+                      {prProducts.length === 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => prFileRef.current?.click()}
+                          className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 hover:border-amber-500 text-slate-400 hover:text-amber-400 text-xs font-bold flex items-center justify-center gap-2 transition-all"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>เลือกไฟล์ CSV สินค้า</span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-amber-950/30 border border-amber-800">
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-bold text-amber-400 truncate">📄 {prCsvFileName}</div>
+                            <div className="text-[9px] text-slate-400">พบสินค้า {prProducts.length} รายการ</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={clearPrProducts}
+                            className="text-[10px] text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 shrink-0"
+                          >
+                            <X className="w-3 h-3" /> ล้าง
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* จำนวนสคริปต์ต่อ 1 สินค้า */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-1.5">จำนวน Script ต่อ 1 สินค้า</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        className="glass-input w-full text-xs h-9 px-3"
+                        value={prScriptsPerItem}
+                        onChange={(e) => setPrScriptsPerItem(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                      />
+                      <p className="text-[9px] text-slate-500 mt-1 leading-normal">
+                        เช่น สินค้า "Chair" ตั้งค่า 3 → จะได้ <span className="text-amber-400 font-bold">Chair_script1, Chair_script2, Chair_script3</span>
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-1.5">ขนาดความยาวสคริปต์</label>
+                      <select
+                        className="glass-input w-full text-xs h-9"
+                        value={prLength}
+                        onChange={(e) => setPrLength(e.target.value)}
+                      >
+                        {VOICEOVER_LENGTHS.map(l => (
+                          <option key={l.id} value={l.id}>{l.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      className="gradient-btn w-full py-3 text-xs font-bold"
+                      onClick={generateProductScripts}
+                      disabled={prIsRunning}
+                    >
+                      {prIsRunning ? '⏳ กำลังรังสรรค์บทรีวิว...' : `🍷 ผลิตสคริปต์รีวิว (${prProducts.length * prScriptsPerItem} ชิ้น)`}
+                    </button>
+
+                    {prLogs.length > 0 && (
+                      <div className="space-y-2 mt-4">
+                        <label className="block text-xs font-bold text-slate-400">สถานะการทำงาน (Logs)</label>
+                        <div className="log-screen">
+                          {prLogs.map((log, idx) => (
+                            <div key={idx} className="py-0.5">{log}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="lg:col-span-2 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-white">📋 สคริปต์รีวิวพร้อมใช้ ({prResults.length} ชิ้น)</h4>
+                    {prResults.length > 0 && (
+                      <div className="flex items-center gap-3">
+                        <button
+                          className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1.5"
+                          onClick={() => exportPrToCSV(prResults)}
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>โหลดทั้งหมดเป็น .CSV</span>
+                        </button>
+                        <button
+                          className="text-xs text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1.5"
+                          onClick={() => setPrResults([])}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>ล้างทั้งหมด</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {prResults.length === 0 ? (
+                    <div className="glass-panel p-12 text-center text-slate-500">
+                      <Star className="mx-auto w-12 h-12 mb-3 text-slate-800" />
+                      <p className="text-xs">อัปโหลดไฟล์ CSV สินค้าด้านซ้าย ตั้งจำนวนสคริปต์ต่อสินค้า แล้วเริ่มผลิตบทรีวิวสไตล์ผู้ดีจิบไวน์</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 max-h-[640px] overflow-y-auto pr-2">
+                      {prResults.map(script => (
+                        <div key={script.id} className="card-item space-y-3 border-l-4 border-l-amber-500">
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="flex flex-col gap-1 min-w-0">
+                              <span className="text-[12px] text-amber-300 font-extrabold font-mono truncate">
+                                {script.clipName}
+                              </span>
+                              <span className="text-[9px] text-slate-500 truncate">สินค้า: {script.productName}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                className="text-[10px] text-amber-400 hover:underline font-bold"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(script.script);
+                                  alert('คัดลอกบทรีวิว (Script) ลงคลิปบอร์ดแล้ว');
+                                }}
+                              >
+                                คัดลอก Script
+                              </button>
+                              <button
+                                className="text-[10px] text-rose-400 hover:text-rose-300 font-bold"
+                                onClick={() => setPrResults(prev => prev.filter(s => s.id !== script.id))}
+                              >
+                                ลบ
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Hook — แยกออกจาก Script */}
+                          {script.hooks.length > 0 && (
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[10px] font-bold text-amber-400/80 uppercase tracking-wider">🪝 Hook (พาดหัว {script.hooks.length} ข้อ)</label>
+                                <button
+                                  className="text-[9px] text-amber-400 hover:underline font-bold"
+                                  onClick={() => navigator.clipboard.writeText(script.hooks.join('\n'))}
+                                >
+                                  คัดลอก Hook
+                                </button>
+                              </div>
+                              <textarea
+                                className="glass-input w-full text-xs leading-relaxed h-24 resize-none p-3 font-sans"
+                                value={script.hooks.join('\n')}
+                                onChange={(e) => {
+                                  const lines = e.target.value.split('\n');
+                                  setPrResults(prev => prev.map(s => s.id === script.id ? { ...s, hooks: lines } : s));
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          {/* Script — เนื้อ voiceover ล้วน */}
+                          <div>
+                            <label className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider block mb-1">🎙️ Script (บทพูด voiceover)</label>
+                            <textarea
+                              className="glass-input w-full text-xs leading-relaxed h-56 resize-none p-3 font-sans"
+                              value={script.script}
+                              onChange={(e) => {
+                                const text = e.target.value;
+                                setPrResults(prev => prev.map(s => s.id === script.id ? { ...s, script: text } : s));
+                              }}
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>

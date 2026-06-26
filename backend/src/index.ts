@@ -1493,6 +1493,9 @@ const buildTitleAss = (
   padding: number,
   opacity: number,
   yPosition: number,
+  fontName: string = 'Prompt',
+  boxWidth: number = 0,
+  boxHeight: number = 0,
 ) => {
   const OUT_W = 1080;
   const OUT_H = 1920;
@@ -1506,6 +1509,9 @@ const buildTitleAss = (
 
   const alphaHex = Math.round((1 - opacity) * 255).toString(16).padStart(2, '0').toUpperCase();
 
+  // สไตล์ที่ไม่มีกล่อง (ตัวอักษรขอบดำ) — กล่อง W×H ไม่มีผลกับสไตล์เหล่านี้
+  const NO_BOX_STYLES = new Set(['no-box-shadow', 'outline-minimal']);
+
   if (styleId === 'minimal-black') {
     primaryColor = '&H00FFFFFF';
     backColor = `&H${alphaHex}000000`;
@@ -1518,12 +1524,30 @@ const buildTitleAss = (
   } else if (styleId === 'attention-red') {
     primaryColor = '&H00FFFFFF';
     backColor = `&H${alphaHex}4444EF`;
+  } else if (styleId === 'shopee-orange') {
+    primaryColor = '&H00FFFFFF';
+    backColor = `&H${alphaHex}2D4DEE`;
+  } else if (styleId === 'mint-green') {
+    primaryColor = '&H00231A0E';
+    backColor = `&H${alphaHex}A6B814`;
+  } else if (styleId === 'pastel-blue') {
+    primaryColor = '&H00422D11';
+    backColor = `&H${alphaHex}FEDBBF`;
+  } else if (styleId === 'rich-gold') {
+    primaryColor = '&H00231A0E';
+    backColor = `&H${alphaHex}44B0E0`;
   } else if (styleId === 'no-box-shadow') {
     primaryColor = '&H00FFFFFF';
     backColor = '&H00000000';
     borderStyle = 1;
     outlineWidth = 4;
     shadow = 2;
+  } else if (styleId === 'outline-minimal') {
+    primaryColor = '&H00FFFFFF';
+    backColor = '&H00000000';
+    borderStyle = 1;
+    outlineWidth = 2;
+    shadow = 0;
   } else {
     primaryColor = '&H00111111';
     backColor = `&H${alphaHex}B4DDF3`;
@@ -1535,6 +1559,38 @@ const buildTitleAss = (
     .filter(Boolean)
     .join('\\N');
 
+  // ── โหมดกล่องกำหนดขนาดเอง (W×H) ── วาดสี่เหลี่ยมด้วย ASS drawing แล้ววางข้อความตรงกลาง
+  // เพื่อให้คุมความกว้าง/ความสูงกล่องได้อิสระจริง (ASS BorderStyle=3 ขยายตามตัวอักษรเท่านั้น)
+  const useDrawnBox = boxWidth > 0 && boxHeight > 0 && !NO_BOX_STYLES.has(styleId);
+
+  const fontsize = Math.max(8, Math.round(fontSize));
+
+  if (useDrawnBox) {
+    const cx = Math.round(OUT_W / 2);
+    const boxLeft = Math.round(cx - boxWidth / 2);
+    const boxTop = Math.round(yPosition);
+    const textCy = Math.round(boxTop + boxHeight / 2);
+    const backMatch = backColor.match(/&H(..)(......)/i);
+    const boxAlpha = backMatch ? backMatch[1] : '00';
+    const boxRGB = backMatch ? backMatch[2] : '111111';
+
+    return `[Script Info]
+ScriptType: v4.00+
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+PlayResX: ${OUT_W}
+PlayResY: ${OUT_H}
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,${fontName},${fontsize},${primaryColor},&H00FFFFFF,&H00000000,&H00000000,${bold},0,0,0,100,100,0,0,1,2,0,5,40,40,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,9:59:59.99,Default,,0,0,0,,{\\pos(${boxLeft},${boxTop})\\an7\\1c&H${boxRGB}&\\1a&H${boxAlpha}&\\bord0\\shad0\\p1}m 0 0 l ${Math.round(boxWidth)} 0 ${Math.round(boxWidth)} ${Math.round(boxHeight)} 0 ${Math.round(boxHeight)}{\\p0}
+Dialogue: 1,0:00:00.00,9:59:59.99,Default,,0,0,0,,{\\pos(${cx},${textCy})\\an5}${formattedText}`;
+  }
+
   const header = `[Script Info]
 ScriptType: v4.00+
 WrapStyle: 0
@@ -1544,7 +1600,7 @@ PlayResY: ${OUT_H}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Prompt,${fontSize},${primaryColor},&H00FFFFFF,${backColor},${backColor},${bold},0,0,0,100,100,0,0,${borderStyle},${outlineWidth},${shadow},8,120,120,${yPosition},1
+Style: Default,${fontName},${fontsize},${primaryColor},&H00FFFFFF,${backColor},${backColor},${bold},0,0,0,100,100,0,0,${borderStyle},${outlineWidth},${shadow},8,120,120,${yPosition},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -1730,9 +1786,12 @@ const runWhisper = async (audioPath: string, tempDir: string, model: string, lan
       '--output_format', 'json',
       '--device', 'cpu',
       '--compute_type', 'int8',
+      // ข้ามขั้น alignment (wav2vec2) เพราะภาษาไทยไม่มี default align-model → WhisperX จะ crash
+      // segment-level timestamps จากการถอดเสียงเพียงพอสำหรับซับไตเติลแล้ว
+      '--no_align',
     ];
     if (language && language !== 'auto') args.push('--language', language);
-    
+
     await runProcess('/opt/homebrew/bin/whisperx', args, `WhisperX ${finalModel}`, sendCallback, resConnection);
     success = true;
   } catch (e: any) {
@@ -1840,15 +1899,26 @@ const callOpenRouterJson = (apiKey: string, model: string, prompt: string) => ne
 
 const generateAiHeadline = async (scriptText: string, apiKey: string) => {
   if (!apiKey || !scriptText.trim()) return [];
-  const prompt = `วิเคราะห์เนื้อหาจาก Script วิดีโอต่อไปนี้ แล้วคิดคำพาดหัววิดีโอสั้นๆ (Hook) ที่ดึงดูดความสนใจ สไตล์คลิปไวรัลใน TikTok/Reels จำนวน 3 ตัวเลือก โดยใช้ภาษาไทยที่กระชับ โดนใจ และดึงดูดความสนใจทันที
-กฎ:
-- ส่งกลับมาเป็นข้อมูลรูปแบบ JSON Array ของสตริงเท่านั้น เช่น ["พาดหัวข้อที่ 1", "พาดหัวข้อที่ 2", "พาดหัวข้อที่ 3"]
-- ห้ามมีข้อความเกริ่นนำหรือลงท้าย
-- ห้ามใช้ Markdown code block ครอบ นอกจากตัว JSON
+  // คิดพาดหัว 3 สไตล์ตามลำดับ: 1) สุขุม/สารคดี/ปรัชญา (สไตล์เจ้าของช่อง) 2) Clickbait 3) บอกประโยชน์ตรงๆ
+  const prompt = `คุณเป็นนักการตลาดสายคอนเทนต์ ขายของบน TikTok/Reels/Shopee
+จากเนื้อหา/สคริปต์วิดีโอต่อไปนี้ ให้คิด "พาดหัว (Hook) ภาษาไทย" 3 แบบ แบบละ 1 ข้อ เรียงตามลำดับนี้เป๊ะ ๆ:
 
-Script:
+1) สไตล์สุขุม/สารคดี/ปรัชญา — กวนแบบผู้ใหญ่ ชวนสงสัย ไม่ขายของตรง ๆ เปรียบเปรยเกินจริงนิด ๆ
+   ตัวอย่างโทนที่ต้องการ:
+   - "ศัตรูตัวนี้โจมตีคุณตั้งแต่เกิด"
+   - "การออกจากบ้านโดยไม่ป้องกันผิว คือการพนันรูปแบบหนึ่ง"
+   - "ดวงอาทิตย์ไม่ได้เกลียดคุณ...แต่มันก็ไม่ได้ปรานีคุณ"
+2) สไตล์ Clickbait — เร้าอารมณ์ อยากกดดูทันที ใช้ตัวเลข/คำเกินจริงนิด ๆ ความอยากรู้สูง
+3) สไตล์บอกประโยชน์สินค้าตรง ๆ — ชัดเจนว่าได้อะไร แก้ปัญหาอะไร เข้าใจง่าย
+
+กฎ:
+- แต่ละพาดหัวสั้น กระชับ ไม่เกินประมาณ 14 คำ ภาษาไทย
+- ส่งกลับเป็น JSON Array ของสตริง "3 ตัวเท่านั้น" เรียงตามลำดับ 1,2,3 เช่น ["...","...","..."]
+- ห้ามมีข้อความเกริ่นนำ/ลงท้าย ห้ามใส่หมายเลขข้อ ห้ามใช้ Markdown code block
+
+เนื้อหา/สคริปต์:
 "${scriptText}"`;
-  
+
   try {
     const data = await callOpenRouterJson(apiKey, 'google/gemini-2.5-flash', prompt);
     if (Array.isArray(data)) return data.map(t => String(t || '').trim()).filter(Boolean);
@@ -1992,6 +2062,118 @@ app.post('/api/list-folder-videos', (req, res) => {
   }
 });
 
+// ── ดึงเฟรมตัวอย่างจากคลิป Avatar (สำหรับเครื่องมือตั้งค่า Crop ใบหน้าวงกลม) ──
+//   คืนภาพ base64 + ขนาดจริงของวิดีโอ เพื่อให้ frontend วาง overlay crop ได้ตรง
+app.post('/api/extract-avatar-frame', (req, res) => {
+  try {
+    const body = req.body || {};
+    let videoPath = String(body.videoPath || '').trim();
+    if (!videoPath && body.folder && body.file) {
+      videoPath = path.join(String(body.folder), String(body.file));
+    }
+    const VIDEO_EXTS = ['.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm'];
+    if (!videoPath || !fs.existsSync(videoPath) || !VIDEO_EXTS.includes(path.extname(videoPath).toLowerCase())) {
+      return res.json({ success: false, error: 'ไม่พบไฟล์วิดีโอ' });
+    }
+
+    const { spawnSync } = require('child_process');
+    const ffmpegPath = getFFmpegPath();
+    const env = { ...process.env, PATH: `/opt/homebrew/opt/ffmpeg-full/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}` };
+    const tmpPng = path.join(require('os').tmpdir(), `avatar_frame_${Date.now()}.jpg`);
+
+    // ดึงเฟรมที่ ~0.8 วินาที ย่อกว้างไม่เกิน 640px
+    const r = spawnSync(ffmpegPath, [
+      '-y', '-ss', '0.8', '-i', videoPath, '-frames:v', '1',
+      '-vf', "scale='min(640,iw)':-2", '-q:v', '4', tmpPng,
+    ], { env, timeout: 30000 });
+    if (r.status !== 0 || !fs.existsSync(tmpPng)) {
+      // เผื่อคลิปสั้นกว่า 0.8s ลองที่เฟรมแรก
+      spawnSync(ffmpegPath, ['-y', '-i', videoPath, '-frames:v', '1', '-vf', "scale='min(640,iw)':-2", '-q:v', '4', tmpPng], { env, timeout: 30000 });
+    }
+    if (!fs.existsSync(tmpPng)) return res.json({ success: false, error: 'ดึงเฟรมไม่สำเร็จ' });
+
+    // อ่านขนาดวิดีโอจริงด้วย ffprobe (ถ้ามี) เพื่อบอก aspect
+    let vw = 0, vh = 0;
+    try {
+      const probe = spawnSync(getFFprobePath(), ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0:s=x', videoPath], { env, encoding: 'utf8', timeout: 15000 });
+      const m = String(probe.stdout || '').trim().match(/(\d+)x(\d+)/);
+      if (m) { vw = Number(m[1]); vh = Number(m[2]); }
+    } catch {}
+
+    const b64 = fs.readFileSync(tmpPng).toString('base64');
+    try { fs.unlinkSync(tmpPng); } catch {}
+    res.json({ success: true, image: `data:image/jpeg;base64,${b64}`, width: vw, height: vh });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── โหมด Shopee: ลิสต์โฟลเดอร์ย่อย product/avatar แล้วจับคู่อัตโนมัติจากชื่อ (prefix) ──
+//   product subfolder เช่น 001_RiceWarmerGlove
+//   avatar subfolder  เช่น 001_RiceWarmerGlove_script1  → ตัด _scriptN ออกแล้วจับกับ product
+//   แต่ละ avatar subfolder = 1 คลิป output (footage มาจาก product ที่จับคู่ได้)
+app.post('/api/shopee-pair-folders', (req, res) => {
+  try {
+    const productFolder = String((req.body || {}).productFolder || '').trim();
+    const avatarFolder = String((req.body || {}).avatarFolder || '').trim();
+    if (!productFolder || !fs.existsSync(productFolder) || !fs.statSync(productFolder).isDirectory()) {
+      return res.json({ success: false, error: 'ไม่พบโฟลเดอร์สินค้า', pairs: [], productFolders: [] });
+    }
+    if (!avatarFolder || !fs.existsSync(avatarFolder) || !fs.statSync(avatarFolder).isDirectory()) {
+      return res.json({ success: false, error: 'ไม่พบโฟลเดอร์ Avatar', pairs: [], productFolders: [] });
+    }
+
+    const listSubDirs = (root: string) =>
+      fs.readdirSync(root)
+        .filter(name => !name.startsWith('.') && fs.statSync(path.join(root, name)).isDirectory())
+        .sort();
+
+    // ตัด suffix สคริปต์/เวอร์ชัน เพื่อใช้เทียบกับชื่อสินค้า
+    const normalizeKey = (name: string) =>
+      name.toLowerCase()
+        .replace(/[_-]?script\s*\d*$/i, '')
+        .replace(/[_-]?v\d+$/i, '')
+        .replace(/[_-]+$/,'')
+        .trim();
+    const numericPrefix = (name: string) => (name.match(/^\s*(\d{1,6})/) || [])[1] || '';
+
+    const productSubs = listSubDirs(productFolder).map(name => {
+      const full = path.join(productFolder, name);
+      return { name, path: full, key: normalizeKey(name), id: numericPrefix(name), clipCount: collectVideos(full).length };
+    });
+    const productFolders = productSubs.map(p => ({ name: p.name, path: p.path, clipCount: p.clipCount }));
+
+    const avatarSubs = listSubDirs(avatarFolder);
+    const pairs = avatarSubs.map(name => {
+      const avatarSubPath = path.join(avatarFolder, name);
+      const videos = collectVideos(avatarSubPath);
+      const avatarVideoPath = videos[0] || '';
+      const key = normalizeKey(name);
+      const id = numericPrefix(name);
+
+      // จับคู่: 1) key ตรงกัน  2) numeric id ตรงกัน  3) ชื่อขึ้นต้นกัน
+      let match = productSubs.find(p => p.key === key);
+      if (!match && id) match = productSubs.find(p => p.id === id);
+      if (!match) match = productSubs.find(p => key.startsWith(p.key) || p.key.startsWith(key));
+
+      return {
+        avatarSubfolder: name,
+        avatarSubfolderPath: avatarSubPath,
+        avatarVideoFile: avatarVideoPath ? path.basename(avatarVideoPath) : '',
+        avatarVideoDir: avatarVideoPath ? path.dirname(avatarVideoPath) : avatarSubPath,
+        productSubfolder: match ? match.name : '',
+        productSubfolderPath: match ? match.path : '',
+        productClipCount: match ? match.clipCount : 0,
+        matched: !!match && !!avatarVideoPath,
+      };
+    });
+
+    res.json({ success: true, pairs, productFolders });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message, pairs: [], productFolders: [] });
+  }
+});
+
 app.post('/api/pick-file', (req, res) => {
   let prompt = 'เลือกไฟล์';
   if (req.body && req.body.prompt) prompt = req.body.prompt;
@@ -2109,8 +2291,9 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
   const AUDIO_EXTS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'];
   const OUT_W = 1080;
   const OUT_H = 1920;
-  const TOP_H = 1040;
-  const AVATAR_H = OUT_H - TOP_H;
+  // โหมด split: ความสูง footage (บน) / Avatar (ล่าง) — ปรับได้ผ่าน footageRatioPct (กำหนดค่าจริงด้านล่าง)
+  let TOP_H = 1040;
+  let AVATAR_H = OUT_H - TOP_H;
 
   const send = (obj: object) => {
     if (!res.writableEnded) {
@@ -2152,7 +2335,32 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
       const isVerticalAvatar = !!payload.isVerticalAvatar;
       const useGreenScreenKeying = !!payload.useGreenScreenKeying;
       const headlineAiEnabled = !!payload.headlineAiEnabled;
-      
+
+      // ── เลย์เอาต์ Avatar: split | greenscreen-full | bottom-band | circle ──
+      // รองรับ payload.avatarLayout โดยตรง และ map ย้อนหลังจาก flag เดิม
+      let avatarLayout = String(payload.avatarLayout || '').trim();
+      if (!avatarLayout) {
+        avatarLayout = isVerticalAvatar ? (useGreenScreenKeying ? 'greenscreen-full' : 'greenscreen-full') : 'split';
+      }
+      const clampPct = (v: any, def: number, lo: number, hi: number) =>
+        Math.max(lo, Math.min(hi, Number(v ?? def)));
+      const footageRatioPct = clampPct(payload.footageRatioPct, 54, 30, 75);   // % ความสูง footage (โหมด split)
+      const avatarScalePct = clampPct(payload.avatarScalePct, 100, 40, 120);    // % สเกล Avatar (โหมด greenscreen)
+      const bandHeightPct = clampPct(payload.bandHeightPct, 32, 15, 60);        // % ความสูงแถบล่าง
+      const bandPosYPct = clampPct(payload.bandPosYPct, 0, 0, 40);              // % ระยะห่างจากขอบล่าง
+      const circleDiameterPct = clampPct(payload.circleDiameterPct, 38, 18, 70); // % เส้นผ่านศูนย์กลาง (อิงความกว้าง)
+      const circlePosXPct = clampPct(payload.circlePosXPct, 50, 0, 100);
+      const circlePosYPct = clampPct(payload.circlePosYPct, 72, 0, 100);
+      // ── Crop ใบหน้าในวงกลม (ตั้งค่าครั้งเดียวใช้ทุกคลิป) ──
+      // size = ด้านของสี่เหลี่ยม crop เทียบกับด้านสั้นของเฟรม (ยิ่งน้อย = ซูมเข้าหน้ามาก)
+      const circleCropSizePct = clampPct(payload.circleCropSizePct, 80, 30, 100);
+      const circleCropXPct = clampPct(payload.circleCropXPct, 50, 0, 100); // ตำแหน่งซ้าย-ขวาใน source
+      const circleCropYPct = clampPct(payload.circleCropYPct, 32, 0, 100);  // ตำแหน่งบน-ล่างใน source (เล็งใบหน้า)
+
+      // โหมด split: คำนวณความสูง footage(บน)/Avatar(ล่าง) จากสัดส่วนที่ผู้ใช้ตั้ง (เป็นเลขคู่กัน 30 fps ปลอดภัย)
+      TOP_H = Math.round((OUT_H * footageRatioPct) / 100 / 2) * 2;
+      AVATAR_H = OUT_H - TOP_H;
+
       const subtitleOptions = payload.subtitle && typeof payload.subtitle === 'object' ? payload.subtitle : {};
       const headlineOptions = payload.headlineOptions && typeof payload.headlineOptions === 'object' ? payload.headlineOptions : {};
       const hlStyle = String(headlineOptions.style || 'classic-gold');
@@ -2160,6 +2368,9 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
       const hlOpacity = Math.max(0, Math.min(100, Number(headlineOptions.opacity ?? 96))) / 100;
       const hlFontSizeOverride = Number(headlineOptions.fontSize ?? 0);
       const hlYPosition = Math.max(50, Math.min(1500, Number(headlineOptions.yPosition ?? 220)));
+      const hlFont = String(headlineOptions.font || 'Prompt');
+      const hlBoxWidth = Math.max(0, Math.min(OUT_W, Number(headlineOptions.boxWidth ?? 0)));
+      const hlBoxHeight = Math.max(0, Math.min(OUT_H, Number(headlineOptions.boxHeight ?? 0)));
 
       if (!avatarFolder || !fs.existsSync(avatarFolder) || !fs.statSync(avatarFolder).isDirectory()) throw new Error('ไม่พบโฟลเดอร์ Avatar');
       if (!avatarFile || path.isAbsolute(avatarFile) || path.basename(avatarFile) !== avatarFile) {
@@ -2206,7 +2417,9 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
 
       const segmentPaths: string[] = [];
       const bRollW = OUT_W;
-      const bRollH = isVerticalAvatar ? OUT_H : TOP_H;
+      // footage เต็มจอสำหรับเลย์เอาต์ที่ Avatar ลอยทับ (greenscreen/แถบล่าง/วงกลม); split ใช้แค่ส่วนบน
+      const footageFullFrame = avatarLayout !== 'split';
+      const bRollH = footageFullFrame ? OUT_H : TOP_H;
       const topVf = `scale=${bRollW}:${bRollH}:force_original_aspect_ratio=increase,crop=${bRollW}:${bRollH},setsar=1,fps=30,format=yuv420p`;
       
       for (let i = 0; i < selected.length; i++) {
@@ -2295,7 +2508,10 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
           hlFontSize,
           hlPadding,
           hlOpacity,
-          finalY
+          finalY,
+          hlFont,
+          hlBoxWidth,
+          hlBoxHeight
         ),
         'utf8'
       );
@@ -2348,27 +2564,49 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
       }
 
       let filterParts: string[] = [];
-      if (isVerticalAvatar) {
-        filterParts.push(`[0:v]trim=duration=${avatarDuration.toFixed(3)},setpts=PTS-STARTPTS[bg]`);
-        
+      const fontsDir = escapeFilterPath(path.resolve(__dirname, '../../public/Font_stock'));
+      // footage montage = พื้นหลังหลักของทุกเลย์เอาต์
+      filterParts.push(`[0:v]trim=duration=${avatarDuration.toFixed(3)},setpts=PTS-STARTPTS,fps=30,format=yuv420p[bg]`);
+
+      if (avatarLayout === 'greenscreen-full') {
+        // Avatar เต็มจอ (สเกลได้) ลอยทับ footage — เจาะกรีนสกรีนตามตัวเลือก จัดกึ่งกลางชิดล่าง
+        const avatarW = Math.round((OUT_W * avatarScalePct) / 100 / 2) * 2;
         if (useGreenScreenKeying) {
-          filterParts.push(`[1:v]colorkey=0x00FF00:0.32:0.08,scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,crop=${OUT_W}:${OUT_H},setsar=1,fps=30,format=rgba[avatarv]`);
-          filterParts.push(`[bg][avatarv]overlay=0:0[stacked]`);
+          filterParts.push(`[1:v]colorkey=0x00FF00:0.32:0.08,scale=${avatarW}:-2,setsar=1,fps=30,format=rgba[avatarv]`);
         } else {
-          filterParts.push(`[1:v]scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,crop=${OUT_W}:${OUT_H},setsar=1,fps=30,format=yuv420p[avatarv]`);
-          filterParts.push(`[bg][avatarv]overlay=0:0[stacked]`);
+          filterParts.push(`[1:v]scale=${avatarW}:-2,setsar=1,fps=30,format=rgba[avatarv]`);
         }
-        
-        filterParts.push(`[stacked]subtitles=filename=${escapeFilterPath(titleAssPath)}:fontsdir=${escapeFilterPath(path.resolve(__dirname, '../../public/Font_stock'))}[titled]`);
+        filterParts.push(`[bg][avatarv]overlay=(W-w)/2:H-h[stacked]`);
+      } else if (avatarLayout === 'bottom-band') {
+        // คลิป Avatar แนวนอนวางเป็นแถบล่าง บน footage เต็มจอ
+        const bandH = Math.round((OUT_H * bandHeightPct) / 100 / 2) * 2;
+        const marginBottom = Math.round((OUT_H * bandPosYPct) / 100);
+        filterParts.push(`[1:v]scale=${OUT_W}:${bandH}:force_original_aspect_ratio=decrease,setsar=1,fps=30,format=yuv420p[avatarv]`);
+        filterParts.push(`[bg][avatarv]overlay=(W-w)/2:H-h-${marginBottom}[stacked]`);
+      } else if (avatarLayout === 'circle') {
+        // crop Avatar เป็นวงกลม face-cam แล้ววางบน footage เต็มจอ ตามตำแหน่ง X/Y
+        const D = Math.round((OUT_W * circleDiameterPct) / 100 / 2) * 2;
+        const r = D / 2;
+        const cxp = Math.round((OUT_W * circlePosXPct) / 100) - r;
+        const cyp = Math.round((OUT_H * circlePosYPct) / 100) - r;
+        // crop ใบหน้าตามที่ผู้ใช้ตั้ง — X/Y = ตำแหน่ง "จุดศูนย์กลาง" ของวง (fraction ของเฟรม) ให้ตรงกับวงที่ลากในตัวแก้ไข
+        // side = ด้านสั้น(min) × size% ; clamp ไม่ให้ออกนอกเฟรม
+        const S = (circleCropSizePct / 100).toFixed(3);
+        const CX = (circleCropXPct / 100).toFixed(3);
+        const CY = (circleCropYPct / 100).toFixed(3);
+        const sideE = `min(iw,ih)*${S}`;
+        const cropExpr = `crop=w='${sideE}':h='${sideE}':x='max(0,min(iw-${sideE},iw*${CX}-${sideE}/2))':y='max(0,min(ih-${sideE},ih*${CY}-${sideE}/2))'`;
+        filterParts.push(`[1:v]${cropExpr},scale=${D}:${D},setsar=1,fps=30,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte((X-${r})*(X-${r})+(Y-${r})*(Y-${r}),${r * r}),255,0)'[avatarv]`);
+        filterParts.push(`[bg][avatarv]overlay=${cxp}:${cyp}[stacked]`);
       } else {
-        filterParts.push(`[0:v]trim=duration=${avatarDuration.toFixed(3)},setpts=PTS-STARTPTS[top]`);
+        // split (ค่าเริ่มต้น): footage บน (สูง TOP_H) / Avatar ล่าง
         filterParts.push(`[1:v]scale=${OUT_W}:${AVATAR_H}:force_original_aspect_ratio=increase,crop=${OUT_W}:${AVATAR_H},setsar=1,fps=30,format=yuv420p[avatarv]`);
         filterParts.push(`color=c=black:s=${OUT_W}x${OUT_H}:d=${avatarDuration.toFixed(3)}[base]`);
-        filterParts.push(`[base][top]overlay=0:0[withtop]`);
+        filterParts.push(`[base][bg]overlay=0:0[withtop]`);
         filterParts.push(`[withtop][avatarv]overlay=0:${TOP_H}[stacked]`);
-        
-        filterParts.push(`[stacked]subtitles=filename=${escapeFilterPath(titleAssPath)}:fontsdir=${escapeFilterPath(path.resolve(__dirname, '../../public/Font_stock'))}[titled]`);
       }
+
+      filterParts.push(`[stacked]subtitles=filename=${escapeFilterPath(titleAssPath)}:fontsdir=${fontsDir}[titled]`);
 
       if (subtitleAssPath) {
         filterParts.push(`[titled]subtitles=filename=${escapeFilterPath(subtitleAssPath)}:fontsdir=${escapeFilterPath(path.resolve(__dirname, '../../public/Font_stock'))}[vout]`);
