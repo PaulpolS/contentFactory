@@ -1671,6 +1671,95 @@ Dialogue: 0,0:00:00.00,9:59:59.99,Default,,0,0,0,,${formattedText}`;
   return header;
 };
 
+// ── สร้างลายน้ำเครดิต (Watermark) เป็นไฟล์ ASS ──
+//   mode: fixed = มุมเดียวคงที่, random-corners = สุ่มย้ายมุมทุกช่วง, roaming = ลอยเคลื่อนไปมา
+const buildWatermarkAss = (
+  text: string,
+  opts: { mode?: string; corner?: string; style?: string; opacity?: number; fontSize?: number; font?: string; intervalSec?: number },
+  durationSec: number,
+) => {
+  const OUT_W = 1080, OUT_H = 1920;
+  const dur = Math.max(0.5, Number(durationSec) || 5);
+  const mode = String(opts.mode || 'random-corners');
+  const style = String(opts.style || 'faint');
+  const fontName = String(opts.font || 'Prompt');
+  const fontSize = Math.max(18, Math.min(140, Math.round(Number(opts.fontSize) || 44)));
+  const opacity = Math.max(0.05, Math.min(1, Number(opts.opacity ?? 0.35)));
+  const intervalSec = Math.max(2, Math.min(12, Number(opts.intervalSec) || 4));
+
+  const aHex = (o: number) => Math.round((1 - Math.max(0, Math.min(1, o))) * 255).toString(16).padStart(2, '0').toUpperCase();
+  const primary = `&H${aHex(opacity)}FFFFFF`;
+  const outline = `&H${aHex(Math.min(1, opacity * 1.1))}000000`;
+  let borderStyle = 1, outlineW = 2, shadow = 0, back = '&HFF000000', italic = 0;
+  if (style === 'outline') { outlineW = 3.5; }
+  else if (style === 'box') { borderStyle = 3; outlineW = 10; back = `&H${aHex(opacity * 0.7)}000000`; }
+  else if (style === 'italic') { italic = -1; outlineW = 2; }
+
+  const esc = String(text || '').replace(/[\r\n]+/g, ' ').replace(/[{}\\]/g, '').replace(/\s+/g, ' ').trim() || '@yourshop';
+
+  const secToAss = (t: number) => {
+    const cs = Math.max(0, Math.round(t * 100));
+    const h = Math.floor(cs / 360000);
+    const m = Math.floor((cs % 360000) / 6000);
+    const s = Math.floor((cs % 6000) / 100);
+    const c = cs % 100;
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(c).padStart(2, '0')}`;
+  };
+
+  // จุดยึด (เว้นขอบ ~ปลอดภัย) เป็นพิกัดจริงบนเฟรม 1080x1920
+  const anchors = [
+    { x: 200, y: 230 }, { x: 880, y: 230 },          // บนซ้าย/ขวา
+    { x: 200, y: 1700 }, { x: 880, y: 1700 },        // ล่างซ้าย/ขวา
+    { x: 540, y: 250 }, { x: 540, y: 1680 },         // บนกลาง/ล่างกลาง
+    { x: 220, y: 960 }, { x: 860, y: 960 },          // กลางซ้าย/ขวา
+  ];
+  const cornerMap: Record<string, { x: number; y: number }> = {
+    'top-left': anchors[0], 'top-right': anchors[1], 'bottom-left': anchors[2],
+    'bottom-right': anchors[3], 'top': anchors[4], 'bottom': anchors[5], 'center': { x: 540, y: 960 },
+  };
+
+  const header = `[Script Info]
+ScriptType: v4.00+
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+PlayResX: ${OUT_W}
+PlayResY: ${OUT_H}
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,${fontName},${fontSize},${primary},&H00FFFFFF,${outline},${back},0,${italic},0,0,100,100,0,0,${borderStyle},${outlineW},${shadow},5,0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+
+  const lines: string[] = [];
+  if (mode === 'fixed') {
+    const a = cornerMap[String(opts.corner || 'bottom-right')] || anchors[3];
+    lines.push(`Dialogue: 0,${secToAss(0)},${secToAss(dur)},Default,,0,0,0,,{\\pos(${a.x},${a.y})\\an5}${esc}`);
+  } else {
+    let t = 0;
+    let prev = anchors[Math.floor(Math.random() * anchors.length)];
+    let guard = 0;
+    while (t < dur - 0.05 && guard < 400) {
+      guard++;
+      const t1 = Math.min(dur, t + intervalSec);
+      let next = anchors[Math.floor(Math.random() * anchors.length)];
+      let tries = 0;
+      while (next === prev && tries < 6) { next = anchors[Math.floor(Math.random() * anchors.length)]; tries++; }
+      if (mode === 'roaming') {
+        lines.push(`Dialogue: 0,${secToAss(t)},${secToAss(t1)},Default,,0,0,0,,{\\move(${prev.x},${prev.y},${next.x},${next.y})\\an5\\fad(250,250)}${esc}`);
+      } else {
+        // random-corners: กระโดดมุม + เฟดเข้า-ออก
+        lines.push(`Dialogue: 0,${secToAss(t)},${secToAss(t1)},Default,,0,0,0,,{\\pos(${next.x},${next.y})\\an5\\fad(350,350)}${esc}`);
+      }
+      prev = next; t = t1;
+    }
+  }
+
+  return header + lines.join('\n');
+};
+
 const buildSubtitleAss = (
   segments: Array<{ start: number; end: number; text: string }>,
   styleId: string,
@@ -2462,6 +2551,9 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
       const hlBoxWidth = Math.max(0, Math.min(OUT_W, Number(headlineOptions.boxWidth ?? 0)));
       const hlBoxHeight = Math.max(0, Math.min(OUT_H, Number(headlineOptions.boxHeight ?? 0)));
 
+      const watermarkOptions = payload.watermark && typeof payload.watermark === 'object' ? payload.watermark : {};
+      const watermarkEnabled = !!watermarkOptions.enabled && !!String(watermarkOptions.text || '').trim();
+
       if (!avatarFolder || !fs.existsSync(avatarFolder) || !fs.statSync(avatarFolder).isDirectory()) throw new Error('ไม่พบโฟลเดอร์ Avatar');
       if (!avatarFile || path.isAbsolute(avatarFile) || path.basename(avatarFile) !== avatarFile) {
         throw new Error('ชื่อไฟล์ Avatar ไม่ถูกต้อง');
@@ -2617,7 +2709,10 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
       }
 
       const safeBase = cleanFilePart(path.parse(avatarFile).name);
-      const finalOutName = safeHeadlineName ? `${safeHeadlineName}_output.mp4` : `${safeBase}_output.mp4`;
+      // ถ้าระบุ outputName มา (เช่นโหมด Shopee) → ตั้งชื่อตามนั้นเลย (ชื่อเดียวกับคลิป Avatar)
+      const explicitOutName = cleanFilePart(String(payload.outputName || '').trim());
+      const finalBase = (String(payload.outputName || '').trim() ? explicitOutName : (safeHeadlineName || safeBase));
+      const finalOutName = `${finalBase}_output.mp4`;
       const outputPath = path.join(outputFolder, finalOutName);
 
       let subtitleAssPath = '';
@@ -2696,13 +2791,34 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
         filterParts.push(`[withtop][avatarv]overlay=0:${TOP_H}[stacked]`);
       }
 
-      filterParts.push(`[stacked]subtitles=filename=${escapeFilterPath(titleAssPath)}:fontsdir=${fontsDir}[titled]`);
-
-      if (subtitleAssPath) {
-        filterParts.push(`[titled]subtitles=filename=${escapeFilterPath(subtitleAssPath)}:fontsdir=${escapeFilterPath(path.resolve(__dirname, '../../public/Font_stock'))}[vout]`);
-      } else {
-        filterParts.push('[titled]format=yuv420p[vout]');
+      // เตรียมไฟล์ลายน้ำ (ถ้าเปิด)
+      let watermarkAssPath = '';
+      if (watermarkEnabled) {
+        watermarkAssPath = path.join(tempDir, 'watermark.ass');
+        fs.writeFileSync(watermarkAssPath, buildWatermarkAss(String(watermarkOptions.text || ''), {
+          mode: String(watermarkOptions.mode || 'random-corners'),
+          corner: String(watermarkOptions.corner || 'bottom-right'),
+          style: String(watermarkOptions.style || 'faint'),
+          opacity: Number(watermarkOptions.opacity ?? 0.35),
+          fontSize: Number(watermarkOptions.fontSize ?? 44),
+          font: String(watermarkOptions.font || 'Prompt'),
+          intervalSec: Number(watermarkOptions.intervalSec ?? 4),
+        }, avatarDuration), 'utf8');
+        send({ log: `💧 ใส่ลายน้ำ "${String(watermarkOptions.text).trim()}" (โหมด: ${watermarkOptions.mode || 'random-corners'})` });
       }
+
+      // เชนตัวกรอง: พาดหัว → ซับ → ลายน้ำ → [vout]
+      filterParts.push(`[stacked]subtitles=filename=${escapeFilterPath(titleAssPath)}:fontsdir=${fontsDir}[titled]`);
+      let lastLabel = 'titled';
+      if (subtitleAssPath) {
+        filterParts.push(`[${lastLabel}]subtitles=filename=${escapeFilterPath(subtitleAssPath)}:fontsdir=${fontsDir}[subbed]`);
+        lastLabel = 'subbed';
+      }
+      if (watermarkAssPath) {
+        filterParts.push(`[${lastLabel}]subtitles=filename=${escapeFilterPath(watermarkAssPath)}:fontsdir=${fontsDir}[wm]`);
+        lastLabel = 'wm';
+      }
+      filterParts.push(`[${lastLabel}]format=yuv420p[vout]`);
 
       const finalArgs = ['-y', '-i', topPath, '-i', avatarPath];
       let audioMapped = false;

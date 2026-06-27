@@ -255,6 +255,17 @@ export function AvatarVerticalClipPortal() {
   const [cropFrameAspect, setCropFrameAspect] = useState(16 / 9); // w/h ของเฟรมต้นฉบับ
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
 
+  // ── ลายน้ำเครดิต (Watermark) ──
+  const [watermarkEnabled, setWatermarkEnabled] = useState(() => localStorage.getItem('avatar_vertical_wm_enabled') === 'true');
+  const [watermarkText, setWatermarkText] = useState(() => localStorage.getItem('avatar_vertical_wm_text') || '');
+  const [watermarkMode, setWatermarkMode] = useState(() => localStorage.getItem('avatar_vertical_wm_mode') || 'random-corners');
+  const [watermarkCorner, setWatermarkCorner] = useState(() => localStorage.getItem('avatar_vertical_wm_corner') || 'bottom-right');
+  const [watermarkStyle, setWatermarkStyle] = useState(() => localStorage.getItem('avatar_vertical_wm_style') || 'faint');
+  const [watermarkOpacity, setWatermarkOpacity] = useState(() => Number(localStorage.getItem('avatar_vertical_wm_opacity') || 35)); // % (5-100)
+  const [watermarkFontSize, setWatermarkFontSize] = useState(() => Number(localStorage.getItem('avatar_vertical_wm_font_size') || 44));
+  const [watermarkFont, setWatermarkFont] = useState(() => localStorage.getItem('avatar_vertical_wm_font') || 'Prompt');
+  const [watermarkInterval, setWatermarkInterval] = useState(() => Number(localStorage.getItem('avatar_vertical_wm_interval') || 4));
+
   // โหมด Shopee (จับคู่ footage สินค้า ↔ Avatar เป็นชุด)
   const [shopeeMode, setShopeeMode] = useState(() => localStorage.getItem(AVATAR_VERTICAL_KEYS.shopeeMode) === 'true');
   const [shopeeProductFolder, setShopeeProductFolder] = useState(() => localStorage.getItem(AVATAR_VERTICAL_KEYS.shopeeProductFolder) || '');
@@ -511,6 +522,15 @@ export function AvatarVerticalClipPortal() {
   useEffect(() => { localStorage.setItem('avatar_vertical_circle_crop_size_pct', String(circleCropSizePct)); }, [circleCropSizePct]);
   useEffect(() => { localStorage.setItem('avatar_vertical_circle_crop_x_pct', String(circleCropXPct)); }, [circleCropXPct]);
   useEffect(() => { localStorage.setItem('avatar_vertical_circle_crop_y_pct', String(circleCropYPct)); }, [circleCropYPct]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_wm_enabled', String(watermarkEnabled)); }, [watermarkEnabled]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_wm_text', watermarkText); }, [watermarkText]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_wm_mode', watermarkMode); }, [watermarkMode]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_wm_corner', watermarkCorner); }, [watermarkCorner]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_wm_style', watermarkStyle); }, [watermarkStyle]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_wm_opacity', String(watermarkOpacity)); }, [watermarkOpacity]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_wm_font_size', String(watermarkFontSize)); }, [watermarkFontSize]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_wm_font', watermarkFont); }, [watermarkFont]);
+  useEffect(() => { localStorage.setItem('avatar_vertical_wm_interval', String(watermarkInterval)); }, [watermarkInterval]);
 
   useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.shopeeMode, String(shopeeMode)); }, [shopeeMode]);
   useEffect(() => { localStorage.setItem(AVATAR_VERTICAL_KEYS.shopeeProductFolder, shopeeProductFolder); }, [shopeeProductFolder]);
@@ -944,6 +964,17 @@ export function AvatarVerticalClipPortal() {
             boxWidth: headlineBoxWidth,
             boxHeight: headlineBoxHeight
           },
+          watermark: {
+            enabled: watermarkEnabled,
+            text: watermarkText,
+            mode: watermarkMode,
+            corner: watermarkCorner,
+            style: watermarkStyle,
+            opacity: Math.max(5, Math.min(100, watermarkOpacity)) / 100,
+            fontSize: watermarkFontSize,
+            font: watermarkFont,
+            intervalSec: watermarkInterval,
+          },
         }),
         signal: controller.signal,
       });
@@ -1354,6 +1385,7 @@ export function AvatarVerticalClipPortal() {
           avatarFile: pair.avatarVideoFile,
           footageFolder: pair.productSubfolderPath,
           outputFolder,
+          outputName: pair.avatarSubfolder, // ตั้งชื่อ output ตามโฟลเดอร์ Avatar เช่น 001_RiceWarmerGlove_script1_output.mp4
           bgmFile,
           bgmVolume: Math.max(0, Math.min(100, bgmVolume)) / 100,
           titleText: shopeeHeadlines[pair.avatarSubfolder] || '',
@@ -1374,6 +1406,11 @@ export function AvatarVerticalClipPortal() {
             style: headlineStyle, padding: headlinePadding, opacity: headlineOpacity,
             fontSize: headlineFontSize, yPosition: headlineYPosition, font: headlineFont,
             boxWidth: headlineBoxWidth, boxHeight: headlineBoxHeight,
+          },
+          watermark: {
+            enabled: watermarkEnabled, text: watermarkText, mode: watermarkMode, corner: watermarkCorner,
+            style: watermarkStyle, opacity: Math.max(5, Math.min(100, watermarkOpacity)) / 100,
+            fontSize: watermarkFontSize, font: watermarkFont, intervalSec: watermarkInterval,
           },
         }),
         signal: controller.signal,
@@ -2198,6 +2235,115 @@ export function AvatarVerticalClipPortal() {
         </div>
       </div>
 
+      {/* ── โซนจัดการลายน้ำเครดิต (Watermark) ── */}
+      <div className="p-6 rounded-3xl border shadow-sm" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
+        <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-lg font-bold mb-1 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              💧 ลายน้ำเครดิต (Watermark)
+            </h2>
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              ใส่เครดิต/ชื่อร้านจาง ๆ บนคลิป เลือกให้สุ่มย้ายมุมไปมา หรือลอยเคลื่อน เพื่อกันก๊อปและสร้างแบรนด์
+            </p>
+          </div>
+          <label className="flex items-center gap-3 cursor-pointer select-none shrink-0">
+            <input type="checkbox" checked={watermarkEnabled} onChange={e => setWatermarkEnabled(e.target.checked)} className="w-5 h-5 cursor-pointer" />
+            <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>เปิดลายน้ำ</span>
+          </label>
+        </div>
+
+        {watermarkEnabled && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>ข้อความลายน้ำ</label>
+                <input
+                  type="text"
+                  value={watermarkText}
+                  onChange={e => setWatermarkText(e.target.value)}
+                  placeholder="เช่น @ชื่อร้าน / IG: yourshop"
+                  className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none"
+                  style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>ฟอนต์</label>
+                <select value={watermarkFont} onChange={e => setWatermarkFont(e.target.value)} className="px-4 py-2.5 rounded-xl text-sm border outline-none font-semibold cursor-pointer w-full md:w-44" style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}>
+                  {HEADLINE_FONTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* โหมดการเคลื่อนไหว */}
+            <div>
+              <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>โหมดการแสดง</div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { id: 'random-corners', icon: '🎲', label: 'สุ่มย้ายมุม', desc: 'กระโดดเปลี่ยนมุมไปมาเรื่อย ๆ' },
+                  { id: 'roaming', icon: '🌀', label: 'ลอยเคลื่อน', desc: 'ค่อย ๆ ลอยจากจุดหนึ่งไปอีกจุด' },
+                  { id: 'fixed', icon: '📌', label: 'มุมเดียวคงที่', desc: 'ปักไว้มุมเดียวตลอดคลิป' },
+                ].map(m => (
+                  <button key={m.id} type="button" onClick={() => setWatermarkMode(m.id)}
+                    className="rounded-xl border p-3 text-left transition-all hover:scale-[1.01] cursor-pointer"
+                    style={{ borderColor: watermarkMode === m.id ? '#a855f7' : 'var(--border-color)', backgroundColor: watermarkMode === m.id ? 'rgba(168,85,247,0.12)' : 'var(--bg-body)' }}>
+                    <div className="text-lg">{m.icon}</div>
+                    <div className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>{m.label}</div>
+                    <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{m.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {watermarkMode === 'fixed' && (
+              <div>
+                <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>ตำแหน่งมุม</div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: 'top-left', label: '↖ บนซ้าย' }, { id: 'top', label: '↑ บนกลาง' }, { id: 'top-right', label: '↗ บนขวา' },
+                    { id: 'bottom-left', label: '↙ ล่างซ้าย' }, { id: 'bottom', label: '↓ ล่างกลาง' }, { id: 'bottom-right', label: '↘ ล่างขวา' },
+                  ].map(c => (
+                    <button key={c.id} type="button" onClick={() => setWatermarkCorner(c.id)}
+                      className="px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-all"
+                      style={{ borderColor: watermarkCorner === c.id ? '#a855f7' : 'var(--border-color)', backgroundColor: watermarkCorner === c.id ? 'rgba(168,85,247,0.12)' : 'var(--bg-body)', color: 'var(--text-primary)' }}>
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* สไตล์ลายน้ำ */}
+            <div>
+              <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>สไตล์ลายน้ำ</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { id: 'faint', label: 'จางมินิมอล', sample: { color: 'rgba(255,255,255,0.5)', textShadow: '0 1px 2px #000' } },
+                  { id: 'outline', label: 'ขอบดำชัด', sample: { color: '#fff', textShadow: '0 0 2px #000,0 0 2px #000,1px 1px 0 #000' } },
+                  { id: 'box', label: 'กล่องจาง', sample: { color: '#fff', backgroundColor: 'rgba(0,0,0,0.45)', padding: '2px 8px', borderRadius: 4 } },
+                  { id: 'italic', label: 'ตัวเอียง', sample: { color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', textShadow: '0 1px 2px #000' } },
+                ].map(s => (
+                  <button key={s.id} type="button" onClick={() => setWatermarkStyle(s.id)}
+                    className="rounded-xl border p-3 transition-all hover:scale-[1.01] cursor-pointer flex flex-col items-center gap-2 min-h-[72px] justify-center"
+                    style={{ borderColor: watermarkStyle === s.id ? '#a855f7' : 'var(--border-color)', backgroundColor: watermarkStyle === s.id ? 'rgba(168,85,247,0.10)' : 'var(--bg-body)' }}>
+                    <span className="text-[10px] font-bold" style={{ color: 'var(--text-secondary)' }}>{s.label}</span>
+                    <span className="px-1 text-xs font-bold" style={s.sample as React.CSSProperties}>{watermarkText || '@yourshop'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* สไลเดอร์ */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              <SliderField label="ความจาง (Opacity)" value={watermarkOpacity} unit="%" min={5} max={100} onChange={setWatermarkOpacity} hint="ยิ่งน้อยยิ่งจาง แนะนำ 25-45%" />
+              <SliderField label="ขนาดฟอนต์" value={watermarkFontSize} unit="px" min={20} max={120} onChange={setWatermarkFontSize} hint="ลายน้ำควรเล็ก ไม่บังเนื้อหา" />
+              {watermarkMode !== 'fixed' && (
+                <SliderField label="ความถี่ย้ายตำแหน่ง" value={watermarkInterval} unit=" วิ" min={2} max={12} onChange={setWatermarkInterval} hint="ทุกกี่วินาทีจะย้าย/ลอยไปจุดใหม่" />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="p-6 rounded-3xl border shadow-sm" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
         <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-5">
           <div>
@@ -2946,6 +3092,27 @@ export function AvatarVerticalClipPortal() {
                     {subtitleLanguage === 'en' ? '[Simulated Subtitles Here]' : '[คำบรรยายจะขึ้นโชว์ที่นี่]'}
                   </div>
                 )}
+
+                {/* พรีวิวลายน้ำ */}
+                {watermarkEnabled && watermarkText.trim() && (() => {
+                  const cornerPos: Record<string, { x: number; y: number }> = {
+                    'top-left': { x: 18.5, y: 12 }, 'top': { x: 50, y: 13 }, 'top-right': { x: 81.5, y: 12 },
+                    'bottom-left': { x: 18.5, y: 88.5 }, 'bottom': { x: 50, y: 87.5 }, 'bottom-right': { x: 81.5, y: 88.5 },
+                  };
+                  const pos = watermarkMode === 'fixed' ? (cornerPos[watermarkCorner] || cornerPos['bottom-right']) : cornerPos['bottom-right'];
+                  const op = Math.max(5, Math.min(100, watermarkOpacity)) / 100;
+                  let s: React.CSSProperties = { color: `rgba(255,255,255,${op})`, textShadow: '0 0.2cqw 0.4cqw rgba(0,0,0,0.6)' };
+                  if (watermarkStyle === 'outline') s = { color: `rgba(255,255,255,${op})`, textShadow: '0 0 0.3cqw #000,0 0 0.3cqw #000,0.15cqw 0.15cqw 0 #000' };
+                  else if (watermarkStyle === 'box') s = { color: `rgba(255,255,255,${Math.min(1, op + 0.2)})`, backgroundColor: `rgba(0,0,0,${op * 0.7})`, padding: '0.3cqw 0.8cqw', borderRadius: '0.6cqw' };
+                  else if (watermarkStyle === 'italic') s = { color: `rgba(255,255,255,${op})`, fontStyle: 'italic', textShadow: '0 0.2cqw 0.4cqw rgba(0,0,0,0.6)' };
+                  return (
+                    <div className="absolute z-[25] pointer-events-none font-bold whitespace-nowrap"
+                      style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)', fontSize: `${(watermarkFontSize / 1080) * 100}cqw`, ...s }}>
+                      {watermarkText}
+                      {watermarkMode !== 'fixed' && <span className="ml-1 opacity-70">{watermarkMode === 'roaming' ? '🌀' : '🎲'}</span>}
+                    </div>
+                  );
+                })()}
 
                 {/* badge แสดงค่า Y ขณะลาก */}
                 {isDraggingHeadline && (
