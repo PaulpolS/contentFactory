@@ -53,8 +53,8 @@ ${STRICT_COPYWRITING_RULES}`);
   const [showConfig, setShowConfig] = useState(false);
 
   // New V2 states
-  const [automatorMode, setAutomatorMode] = useState<'vision_caption' | 'filename_caption' | 'only_convert'>(() => {
-    return (localStorage.getItem('automator_mode') as 'vision_caption' | 'filename_caption' | 'only_convert') || 'vision_caption';
+  const [automatorMode, setAutomatorMode] = useState<'vision_caption' | 'filename_caption' | 'only_convert' | 'filename_convert'>(() => {
+    return (localStorage.getItem('automator_mode') as 'vision_caption' | 'filename_caption' | 'only_convert' | 'filename_convert') || 'vision_caption';
   });
   
   const [dropboxStatus, setDropboxStatus] = useState<'connected' | 'disconnected' | 'checking' | 'idle'>('idle');
@@ -73,7 +73,7 @@ ${STRICT_COPYWRITING_RULES}`);
 
   useEffect(() => {
     localStorage.setItem('automator_mode', automatorMode);
-    if (automatorMode === 'only_convert') {
+    if (automatorMode === 'only_convert' || automatorMode === 'filename_convert') {
       setActivePromptTab('editor');
     }
   }, [automatorMode]);
@@ -723,7 +723,7 @@ ${STRICT_COPYWRITING_RULES}
     }
     
     const openRouterKey = getOpenRouterKey();
-    if (automatorMode !== 'only_convert' && !openRouterKey) {
+    if (automatorMode !== 'only_convert' && automatorMode !== 'filename_convert' && !openRouterKey) {
       setIsRunning(false);
       return alert("กรุณาใส่ OpenRouter API Key ใน ⚙️ ตั้งค่า API (มุมขวาบน) ก่อนครับ");
     }
@@ -851,6 +851,9 @@ ${STRICT_COPYWRITING_RULES}
           if (automatorMode === 'only_convert') {
             addLog(`🔗 โหมดแปลงลิงก์อย่างเดียว: แปลงลิงก์เรียบร้อย โดยไม่เรียกใช้ AI`);
             aiCaption = "-";
+          } else if (automatorMode === 'filename_convert') {
+            addLog(`🏷️ โหมดแปลงลิงก์ + ใช้ชื่อคลิป: ใช้ชื่อคลิป "${file.name}" เป็นแคปชั่นโดยตรง โดยไม่เรียกใช้ AI`);
+            aiCaption = file.name;
           } else if (automatorMode === 'filename_caption' || isVideo) {
             if (isVideo) {
               addLog(`🎬 ตรวจพบว่าไฟล์เป็นคลิปวิดีโอ กำลังขอให้ AI คิดแคปชั่นคำคม...`);
@@ -1071,7 +1074,7 @@ ${STRICT_COPYWRITING_RULES}
           </div>
 
           {/* OpenRouter Status */}
-          {automatorMode !== 'only_convert' && (
+          {automatorMode !== 'only_convert' && automatorMode !== 'filename_convert' && (
             <div className="flex items-center gap-2 bg-slate-900/60 px-3 py-1.5 border border-slate-850 rounded-xl">
               <span className="text-[11px] font-bold text-slate-300">🤖 OpenRouter:</span>
               {openRouterStatus === 'checking' ? (
@@ -1333,6 +1336,14 @@ ${STRICT_COPYWRITING_RULES}
                     <span>🔗 โหมด 3: แปลงลิงก์ด่วน dl=1 อย่างเดียว</span>
                     <span className="text-[9px] font-normal opacity-75 mt-0.5">แปลงลิงก์ Dropbox ให้เป็นโหมดดาวน์โหลดตรง (dl=1) โดยไม่เรียกใช้ระบบ AI</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setAutomatorMode('filename_convert')}
+                    className={`px-3 py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer text-left flex flex-col ${automatorMode === 'filename_convert' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm border border-emerald-400/20' : 'text-slate-400 hover:text-slate-300 bg-slate-950/40 border border-transparent'}`}
+                  >
+                    <span>🏷️ โหมด 4: แปลงลิงก์ + ใช้ชื่อคลิปที่อัพ</span>
+                    <span className="text-[9px] font-normal opacity-75 mt-0.5">แปลงลิงก์ด่วน dl=1 + เขียนชื่อคลิปตามชื่อไฟล์ที่อัพไปเลย (ผลลัพธ์: ชื่อคลิป | ลิงก์ที่แปลงแล้ว) โดยไม่เรียกใช้ระบบ AI</span>
+                  </button>
                 </div>
               </div>
 
@@ -1350,7 +1361,7 @@ ${STRICT_COPYWRITING_RULES}
                   >
                     🧠 แก้ไขสมอง
                   </button>
-                  {automatorMode !== 'only_convert' && (
+                  {automatorMode !== 'only_convert' && automatorMode !== 'filename_convert' && (
                     <>
                       <button
                         type="button"
@@ -1373,9 +1384,11 @@ ${STRICT_COPYWRITING_RULES}
                 {/* Tab: Editor */}
                 {activePromptTab === 'editor' && (
                   <div className="flex-1 flex flex-col bg-slate-900/10 border border-slate-900 border-t-0 p-4 rounded-b-xl gap-3">
-                    {automatorMode === 'only_convert' ? (
+                    {automatorMode === 'only_convert' || automatorMode === 'filename_convert' ? (
                       <div className="flex-1 flex items-center justify-center text-slate-500 italic text-[11px] text-center p-6 bg-slate-950/40 border border-dashed border-slate-900 rounded-lg font-sans">
-                        ⚠️ โหมดด่วน (แปลงลิงก์อย่างเดียว) จะไม่ส่งข้อมูลเข้าระบบ AI จึงไม่จำเป็นต้องเขียน AI System Prompt (สมองของ AI)
+                        {automatorMode === 'filename_convert'
+                          ? '⚠️ โหมดแปลงลิงก์ + ใช้ชื่อคลิป จะนำชื่อคลิปที่อัพไปมาใส่เป็นแคปชั่นโดยตรง จึงไม่ส่งข้อมูลเข้าระบบ AI และไม่จำเป็นต้องเขียน AI System Prompt (สมองของ AI)'
+                          : '⚠️ โหมดด่วน (แปลงลิงก์อย่างเดียว) จะไม่ส่งข้อมูลเข้าระบบ AI จึงไม่จำเป็นต้องเขียน AI System Prompt (สมองของ AI)'}
                       </div>
                     ) : (
                       <>
