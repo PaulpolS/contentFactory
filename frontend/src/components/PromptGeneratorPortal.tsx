@@ -103,7 +103,8 @@ interface ProductScriptResult {
   productName: string;   // ชื่อสินค้าเดิม (จาก CSV)
   englishName: string;   // ชื่ออังกฤษ PascalCase เช่น RiceWarmerGlove
   clipName: string;      // ชื่อคลิป เช่น 001_RiceWarmerGlove_script1
-  hooks: string[];       // พาดหัว 5 ข้อ
+  hooks: string[];       // พาดหัวพูด 5 ข้อ (สำหรับ voiceover)
+  overlayTitle: string;  // พาดหัวตัวหนังสือใหญ่ในคลิป สั้น เข้าใจง่าย บอกตรงๆเกี่ยวกับสินค้า
   script: string;        // เนื้อ voiceover ล้วน (ไม่มีวงเล็บการกระทำ/หัวข้อ)
   detail?: string;       // รายละเอียดสินค้า
   lengthId: string;
@@ -197,6 +198,14 @@ const ROLE_SHOPEE_TEMPLATE = `# ROLE
 * ศัตรูตัวนี้โจมตีคุณตั้งแต่เกิด
 พาดหัวต้องชวนสงสัย และไม่ดูเหมือนกำลังขายสินค้า
 
+# OVERLAY TITLE (พาดหัวตัวหนังสือใหญ่ในคลิป — คนละส่วนกับ hooks ด้านบน)
+สร้างพาดหัวสั้นๆ อีก 1 ข้อ สำหรับใช้เป็นตัวหนังสือใหญ่ทับวิดีโอ (ไม่ใช่คำพูด)
+กฎ:
+- ต้องสื่อถึงสินค้าตรงๆ ทันทีที่อ่าน ไม่ใช้คำเปรียบเปรยหรือปรัชญา
+- สั้นมาก ไม่เกิน 8-10 คำ อ่านจบในพริบตา
+- เน้นจุดขายหรือความคุ้มของสินค้า
+ตัวอย่าง: "ตะกร้าใหญ่มาก สุดคุ้ม", "ผ้าห่มนุ่มสุด ราคาเบาๆ", "ที่ชาร์จไร้สาย ใช้ง่ายมาก"
+
 # STRUCTURE
 1. Hook — เริ่มจากข้อคิด ปรัชญา หรือการเปรียบเทียบ
 2. Escalation — ขยายเรื่องให้ดูยิ่งใหญ่เกินจริง เหมือนกำลังเล่าเรื่องสงครามหรือสารคดี
@@ -214,10 +223,12 @@ const ROLE_SHOPEE_TEMPLATE = `# ROLE
 {
   "englishName": "ชื่อสินค้าเป็นภาษาอังกฤษแบบ PascalCase ไม่มีเว้นวรรค ไม่มีอักขระพิเศษ เช่น RiceWarmerGlove, SunscreenSPF50",
   "hooks": ["พาดหัวข้อ 1", "พาดหัวข้อ 2", "พาดหัวข้อ 3", "พาดหัวข้อ 4", "พาดหัวข้อ 5"],
+  "overlayTitle": "พาดหัวตัวหนังสือใหญ่ในคลิป สั้น เข้าใจง่าย บอกตรงๆเกี่ยวกับสินค้า ไม่เกิน 8-10 คำ",
   "script": "บทพูด voiceover ล้วนๆ พร้อมพากย์เสียงทันที"
 }
 
-กฎของ "hooks": พาดหัว 5 ข้อ ชวนสงสัย ไม่ดูเหมือนกำลังขายสินค้า
+กฎของ "hooks": พาดหัว 5 ข้อ ชวนสงสัย ไม่ดูเหมือนกำลังขายสินค้า (สำหรับคำพูด)
+กฎของ "overlayTitle": พาดหัวสั้น 1 ข้อ บอกสินค้าตรงๆ เข้าใจง่ายทันที (สำหรับตัวหนังสือใหญ่ในคลิป ไม่ใช่คำพูด)
 
 กฎเหล็กของ "script" (สำคัญมาก):
 - ใส่เฉพาะ "คำพูดที่จะพากย์จริง" เท่านั้น
@@ -762,6 +773,9 @@ ${row.article.slice(0, 5000)}
   const [prIsRunning, setPrIsRunning] = useState(false);
   const [prLogs, setPrLogs] = useState<string[]>([]);
   const prFileRef = useRef<HTMLInputElement>(null);
+  const [prSelected, setPrSelected] = useState<string[]>([]);
+  const [prSheetUrl, setPrSheetUrl] = useState(() => localStorage.getItem('pr_gsheet_url') || 'https://docs.google.com/spreadsheets/d/18sppbH-mkojCxcMhOMz726a8UVwx6jUl-UaXoSHIxi0/edit?gid=337821009');
+  const [prSheetLoading, setPrSheetLoading] = useState(false);
 
   const logPr = (msg: string) => {
     const time = new Date().toLocaleTimeString();
@@ -818,6 +832,50 @@ ${row.article.slice(0, 5000)}
     return cleaned.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('').slice(0, 40);
   };
 
+  // ตั้งรายการสินค้า + เลือกทั้งหมดโดยอัตโนมัติ
+  const applyPrProducts = (products: { name: string; detail: string }[], sourceName: string) => {
+    setPrProducts(products);
+    setPrCsvFileName(sourceName);
+    setPrSelected(products.map(p => p.name));
+  };
+
+  const togglePrSelect = (name: string) =>
+    setPrSelected(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
+  const togglePrSelectAll = () =>
+    setPrSelected(prev => prev.length === prProducts.length ? [] : prProducts.map(p => p.name));
+
+  // เลข 001 + ชื่ออังกฤษ จากชื่อสินค้ารูปแบบ "001_RiceWarmerGlove" (คงเลขจริงแม้เลือกบางตัว)
+  const prProductNo = (product: { name: string }, idx: number) => {
+    const m = (product.name || '').match(/^\s*(\d{1,6})/);
+    return m ? m[1].padStart(3, '0') : String(idx + 1).padStart(3, '0');
+  };
+  const prEnglishFromName = (product: { name: string }) => {
+    const m = (product.name || '').match(/^\s*\d{1,6}[_\-\s]+(.+)$/);
+    return m ? toPascalEnglish(m[1]) : '';
+  };
+
+  // ดึงสินค้าจาก Google Sheet ผ่าน backend (เลี่ยง CORS)
+  const loadFromGoogleSheet = async () => {
+    if (!prSheetUrl.trim()) { alert('กรุณาวางลิงก์ Google Sheet ก่อน'); return; }
+    setPrSheetLoading(true);
+    try {
+      localStorage.setItem('pr_gsheet_url', prSheetUrl);
+      const res = await fetch(`http://localhost:5005/api/gsheet-products?url=${encodeURIComponent(prSheetUrl)}`);
+      const data = await res.json();
+      if (data.success && data.products?.length) {
+        applyPrProducts(data.products.map((p: any) => ({ name: p.name, detail: p.detail })), 'Google Sheet');
+        logPr(`🔗 ดึงจาก Google Sheet สำเร็จ — พบสินค้า ${data.products.length} รายการ (เลือกทั้งหมดให้แล้ว)`);
+      } else {
+        alert(data.error || 'ดึง Google Sheet ไม่สำเร็จ');
+        logPr(`❌ ${data.error || 'ดึง Google Sheet ไม่สำเร็จ'}`);
+      }
+    } catch (e: any) {
+      alert(`ดึง Google Sheet ไม่สำเร็จ: ${e.message}`);
+    } finally {
+      setPrSheetLoading(false);
+    }
+  };
+
   // \u0e15\u0e31\u0e14\u0e2a\u0e48\u0e27\u0e19\u0e17\u0e35\u0e48\u0e44\u0e21\u0e48\u0e43\u0e0a\u0e48\u0e1a\u0e17\u0e1e\u0e39\u0e14\u0e2d\u0e2d\u0e01\u0e08\u0e32\u0e01 script (\u0e04\u0e33\u0e40\u0e01\u0e23\u0e34\u0e48\u0e19/\u0e2b\u0e31\u0e27\u0e02\u0e49\u0e2d/\u0e27\u0e07\u0e40\u0e25\u0e47\u0e1a\u0e01\u0e32\u0e23\u0e01\u0e23\u0e30\u0e17\u0e33) \u0e40\u0e1c\u0e37\u0e48\u0e2d AI \u0e2b\u0e25\u0e38\u0e14\u0e21\u0e32
   const cleanVoiceScript = (raw: string) =>
     (raw || '')
@@ -839,8 +897,7 @@ ${row.article.slice(0, 5000)}
         alert('\u0e44\u0e21\u0e48\u0e1e\u0e1a\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32\u0e43\u0e19\u0e44\u0e1f\u0e25\u0e4c CSV (\u0e04\u0e32\u0e14\u0e2b\u0e27\u0e31\u0e07\u0e04\u0e2d\u0e25\u0e31\u0e21\u0e19\u0e4c: \u0e0a\u0e37\u0e48\u0e2d\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32, \u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32)');
         return;
       }
-      setPrProducts(products);
-      setPrCsvFileName(file.name);
+      applyPrProducts(products, file.name);
       logPr(`\ud83d\udce5 \u0e42\u0e2b\u0e25\u0e14\u0e44\u0e1f\u0e25\u0e4c "${file.name}" \u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08 \u0e1e\u0e1a\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32 ${products.length} \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23`);
     };
     reader.readAsText(file, 'utf-8');
@@ -850,6 +907,7 @@ ${row.article.slice(0, 5000)}
   const clearPrProducts = () => {
     setPrProducts([]);
     setPrCsvFileName('');
+    setPrSelected([]);
   };
 
   const generateProductScripts = async () => {
@@ -862,19 +920,21 @@ ${row.article.slice(0, 5000)}
       return;
     }
 
+    const targets = prProducts.filter(p => prSelected.includes(p.name));
+    if (!targets.length) { alert('กรุณาติ๊กเลือกสินค้าอย่างน้อย 1 รายการก่อนสร้างสคริปต์'); return; }
     const perItem = Math.max(1, Math.min(20, prScriptsPerItem || 1));
     const activeLength = VOICEOVER_LENGTHS.find(l => l.id === prLength) || VOICEOVER_LENGTHS[1];
-    const totalJobs = prProducts.length * perItem;
+    const totalJobs = targets.length * perItem;
 
     setPrIsRunning(true);
     setPrLogs([]);
     logPr(`\u0e40\u0e23\u0e34\u0e48\u0e21\u0e1c\u0e25\u0e34\u0e15\u0e2a\u0e04\u0e23\u0e34\u0e1b\u0e15\u0e4c\u0e23\u0e35\u0e27\u0e34\u0e27: ${prProducts.length} \u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32 \u00d7 ${perItem} \u0e2a\u0e04\u0e23\u0e34\u0e1b\u0e15\u0e4c = ${totalJobs} \u0e0a\u0e34\u0e49\u0e19`);
 
     let currentIdx = 1;
-    for (let p = 0; p < prProducts.length; p++) {
-      const product = prProducts[p];
-      const productNo = String(p + 1).padStart(3, '0');   // 001, 002, ... \u0e15\u0e32\u0e21\u0e25\u0e33\u0e14\u0e31\u0e1a\u0e43\u0e19\u0e44\u0e1f\u0e25\u0e4c (\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e1f\u0e25\u0e40\u0e14\u0e2d\u0e23\u0e4c)
-      let englishName = '';                                 // \u0e01\u0e33\u0e2b\u0e19\u0e14\u0e04\u0e23\u0e31\u0e49\u0e07\u0e40\u0e14\u0e35\u0e22\u0e27\u0e15\u0e48\u0e2d\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32 \u0e43\u0e2b\u0e49\u0e0a\u0e37\u0e48\u0e2d\u0e04\u0e25\u0e34\u0e1b\u0e17\u0e38\u0e01 script \u0e02\u0e2d\u0e07\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32\u0e19\u0e35\u0e49\u0e2a\u0e2d\u0e14\u0e04\u0e25\u0e49\u0e2d\u0e07\u0e01\u0e31\u0e19
+    for (let p = 0; p < targets.length; p++) {
+      const product = targets[p];
+      const productNo = prProductNo(product, prProducts.indexOf(product));   // 001, 002, ... \u0e15\u0e32\u0e21\u0e25\u0e33\u0e14\u0e31\u0e1a\u0e43\u0e19\u0e44\u0e1f\u0e25\u0e4c (\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e1f\u0e25\u0e40\u0e14\u0e2d\u0e23\u0e4c)
+      let englishName = prEnglishFromName(product);                                 // \u0e01\u0e33\u0e2b\u0e19\u0e14\u0e04\u0e23\u0e31\u0e49\u0e07\u0e40\u0e14\u0e35\u0e22\u0e27\u0e15\u0e48\u0e2d\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32 \u0e43\u0e2b\u0e49\u0e0a\u0e37\u0e48\u0e2d\u0e04\u0e25\u0e34\u0e1b\u0e17\u0e38\u0e01 script \u0e02\u0e2d\u0e07\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32\u0e19\u0e35\u0e49\u0e2a\u0e2d\u0e14\u0e04\u0e25\u0e49\u0e2d\u0e07\u0e01\u0e31\u0e19
       const fallbackName = `Product${productNo}`;
       const productInfo = product.detail
         ? `\u0e0a\u0e37\u0e48\u0e2d\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32: ${product.name}\n\u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32: ${product.detail}`
@@ -901,6 +961,7 @@ ${row.article.slice(0, 5000)}
           const hooks: string[] = Array.isArray(parsed.hooks)
             ? parsed.hooks.map((h: any) => String(h).trim()).filter(Boolean)
             : [];
+          const overlayTitle = String(parsed.overlayTitle || '').trim();
 
           const clipName = `${productNo}_${englishName}_script${i}`;
           logPr(`[\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08] ${clipName} \u0e40\u0e02\u0e35\u0e22\u0e19\u0e40\u0e2a\u0e23\u0e47\u0e08\u0e40\u0e23\u0e35\u0e22\u0e1a\u0e23\u0e49\u0e2d\u0e22!`);
@@ -910,6 +971,7 @@ ${row.article.slice(0, 5000)}
             englishName,
             clipName,
             hooks,
+            overlayTitle,
             script: cleanVoiceScript(String(parsed.script || '')),
             detail: product.detail,
             lengthId: prLength,
@@ -925,6 +987,7 @@ ${row.article.slice(0, 5000)}
             englishName,
             clipName,
             hooks: [],
+            overlayTitle: '',
             script: `[\u0e25\u0e49\u0e21\u0e40\u0e2b\u0e25\u0e27\u0e43\u0e19\u0e01\u0e32\u0e23\u0e40\u0e02\u0e35\u0e22\u0e19\u0e2a\u0e04\u0e23\u0e34\u0e1b\u0e15\u0e4c: ${err.message}]`,
             detail: product.detail,
             lengthId: prLength,
@@ -943,11 +1006,12 @@ ${row.article.slice(0, 5000)}
 
   const exportPrToCSV = (rows: ProductScriptResult[]) => {
     const escape = (s: string) => `"${(s || '').replace(/"/g, '""')}"`;
-    const header = ['Clip Name', 'Product', 'Hook', 'Script', 'Length', 'Created At'];
+    const header = ['Clip Name', 'Product', 'Overlay Title', 'Hook', 'Script', 'Length', 'Created At'];
 
     const body = rows.map(r => [
       r.clipName,
       r.productName,
+      r.overlayTitle || '',
       (r.hooks || []).join('\n'),
       r.script,
       r.lengthId,
@@ -1953,7 +2017,7 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                     <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
                       <div className="text-[11px] font-extrabold text-amber-400">🍷 บุคลิก: ผู้ดีจิบไวน์</div>
                       <div className="text-[9px] text-slate-400 mt-1 leading-normal">
-                        ชายสูทจิบไวน์ เล่าแบบสารคดี+ปรัชญา+มุกบากิ ขำหน้าตาย เปิดด้วยพาดหัว 5 ข้อ แล้วค่อยเฉลยสินค้า (อ้างอิง role_shopee.txt)
+                        ชายสูทจิบไวน์ เล่าแบบสารคดี+ปรัชญา+มุกบากิ ขำหน้าตาย เปิดด้วยพาดหัว 5 ข้อ แล้วค่อยเฉลยสินค้า พร้อมพาดหัวตัวหนังสือใหญ่สั้นๆสำหรับใส่ในคลิป (อ้างอิง role_shopee.txt)
                       </div>
                     </div>
 
@@ -1970,6 +2034,26 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                         className="hidden"
                         onChange={handlePrCsvUpload}
                       />
+                      <div className="mb-3 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 space-y-2">
+                        <div className="text-[11px] font-extrabold text-emerald-400 flex items-center gap-1.5">🔗 เชื่อม Google Sheet โดยตรง</div>
+                        <input
+                          type="text"
+                          value={prSheetUrl}
+                          onChange={(e) => setPrSheetUrl(e.target.value)}
+                          placeholder="วางลิงก์ Google Sheet..."
+                          className="glass-input w-full text-[11px] h-8 px-2.5"
+                        />
+                        <button
+                          type="button"
+                          onClick={loadFromGoogleSheet}
+                          disabled={prSheetLoading}
+                          className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold disabled:opacity-50 transition-all"
+                        >
+                          {prSheetLoading ? '⏳ กำลังดึงข้อมูล...' : '🔗 ดึงสินค้าจาก Sheet'}
+                        </button>
+                        <div className="text-[9px] text-slate-500 leading-normal">Sheet ต้องตั้งแชร์ "ทุกคนที่มีลิงก์ดูได้" · อ่านคอลัมน์ ชื่อในโฟลเดอร์ / รายละเอียดสินค้า</div>
+                      </div>
+                      <div className="text-[9px] text-slate-500 text-center mb-2">— หรือ อัปโหลดไฟล์ CSV —</div>
                       {prProducts.length === 0 ? (
                         <button
                           type="button"
@@ -2025,12 +2109,41 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                       </select>
                     </div>
 
+                    {prProducts.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-slate-400">เลือกสินค้าที่จะสร้าง Script ({prSelected.length}/{prProducts.length})</label>
+                          <button
+                            type="button"
+                            onClick={togglePrSelectAll}
+                            className="text-[10px] font-bold text-amber-400 hover:text-amber-300"
+                          >
+                            {prSelected.length === prProducts.length ? '☐ ล้างทั้งหมด' : '☑ เลือกทั้งหมด'}
+                          </button>
+                        </div>
+                        <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-700 divide-y divide-slate-800">
+                          {prProducts.map((prod, idx) => (
+                            <label key={idx} className="flex items-center gap-2 px-2.5 py-1.5 cursor-pointer hover:bg-slate-800/40">
+                              <input
+                                type="checkbox"
+                                checked={prSelected.includes(prod.name)}
+                                onChange={() => togglePrSelect(prod.name)}
+                                style={{ accentColor: '#f59e0b' }}
+                                className="w-3.5 h-3.5 shrink-0"
+                              />
+                              <span className="text-[11px] text-slate-200 truncate" title={prod.name}>{prod.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <button
                       className="gradient-btn w-full py-3 text-xs font-bold"
                       onClick={generateProductScripts}
                       disabled={prIsRunning}
                     >
-                      {prIsRunning ? '⏳ กำลังรังสรรค์บทรีวิว...' : `🍷 ผลิตสคริปต์รีวิว (${prProducts.length * prScriptsPerItem} ชิ้น)`}
+                      {prIsRunning ? '⏳ กำลังรังสรรค์บทรีวิว...' : `🍷 ผลิตสคริปต์รีวิว (${prSelected.length * prScriptsPerItem} ชิ้น)`}
                     </button>
 
                     {prLogs.length > 0 && (
@@ -2104,6 +2217,30 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                               </button>
                             </div>
                           </div>
+
+                          {/* Overlay Title — พาดหัวตัวหนังสือใหญ่ในคลิป */}
+                          {script.overlayTitle && (
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[10px] font-bold text-cyan-400/80 uppercase tracking-wider">🔠 พาดหัวในคลิป (ข้อความใหญ่)</label>
+                                <button
+                                  className="text-[9px] text-cyan-400 hover:underline font-bold"
+                                  onClick={() => navigator.clipboard.writeText(script.overlayTitle)}
+                                >
+                                  คัดลอก
+                                </button>
+                              </div>
+                              <input
+                                type="text"
+                                className="glass-input w-full text-xs leading-relaxed p-3 font-sans font-bold"
+                                value={script.overlayTitle}
+                                onChange={(e) => {
+                                  const text = e.target.value;
+                                  setPrResults(prev => prev.map(s => s.id === script.id ? { ...s, overlayTitle: text } : s));
+                                }}
+                              />
+                            </div>
+                          )}
 
                           {/* Hook — แยกออกจาก Script */}
                           {script.hooks.length > 0 && (

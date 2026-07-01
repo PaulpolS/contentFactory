@@ -209,6 +209,15 @@ function pathBasename(filePath: string) {
   return parts[parts.length - 1];
 }
 
+// แปลงวินาที → m:ss สำหรับแสดงเวลาในซับ (คืน '' ถ้าไม่มีค่า)
+function formatSubTime(sec: any) {
+  const n = Number(sec);
+  if (!isFinite(n) || n < 0) return '';
+  const m = Math.floor(n / 60);
+  const s = Math.floor(n % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export function AvatarVerticalClipPortal() {
   const [avatarFolder, setAvatarFolder] = useState(() => localStorage.getItem(AVATAR_VERTICAL_KEYS.avatarFolder) || '');
   const [footageFolder, setFootageFolder] = useState(() => localStorage.getItem(AVATAR_VERTICAL_KEYS.footageFolder) || '');
@@ -282,6 +291,22 @@ export function AvatarVerticalClipPortal() {
   const [isPairing, setIsPairing] = useState(false);
   const [isTranscribingAll, setIsTranscribingAll] = useState(false);
 
+  // ── ฐานข้อมูลสินค้าจริง (ใช้เขียนพาดหัวแทนสคริปต์ตลก) ──
+  const [shopeeProductDb, setShopeeProductDb] = useState<Array<{ name: string; link: string; detail: string }>>(() => {
+    try { return JSON.parse(localStorage.getItem('avatar_vertical_shopee_product_db') || '[]'); } catch { return []; }
+  });
+  const [shopeeDbSource, setShopeeDbSource] = useState(() => localStorage.getItem('avatar_vertical_shopee_product_db_source') || '');
+  const [shopeeDbSheetUrl, setShopeeDbSheetUrl] = useState(() => localStorage.getItem('avatar_vertical_shopee_db_sheet_url') || 'https://docs.google.com/spreadsheets/d/18sppbH-mkojCxcMhOMz726a8UVwx6jUl-UaXoSHIxi0/edit?gid=337821009');
+  const [isLoadingSheet, setIsLoadingSheet] = useState(false);
+  const [isDbHeadlineAll, setIsDbHeadlineAll] = useState(false);
+  // Picker modal เลือกพาดหัวจาก DB ต่อแถว
+  const [dbHlOpen, setDbHlOpen] = useState(false);
+  const [dbHlTarget, setDbHlTarget] = useState('');
+  const [dbHlProductName, setDbHlProductName] = useState('');
+  const [dbHlOptions, setDbHlOptions] = useState<string[]>([]);
+  const [dbHlLoading, setDbHlLoading] = useState(false);
+  const [dbHlError, setDbHlError] = useState('');
+
   // Interactive AI Headline Modal state
   const [isHeadlineModalOpen, setIsHeadlineModalOpen] = useState(false);
   const [modalAvatarFile, setModalAvatarFile] = useState('');
@@ -290,6 +315,11 @@ export function AvatarVerticalClipPortal() {
   const [isModalLoading, setIsModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
   const [modalProgressText, setModalProgressText] = useState('');
+
+  // Popup ดูซับที่ถอดไว้แล้ว (Shopee)
+  const [subsViewerOpen, setSubsViewerOpen] = useState(false);
+  const [subsViewerTitle, setSubsViewerTitle] = useState('');
+  const [subsViewerSegments, setSubsViewerSegments] = useState<any[]>([]);
 
   // Customizable Hook Headline Banner states
   const [headlineStyle, setHeadlineStyle] = useState(() => localStorage.getItem('avatar_vertical_headline_style') || 'classic-gold');
@@ -553,6 +583,12 @@ export function AvatarVerticalClipPortal() {
   useEffect(() => {
     if (shopeeMode && shopeeProductFolder && shopeeAvatarFolder) void refreshShopeePairs(shopeeProductFolder, shopeeAvatarFolder);
   }, [shopeeMode, shopeeProductFolder, shopeeAvatarFolder]);
+
+  // โหลดฐานข้อมูลสินค้าเริ่มต้น (สินค้า Shopee.csv) ครั้งแรกถ้ายังไม่มี
+  useEffect(() => {
+    if (shopeeProductDb.length === 0) void loadDefaultProductDb(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addLog = (text: string) => {
     const stamp = new Date().toLocaleTimeString('th-TH', { hour12: false });
@@ -1286,6 +1322,169 @@ export function AvatarVerticalClipPortal() {
     try { const c = readShopeeHooksCache(); c[key] = hooks; localStorage.setItem('avatar_vertical_shopee_hooks_cache', JSON.stringify(c)); } catch {}
   };
 
+  // เปิด popup ดูซับที่ถอดไว้แล้วของคู่นั้น (ดึงจากแคช)
+  const openShopeeSubsViewer = (pair: any) => {
+    const segs = readShopeeSubsCache()[pair.avatarSubfolderPath] || [];
+    setSubsViewerTitle(pair.avatarSubfolder);
+    setSubsViewerSegments(segs);
+    setSubsViewerOpen(true);
+  };
+
+  // ── ฐานข้อมูลสินค้า: parse CSV + โหลด + จับคู่ + เขียนพาดหัวจากข้อมูลจริง ──
+  const parseProductCsv = (text: string): Array<{ name: string; link: string; detail: string }> => {
+    const rows: string[][] = [];
+    let row: string[] = [], field = '', inQ = false;
+    const s = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (inQ) { if (c === '"') { if (s[i + 1] === '"') { field += '"'; i++; } else inQ = false; } else field += c; }
+      else { if (c === '"') inQ = true; else if (c === ',') { row.push(field); field = ''; } else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; } else field += c; }
+    }
+    if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+    const clean = rows.filter(r => r.some(c => c.trim() !== ''));
+    if (clean.length === 0) return [];
+    const header = clean[0].map(h => h.trim());
+    const iName = header.findIndex(h => h.includes('โฟลเดอร์') || h.toLowerCase().includes('name'));
+    const iLink = header.findIndex(h => h.toLowerCase().includes('link'));
+    const iDetail = header.findIndex(h => h.includes('รายละเอียด') || h.toLowerCase().includes('detail'));
+    return clean.slice(1).map(r => ({
+      name: (iName >= 0 ? r[iName] : r[0] || '').trim(),
+      link: (iLink >= 0 ? r[iLink] : '').trim(),
+      detail: (iDetail >= 0 ? r[iDetail] : r[r.length - 1] || '').trim(),
+    })).filter(p => p.name);
+  };
+
+  const applyProductDb = (products: Array<{ name: string; link: string; detail: string }>, source: string) => {
+    setShopeeProductDb(products);
+    setShopeeDbSource(source);
+    try {
+      localStorage.setItem('avatar_vertical_shopee_product_db', JSON.stringify(products));
+      localStorage.setItem('avatar_vertical_shopee_product_db_source', source);
+    } catch {}
+  };
+
+  const loadDefaultProductDb = async (silent = false) => {
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/shopee-product-db`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.products) && data.products.length > 0) {
+        applyProductDb(data.products, `ค่าเริ่มต้น: ${pathBasename(data.source) || 'สินค้า Shopee.csv'}`);
+        addLog(`🏷️ โหลดฐานข้อมูลสินค้าเริ่มต้น ${data.products.length} รายการ`);
+      } else if (!silent) {
+        addLog(`⚠️ โหลดฐานข้อมูลสินค้าเริ่มต้นไม่สำเร็จ: ${data.error || 'ไม่พบข้อมูล'}`);
+      }
+    } catch (e: any) {
+      if (!silent) addLog(`❌ โหลดฐานข้อมูลสินค้าไม่สำเร็จ: ${e.message || e}`);
+    }
+  };
+
+  const loadShopeeDbFromSheet = async () => {
+    if (!shopeeDbSheetUrl.trim()) { alert('กรุณาวางลิงก์ Google Sheet ก่อน'); return; }
+    setIsLoadingSheet(true);
+    try {
+      localStorage.setItem('avatar_vertical_shopee_db_sheet_url', shopeeDbSheetUrl);
+      const res = await fetch(`${BACKEND_BASE}/api/gsheet-products?url=${encodeURIComponent(shopeeDbSheetUrl)}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.products) && data.products.length > 0) {
+        applyProductDb(data.products, `Google Sheet (${data.products.length} รายการ)`);
+        addLog(`🔗 ดึงฐานข้อมูลสินค้าจาก Google Sheet สำเร็จ ${data.products.length} รายการ`);
+      } else {
+        alert(data.error || 'ดึง Google Sheet ไม่สำเร็จ');
+        addLog(`❌ ${data.error || 'ดึง Google Sheet ไม่สำเร็จ'}`);
+      }
+    } catch (e: any) {
+      alert(`ดึง Google Sheet ไม่สำเร็จ: ${e.message || e}`);
+    } finally {
+      setIsLoadingSheet(false);
+    }
+  };
+
+  const handleUploadProductDb = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const products = parseProductCsv(text);
+      if (products.length === 0) { alert('อ่านไฟล์ CSV ไม่พบข้อมูลสินค้า (ต้องมีคอลัมน์ ชื่อในโฟลเดอร์ / รายละเอียดสินค้า)'); return; }
+      applyProductDb(products, file.name);
+      addLog(`🏷️ อัพโหลดฐานข้อมูลสินค้า "${file.name}" — ${products.length} รายการ`);
+    } catch (e: any) {
+      alert(`อ่านไฟล์ไม่สำเร็จ: ${e.message || e}`);
+    }
+  };
+
+  const numId = (s: string) => (String(s || '').match(/^\s*(\d{1,6})/) || [])[1] || '';
+  const findProductForPair = (pair: any) => {
+    if (!shopeeProductDb.length) return null;
+    const byName = (pair.productSubfolder || '').trim().toLowerCase();
+    let hit = byName ? shopeeProductDb.find(p => p.name.trim().toLowerCase() === byName) : undefined;
+    if (!hit) {
+      const id = numId(pair.productSubfolder) || numId(pair.avatarSubfolder);
+      if (id) hit = shopeeProductDb.find(p => numId(p.name) === id);
+    }
+    return hit || null;
+  };
+
+  const fetchDbHeadlines = async (product: { name: string; detail: string }, key: string) => {
+    const res = await fetch(`${BACKEND_BASE}/api/shopee-db-headline`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productName: product.name, productDetail: product.detail, openRouterKey: key, count: 3 }),
+    });
+    return res.json();
+  };
+
+  const openDbHeadlinePicker = async (pair: any) => {
+    const product = findProductForPair(pair);
+    setDbHlTarget(pair.avatarSubfolder);
+    setDbHlProductName(product?.name || pair.productSubfolder || pair.avatarSubfolder);
+    setDbHlOptions([]);
+    setDbHlError('');
+    setDbHlOpen(true);
+    if (!product) { setDbHlError('ไม่พบสินค้านี้ในฐานข้อมูล — อัพโหลด CSV ที่มีสินค้านี้ก่อน'); return; }
+    const key = getActiveOpenRouterKey();
+    if (!key) { setDbHlError('ยังไม่ได้ตั้งค่า OpenRouter Key (ไปที่หน้า Settings)'); return; }
+    setDbHlLoading(true);
+    try {
+      const data = await fetchDbHeadlines(product, key);
+      if (data.success && data.headlines?.length) setDbHlOptions(data.headlines);
+      else setDbHlError(data.error || 'AI ไม่ได้ส่งพาดหัวกลับมา');
+    } catch (e: any) {
+      setDbHlError(e.message || String(e));
+    } finally { setDbHlLoading(false); }
+  };
+
+  const pickDbHeadline = (headline: string) => {
+    if (dbHlTarget) setShopeeHeadlines(prev => ({ ...prev, [dbHlTarget]: headline }));
+    setDbHlOpen(false);
+    addLog(`🏷️ ใช้พาดหัวจาก DB [${dbHlTarget}]: "${headline}"`);
+  };
+
+  const runShopeeDbHeadlineAll = async () => {
+    const key = getActiveOpenRouterKey();
+    if (!key) return alert('ยังไม่ได้ตั้งค่า OpenRouter Key ในหน้า Settings');
+    if (!shopeeProductDb.length) return alert('ยังไม่มีฐานข้อมูลสินค้า — อัพโหลด CSV หรือกดโหลดค่าเริ่มต้นก่อน');
+    const targets = shopeePairs.filter(p => shopeeSelected.includes(p.avatarSubfolder) && p.matched && findProductForPair(p));
+    if (targets.length === 0) return alert('ไม่มีคู่ที่เลือกและมีข้อมูลในฐานข้อมูลสินค้า');
+    setIsDbHeadlineAll(true);
+    addLog(`🏷️ เริ่มเขียนพาดหัวจาก DB ${targets.length} คลิป...`);
+    for (const p of targets) {
+      const product = findProductForPair(p);
+      if (!product) continue;
+      try {
+        const data = await fetchDbHeadlines(product, key);
+        if (data.success && data.headlines?.length) {
+          setShopeeHeadlines(prev => ({ ...prev, [p.avatarSubfolder]: data.headlines[0] }));
+          addLog(`✅ [${p.avatarSubfolder}] "${data.headlines[0]}"${data.headlines.length > 1 ? ` · อีก ${data.headlines.length - 1} แบบ: ${data.headlines.slice(1).join(' | ')}` : ''}`);
+        } else {
+          addLog(`⚠️ [${p.avatarSubfolder}] ${data.error || 'ไม่ได้พาดหัว'}`);
+        }
+      } catch (e: any) {
+        addLog(`❌ [${p.avatarSubfolder}] ${e.message || e}`);
+      }
+    }
+    setIsDbHeadlineAll(false);
+    addLog('🏷️ เขียนพาดหัวจาก DB เสร็จแล้ว');
+  };
+
   // ── ขั้นที่ 1: ถอดซับ (+ คิดพาดหัว AI) ของ Avatar แล้วแคชไว้ ──
   //   fillHeadline=true → เติมพาดหัวสไตล์สุขุมลงช่องด้วย (ปุ่ม "AI ช่วยคิด")
   //   fillHeadline=false → ถอดซับอย่างเดียว เก็บแคชไว้ (ปุ่ม "ถอดซับ")
@@ -1814,6 +2013,7 @@ export function AvatarVerticalClipPortal() {
           ตั้งค่าโฟลเดอร์และเสียง
         </h2>
         {shopeeMode ? (
+          <>
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
             <FolderField
               label="📦 โฟลเดอร์คลิปสินค้า (มีโฟลเดอร์ย่อยต่อสินค้า)"
@@ -1831,6 +2031,50 @@ export function AvatarVerticalClipPortal() {
               onPick={() => pickFolder('เลือกโฟลเดอร์ปลายทางสำหรับคลิป _output', setOutputFolder)}
             />
           </div>
+
+          <div className="mt-4 rounded-2xl border p-4" style={{ borderColor: 'rgba(245,158,11,0.4)', backgroundColor: 'rgba(245,158,11,0.06)' }}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-bold text-sm flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                  🏷️ ฐานข้อมูลสินค้า (เขียนพาดหัวจากข้อมูลจริง ไม่อิงสคริปต์)
+                </div>
+                <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                  {shopeeProductDb.length > 0
+                    ? <>โหลดแล้ว <b style={{ color: 'var(--text-primary)' }}>{shopeeProductDb.length}</b> รายการ · {shopeeDbSource || 'ไฟล์ที่อัพโหลด'}</>
+                    : 'ยังไม่มีข้อมูล — อัพโหลด CSV หรือกดโหลดค่าเริ่มต้น (คอลัมน์: ชื่อในโฟลเดอร์, Link, รายละเอียดสินค้า)'}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="px-4 py-2 rounded-xl font-bold text-xs cursor-pointer border flex items-center gap-2" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}>
+                  ⬆️ อัพโหลด CSV
+                  <input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0] || null; e.currentTarget.value = ''; void handleUploadProductDb(f); }} />
+                </label>
+                <button onClick={() => void loadDefaultProductDb(false)} className="px-4 py-2 rounded-xl font-bold text-xs cursor-pointer border" style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-secondary)', borderColor: 'var(--border-color)' }}>
+                  🔄 โหลดค่าเริ่มต้นใหม่
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-bold shrink-0" style={{ color: '#10b981' }}>🔗 Google Sheet:</span>
+              <input
+                type="text"
+                value={shopeeDbSheetUrl}
+                onChange={e => setShopeeDbSheetUrl(e.target.value)}
+                placeholder="วางลิงก์ Google Sheet (แชร์แบบทุกคนที่มีลิงก์ดูได้)..."
+                className="flex-1 min-w-[220px] px-3 py-2 rounded-lg text-[11px] border outline-none"
+                style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}
+              />
+              <button
+                onClick={() => void loadShopeeDbFromSheet()}
+                disabled={isLoadingSheet}
+                className="px-4 py-2 rounded-lg font-bold text-xs cursor-pointer disabled:opacity-50"
+                style={{ backgroundColor: '#10b981', color: 'white' }}
+              >
+                {isLoadingSheet ? '⏳ กำลังดึง...' : '🔗 ดึงจาก Sheet'}
+              </button>
+            </div>
+          </div>
+          </>
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
             <FolderField
@@ -2542,6 +2786,17 @@ export function AvatarVerticalClipPortal() {
                 🎙️ {isTranscribingAll ? 'กำลังถอดซับ...' : `ทำซับต่อ (อันที่ยังไม่เสร็จ)`}
               </button>
             )}
+            {!isRendering && (
+              <button
+                onClick={runShopeeDbHeadlineAll}
+                disabled={shopeeSelected.length === 0 || isDbHeadlineAll || isRendering || isTranscribingAll || shopeeProductDb.length === 0}
+                className="px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all disabled:opacity-50 text-xs shadow-md cursor-pointer"
+                style={{ backgroundColor: '#f59e0b', color: 'white' }}
+                title="เขียนพาดหัวจากฐานข้อมูลสินค้าจริง สำหรับคลิปที่เลือก"
+              >
+                🏷️ {isDbHeadlineAll ? 'กำลังเขียนพาดหัว...' : 'พาดหัวจาก DB (ที่เลือก)'}
+              </button>
+            )}
             {!isRendering ? (
               <>
                 <button
@@ -2690,6 +2945,9 @@ export function AvatarVerticalClipPortal() {
           onAiHeadline={generateShopeeHeadlineAI}
           onRenderOne={(pair: any) => { const c = new AbortController(); abortRef.current = c; setIsRendering(true); renderOneShopeePair(pair, c).finally(() => { setIsRendering(false); abortRef.current = null; }); }}
           onOverrideProduct={overrideShopeeProduct}
+          onViewSubs={openShopeeSubsViewer}
+          onDbHeadline={openDbHeadlinePicker}
+          dbMatchedKeys={new Set(shopeePairs.filter(p => findProductForPair(p)).map(p => p.avatarSubfolder))}
           isBusy={isRendering || isPairing || isTranscribingAll}
         />
         ) : (
@@ -3249,11 +3507,102 @@ export function AvatarVerticalClipPortal() {
           </div>
         </div>
       )}
+
+      {subsViewerOpen && (
+        <div
+          onClick={() => setSubsViewerOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: '42rem', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#18181B', border: '1px solid var(--border-glass-bright, #3F3F46)', borderRadius: '1.25rem', boxShadow: '0 25px 60px -12px rgba(0,0,0,0.85)' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-glass, #27272A)', background: 'rgba(132,204,22,0.10)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+                <span style={{ fontSize: '1.5rem' }}>📝</span>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>ซับที่ถอดไว้แล้ว</h3>
+                  <p style={{ fontSize: '11px', color: 'var(--text-secondary)', maxWidth: '30rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={subsViewerTitle}>{subsViewerTitle} · {subsViewerSegments.length} ประโยค</p>
+                </div>
+              </div>
+              <button onClick={() => setSubsViewerOpen(false)} style={{ color: 'var(--text-secondary)', fontSize: '1.25rem', fontWeight: 700, padding: '0.25rem', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>✕</button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem' }}>
+              {subsViewerSegments.length === 0 ? (
+                <div style={{ padding: '3rem 0', textAlign: 'center', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>ยังไม่มีซับที่ถอดไว้สำหรับคลิปนี้ — กด "🎙️ ถอดซับ" ก่อนครับ</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {subsViewerSegments.map((seg, idx) => {
+                    const ts = formatSubTime(seg?.start);
+                    return (
+                      <div key={idx} style={{ display: 'flex', gap: '0.75rem', padding: '0.45rem 0.5rem', borderRadius: '0.5rem', alignItems: 'flex-start', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        {ts && <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted, #71717A)', flexShrink: 0, width: '3rem', paddingTop: '3px' }}>{ts}</span>}
+                        <span style={{ fontSize: '0.92rem', color: 'var(--text-primary)', lineHeight: 1.65 }}>{seg?.text || ''}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '0.85rem 1.5rem', borderTop: '1px solid var(--border-glass, #27272A)', background: 'rgba(0,0,0,0.25)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+              <button
+                onClick={() => { void navigator.clipboard?.writeText(subsViewerSegments.map((s: any) => s?.text || '').join('\n')); addLog('📋 ก๊อปซับลงคลิปบอร์ดแล้ว'); }}
+                disabled={subsViewerSegments.length === 0}
+                style={{ padding: '0.5rem 0.85rem', background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: '0.75rem', borderRadius: '0.6rem', border: 'none', cursor: subsViewerSegments.length === 0 ? 'default' : 'pointer', opacity: subsViewerSegments.length === 0 ? 0.4 : 1 }}
+              >📋 ก๊อปข้อความทั้งหมด</button>
+              <button onClick={() => setSubsViewerOpen(false)} style={{ padding: '0.5rem 1.1rem', background: 'var(--bg-glass-hover, #27272A)', color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.75rem', borderRadius: '0.6rem', border: '1px solid var(--border-glass, #27272A)', cursor: 'pointer' }}>ปิด</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dbHlOpen && (
+        <div onClick={() => setDbHlOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)' }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: '40rem', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#18181B', border: '1px solid var(--border-glass-bright, #3F3F46)', borderRadius: '1.25rem', boxShadow: '0 25px 60px -12px rgba(0,0,0,0.85)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-glass, #27272A)', background: 'rgba(245,158,11,0.10)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+                <span style={{ fontSize: '1.5rem' }}>🏷️</span>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>พาดหัวจากฐานข้อมูลสินค้า</h3>
+                  <p style={{ fontSize: '11px', color: 'var(--text-secondary)', maxWidth: '30rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={dbHlProductName}>{dbHlProductName} · เลือกแบบที่ชอบเพื่อใช้เป็นพาดหัว</p>
+                </div>
+              </div>
+              <button onClick={() => setDbHlOpen(false)} style={{ color: 'var(--text-secondary)', fontSize: '1.25rem', fontWeight: 700, padding: '0.25rem', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem' }}>
+              {dbHlLoading ? (
+                <div style={{ padding: '3rem 0', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>🤖 กำลังเขียนพาดหัวจากข้อมูลสินค้า...</div>
+              ) : dbHlError ? (
+                <div style={{ padding: '1rem', borderRadius: '0.75rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', fontSize: '0.85rem' }}>⚠️ {dbHlError}</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  {dbHlOptions.map((h, idx) => (
+                    <button key={idx} onClick={() => pickDbHeadline(h)}
+                      style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', textAlign: 'left', padding: '0.9rem 1rem', borderRadius: '0.85rem', background: '#212124', border: '1px solid var(--border-glass, #27272A)', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                      <span style={{ background: 'rgba(245,158,11,0.2)', color: '#f59e0b', borderRadius: '999px', width: '1.5rem', height: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0 }}>{idx + 1}</span>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 600, lineHeight: 1.5 }}>{h}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ padding: '0.85rem 1.5rem', borderTop: '1px solid var(--border-glass, #27272A)', background: 'rgba(0,0,0,0.25)', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              {!dbHlLoading && dbHlOptions.length > 0 && (
+                <button onClick={() => { const pair = shopeePairs.find(p => p.avatarSubfolder === dbHlTarget); if (pair) void openDbHeadlinePicker(pair); }}
+                  style={{ padding: '0.5rem 0.85rem', background: 'transparent', color: '#f59e0b', fontWeight: 700, fontSize: '0.75rem', borderRadius: '0.6rem', border: '1px solid rgba(245,158,11,0.5)', cursor: 'pointer' }}>🔄 เขียนใหม่</button>
+              )}
+              <button onClick={() => setDbHlOpen(false)} style={{ padding: '0.5rem 1.1rem', background: 'var(--bg-glass-hover, #27272A)', color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.75rem', borderRadius: '0.6rem', border: '1px solid var(--border-glass, #27272A)', cursor: 'pointer' }}>ปิด</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function ShopeePairingCard({ pairs, productOptions, selected, setSelected, headlines, setHeadlines, statusMap, subStatusMap, onTranscribe, onAiHeadline, onRenderOne, onOverrideProduct, isBusy }: {
+function ShopeePairingCard({ pairs, productOptions, selected, setSelected, headlines, setHeadlines, statusMap, subStatusMap, onTranscribe, onAiHeadline, onRenderOne, onOverrideProduct, onViewSubs, onDbHeadline, dbMatchedKeys, isBusy }: {
   pairs: any[];
   productOptions: any[];
   selected: string[];
@@ -3266,6 +3615,9 @@ function ShopeePairingCard({ pairs, productOptions, selected, setSelected, headl
   onAiHeadline: (pair: any) => void;
   onRenderOne: (pair: any) => void;
   onOverrideProduct: (avatarSubfolder: string, productPath: string) => void;
+  onViewSubs: (pair: any) => void;
+  onDbHeadline: (pair: any) => void;
+  dbMatchedKeys: Set<string>;
   isBusy: boolean;
 }) {
   const matchedPairs = pairs.filter(p => p.matched);
@@ -3355,7 +3707,10 @@ function ShopeePairingCard({ pairs, productOptions, selected, setSelected, headl
                       ) : subSt === 'done' ? (
                         <div className="flex flex-col gap-1">
                           <span className="text-[11px] px-2 py-0.5 rounded font-semibold bg-green-100 dark:bg-green-950/40 text-green-600 w-max">✅ ถอดซับแล้ว</span>
-                          <button onClick={() => onTranscribe(pair)} disabled={isBusy || !pair.avatarVideoFile} className="self-start text-[10px] underline text-gray-400 hover:text-purple-500 disabled:opacity-40 cursor-pointer">ถอดใหม่</button>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => onViewSubs(pair)} className="text-[10px] underline text-gray-400 hover:text-green-600 cursor-pointer">👁️ ดูซับ</button>
+                            <button onClick={() => onTranscribe(pair)} disabled={isBusy || !pair.avatarVideoFile} className="text-[10px] underline text-gray-400 hover:text-purple-500 disabled:opacity-40 cursor-pointer">ถอดใหม่</button>
+                          </div>
                         </div>
                       ) : subSt === 'error' ? (
                         <button onClick={() => onTranscribe(pair)} disabled={isBusy || !pair.avatarVideoFile} className="px-2.5 py-1 rounded-lg border text-[11px] font-bold text-red-500 disabled:opacity-40 cursor-pointer" style={{ borderColor: 'var(--border-color)' }}>⚠️ ลองใหม่</button>
@@ -3373,15 +3728,26 @@ function ShopeePairingCard({ pairs, productOptions, selected, setSelected, headl
                           className="w-full px-2 py-1 rounded-md text-[11px] border outline-none resize-none font-medium leading-tight"
                           style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}
                         />
-                        <button
-                          onClick={() => onAiHeadline(pair)}
-                          disabled={isBusy || !pair.avatarVideoFile}
-                          className="self-start px-2 py-1 rounded-md text-[10px] font-bold border transition-all hover:bg-purple-500/5 disabled:opacity-50 cursor-pointer"
-                          style={{ borderColor: 'var(--border-color)', color: '#a855f7' }}
-                          title="ถอดซับ + ให้ AI คิดพาดหัวสไตล์สุขุมให้ (ถอดซับด้วยในตัว)"
-                        >
-                          💡 AI ช่วยคิด (+ถอดซับ)
-                        </button>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            onClick={() => onDbHeadline(pair)}
+                            disabled={isBusy || !dbMatchedKeys.has(pair.avatarSubfolder)}
+                            className="px-2 py-1 rounded-md text-[10px] font-bold border transition-all disabled:opacity-50 cursor-pointer"
+                            style={{ borderColor: 'rgba(245,158,11,0.5)', color: '#f59e0b' }}
+                            title={dbMatchedKeys.has(pair.avatarSubfolder) ? 'เขียนพาดหัวจากข้อมูลสินค้าจริงในฐานข้อมูล' : 'ไม่พบสินค้านี้ในฐานข้อมูล — อัพโหลด CSV ก่อน'}
+                          >
+                            🏷️ จาก DB
+                          </button>
+                          <button
+                            onClick={() => onAiHeadline(pair)}
+                            disabled={isBusy || !pair.avatarVideoFile}
+                            className="px-2 py-1 rounded-md text-[10px] font-bold border transition-all hover:bg-purple-500/5 disabled:opacity-50 cursor-pointer"
+                            style={{ borderColor: 'var(--border-color)', color: '#a855f7' }}
+                            title="ถอดซับ + ให้ AI คิดพาดหัวสไตล์สุขุมให้ (ถอดซับด้วยในตัว)"
+                          >
+                            💡 AI (+ถอดซับ)
+                          </button>
+                        </div>
                       </div>
                     </td>
                     <td className="px-3 py-3 text-center">

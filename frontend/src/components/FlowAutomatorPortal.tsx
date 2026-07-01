@@ -53,8 +53,8 @@ ${STRICT_COPYWRITING_RULES}`);
   const [showConfig, setShowConfig] = useState(false);
 
   // New V2 states
-  const [automatorMode, setAutomatorMode] = useState<'vision_caption' | 'filename_caption' | 'only_convert' | 'filename_convert'>(() => {
-    return (localStorage.getItem('automator_mode') as 'vision_caption' | 'filename_caption' | 'only_convert' | 'filename_convert') || 'vision_caption';
+  const [automatorMode, setAutomatorMode] = useState<'vision_caption' | 'filename_caption' | 'only_convert' | 'filename_convert' | 'shopee_caption'>(() => {
+    return (localStorage.getItem('automator_mode') as 'vision_caption' | 'filename_caption' | 'only_convert' | 'filename_convert' | 'shopee_caption') || 'vision_caption';
   });
   
   const [dropboxStatus, setDropboxStatus] = useState<'connected' | 'disconnected' | 'checking' | 'idle'>('idle');
@@ -70,6 +70,15 @@ ${STRICT_COPYWRITING_RULES}`);
   const [userFeedback, setUserFeedback] = useState('');
   const [isRefiningPrompt, setIsRefiningPrompt] = useState(false);
   const [feedbackSuccess, setFeedbackSuccess] = useState(false);
+
+  // ── โหมด Shopee: ฐานข้อมูลสินค้า (จับคู่ชื่อไฟล์ → เขียนแคปชั่นขาย) ──
+  const [shopeeDb, setShopeeDb] = useState<Array<{ name: string; link: string; detail: string }>>(() => {
+    try { return JSON.parse(localStorage.getItem('flow_shopee_db') || '[]'); } catch { return []; }
+  });
+  const [shopeeDbSource, setShopeeDbSource] = useState(() => localStorage.getItem('flow_shopee_db_source') || '');
+  const [shopeeDbSheetUrl, setShopeeDbSheetUrl] = useState(() => localStorage.getItem('flow_shopee_db_sheet_url') || 'https://docs.google.com/spreadsheets/d/18sppbH-mkojCxcMhOMz726a8UVwx6jUl-UaXoSHIxi0/edit?gid=337821009');
+  const [shopeeDbLoading, setShopeeDbLoading] = useState(false);
+  const shopeeCsvRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     localStorage.setItem('automator_mode', automatorMode);
@@ -702,7 +711,193 @@ ${STRICT_COPYWRITING_RULES}
     return '';
   };
 
+  // ── โหมด Shopee: helpers ──
+  const BACKEND_BASE_FLOW = window.location.port !== '5005' ? 'http://localhost:5005' : '';
+
+  const parseShopeeCsv = (text: string): Array<{ name: string; link: string; detail: string }> => {
+    const rows: string[][] = [];
+    let row: string[] = [], field = '', inQ = false;
+    const s = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (inQ) { if (c === '"') { if (s[i + 1] === '"') { field += '"'; i++; } else inQ = false; } else field += c; }
+      else { if (c === '"') inQ = true; else if (c === ',') { row.push(field); field = ''; } else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; } else field += c; }
+    }
+    if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+    const clean = rows.filter(r => r.some(c => c.trim() !== ''));
+    if (!clean.length) return [];
+    const header = clean[0].map(h => h.trim());
+    const iName = header.findIndex(h => h.includes('โฟลเดอร์') || h.toLowerCase().includes('name'));
+    const iLink = header.findIndex(h => h.toLowerCase().includes('link'));
+    const iDetail = header.findIndex(h => h.includes('รายละเอียด') || h.toLowerCase().includes('detail'));
+    return clean.slice(1).map(r => ({
+      name: (iName >= 0 ? r[iName] : r[0] || '').trim(),
+      link: (iLink >= 0 ? r[iLink] : '').trim(),
+      detail: (iDetail >= 0 ? r[iDetail] : r[r.length - 1] || '').trim(),
+    })).filter(p => p.name);
+  };
+
+  const applyShopeeDb = (products: Array<{ name: string; link: string; detail: string }>, source: string) => {
+    setShopeeDb(products);
+    setShopeeDbSource(source);
+    try { localStorage.setItem('flow_shopee_db', JSON.stringify(products)); localStorage.setItem('flow_shopee_db_source', source); } catch {}
+  };
+
+  const loadShopeeDbFromSheet = async () => {
+    if (!shopeeDbSheetUrl.trim()) { alert('กรุณาวางลิงก์ Google Sheet ก่อน'); return; }
+    setShopeeDbLoading(true);
+    try {
+      localStorage.setItem('flow_shopee_db_sheet_url', shopeeDbSheetUrl);
+      const res = await fetch(`${BACKEND_BASE_FLOW}/api/gsheet-products?url=${encodeURIComponent(shopeeDbSheetUrl)}`);
+      const data = await res.json();
+      if (data.success && data.products?.length) {
+        applyShopeeDb(data.products, `Google Sheet (${data.products.length} รายการ)`);
+        addLog(`🔗 ดึงข้อมูลสินค้าจาก Google Sheet สำเร็จ ${data.products.length} รายการ`);
+      } else {
+        alert(data.error || 'ดึง Google Sheet ไม่สำเร็จ');
+      }
+    } catch (e: any) {
+      alert(`ดึง Google Sheet ไม่สำเร็จ: ${e.message || e}`);
+    } finally {
+      setShopeeDbLoading(false);
+    }
+  };
+
+  const handleShopeeCsvUpload = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const products = parseShopeeCsv(await file.text());
+      if (!products.length) { alert('อ่าน CSV ไม่พบข้อมูลสินค้า (ต้องมีคอลัมน์ ชื่อในโฟลเดอร์ / รายละเอียดสินค้า)'); return; }
+      applyShopeeDb(products, file.name);
+      addLog(`📄 อัพโหลด CSV สินค้า "${file.name}" — ${products.length} รายการ`);
+    } catch (e: any) {
+      alert(`อ่านไฟล์ไม่สำเร็จ: ${e.message || e}`);
+    }
+  };
+
+  const numIdOf = (s: string) => (String(s || '').match(/(\d{1,6})/) || [])[1] || '';
+  const matchShopeeProduct = (filename: string, products: Array<{ name: string; link: string; detail: string }>) => {
+    const base = filename.replace(/\.[^.]+$/, '');
+    const id = (base.match(/^\s*(\d{1,6})/) || [])[1] || '';
+    if (id) { const byId = products.find(p => numIdOf(p.name) === id); if (byId) return byId; }
+    const key = base.toLowerCase();
+    return products.find(p => p.name && key.startsWith(p.name.trim().toLowerCase())) || null;
+  };
+
+  const runShopeeCaptionWorkflow = async () => {
+    setIsRunning(true);
+    setLogs([]);
+    cancelRef.current = false;
+    try {
+      const refreshedToken = await refreshDropboxTokenIfNeeded();
+      const currentDropboxKey = (refreshedToken || localStorage.getItem('dropbox_key') || dropboxKey || '').trim();
+      if (!currentDropboxKey) { alert('กรุณาใส่ Dropbox Access Token ใน ⚙️ ตั้งค่า API ก่อนครับ'); return; }
+      const openRouterKey = getOpenRouterKey();
+      if (!openRouterKey) { alert('กรุณาใส่ OpenRouter API Key ใน ⚙️ ตั้งค่า API ก่อนครับ'); return; }
+      if (outputMode === 'sheets') {
+        if (!googleToken) { alert('กรุณา Login with Google และเลือกชีทก่อน'); return; }
+        if (!selectedSpreadsheet || !selectedWorksheet) { alert('กรุณาเลือก Google Sheet และแท็บเป้าหมายก่อน'); return; }
+      }
+
+      let products = shopeeDb;
+      if (!products.length) {
+        addLog('📊 ยังไม่มีฐานข้อมูลสินค้า — กำลังดึงจาก Google Sheet เริ่มต้น...');
+        try {
+          const res = await fetch(`${BACKEND_BASE_FLOW}/api/gsheet-products?url=${encodeURIComponent(shopeeDbSheetUrl)}`);
+          const data = await res.json();
+          if (data.success && data.products?.length) { products = data.products; applyShopeeDb(products, `Google Sheet (${products.length} รายการ)`); }
+        } catch {}
+      }
+      if (!products.length) { alert('ไม่มีฐานข้อมูลสินค้า — อัพโหลด CSV หรือใส่ลิงก์ Google Sheet ก่อน'); return; }
+      addLog(`🛒 โหมด Shopee เริ่มทำงาน — ฐานข้อมูลสินค้า ${products.length} รายการ (Output: ${outputMode === 'csv' ? 'ไฟล์ CSV' : 'Google Sheets'})`);
+
+      addLog(`📂 กำลังดึงรายชื่อไฟล์จาก Dropbox: ${folderPath}`);
+      const dbxRes = await fetch("https://api.dropboxapi.com/2/files/list_folder", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${currentDropboxKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ path: folderPath.trim(), recursive: false, include_media_info: false, include_deleted: false, include_has_explicit_shared_members: false })
+      });
+      if (!dbxRes.ok) throw new Error(`Dropbox List Error: ${await dbxRes.text()}`);
+      const listData = await dbxRes.json();
+      const files = listData.entries.filter((e: any) => e['.tag'] === 'file');
+      addLog(`✅ พบไฟล์ทั้งหมด ${files.length} รายการ`);
+
+      const getDl1Link = (urlStr: string): string => {
+        if (!urlStr) return "ไม่พบลิงก์";
+        try { const url = new URL(urlStr); url.searchParams.delete('raw'); url.searchParams.set('dl', '1'); return url.toString(); }
+        catch { let c = urlStr.replace(/[?&]dl=[01]/g, '').replace(/[?&]raw=1/g, ''); if (c.endsWith('?') || c.endsWith('&')) c = c.slice(0, -1); return c.includes('?') ? `${c}&dl=1` : `${c}?dl=1`; }
+      };
+
+      const header = ['ชื่อสินค้า', 'Link shopee', 'Link dropbox', 'แคปชั่นโพสสั้นๆ1', 'แคปชั่นโพสสั้นๆ2'];
+      const rows: string[][] = [header];
+
+      for (let i = 0; i < files.length; i++) {
+        if (cancelRef.current) { addLog('🛑 ผู้ใช้สั่งหยุด จะรวมผลเท่าที่เสร็จ...'); break; }
+        const file = files[i];
+        addLog(`⏳ [${i + 1}/${files.length}] ${file.name}`);
+        try {
+          let fileUrl = '';
+          try {
+            const linkRes = await fetch("https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings", {
+              method: "POST", headers: { "Authorization": `Bearer ${currentDropboxKey}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ path: file.path_lower })
+            });
+            const shareData = await linkRes.json();
+            if (shareData.url) fileUrl = shareData.url;
+            else if (shareData.error && shareData.error.shared_link_already_exists) fileUrl = shareData.error.shared_link_already_exists.metadata.url;
+          } catch (e: any) { addLog(`⚠️ หาลิงก์ Dropbox ไม่สำเร็จ: ${e.message || e}`); }
+          const dropboxDl = getDl1Link(fileUrl);
+
+          const product = matchShopeeProduct(file.name, products);
+          if (!product) {
+            addLog(`⚠️ ไม่พบสินค้าที่ตรงกับ "${file.name}" ในฐานข้อมูล — บันทึกลิงก์ไว้ ไม่มีแคปชั่น`);
+            rows.push([file.name.replace(/\.[^.]+$/, ''), '', dropboxDl, '(ไม่พบข้อมูลสินค้า)', '']);
+          } else {
+            addLog(`🔗 จับคู่ "${file.name}" → ${product.name} · กำลังเขียนแคปชั่น...`);
+            let captions: string[] = [];
+            try {
+              const capRes = await fetch(`${BACKEND_BASE_FLOW}/api/shopee-caption`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productName: product.name, productDetail: product.detail, openRouterKey, count: 2 })
+              });
+              const capData = await capRes.json();
+              if (capData.success && capData.captions?.length) captions = capData.captions;
+              else addLog(`⚠️ [${product.name}] ${capData.error || 'เขียนแคปชั่นไม่สำเร็จ'}`);
+            } catch (e: any) { addLog(`⚠️ [${product.name}] เขียนแคปชั่นล้มเหลว: ${e.message || e}`); }
+            rows.push([product.name, product.link || '', dropboxDl, captions[0] || '', captions[1] || '']);
+          }
+
+          if (outputMode === 'sheets') {
+            const last = rows[rows.length - 1];
+            const encodedRange = encodeURIComponent(`${selectedWorksheet}!A1`);
+            const sheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${selectedSpreadsheet}/values/${encodedRange}:append?valueInputOption=USER_ENTERED`;
+            const sheetRes = await fetch(sheetUrl, { method: "POST", headers: { "Authorization": `Bearer ${googleToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ range: `${selectedWorksheet}!A1`, majorDimension: "ROWS", values: [last] }) });
+            if (!sheetRes.ok) addLog(`❌ บันทึก Google Sheets ไม่สำเร็จ: ${await sheetRes.text()}`);
+            else addLog(`✅ บันทึกลง Google Sheets แล้ว`);
+          }
+        } catch (fe: any) { addLog(`❌ ข้ามไฟล์ ${file.name}: ${fe.message || fe}`); }
+        await new Promise(r => setTimeout(r, 2500));
+      }
+
+      if (outputMode === 'csv' && rows.length > 1) {
+        const esc = (s: string) => `"${String(s ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`;
+        const csv = rows.map(r => r.map(esc).join(',')).join('\r\n');
+        const blob = new Blob(["﻿" + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `shopee_captions_${Date.now()}.csv`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        addLog(`📥 ดาวน์โหลด CSV สำเร็จ (${rows.length - 1} แถว)`);
+      }
+      addLog('🎉 จบการทำงานโหมด Shopee!');
+    } catch (err: any) {
+      addLog(`🆘 ข้อผิดพลาด: ${err.message || err}`);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   const runWorkflow = async (shouldResume = false) => {
+    if (automatorMode === 'shopee_caption') { void runShopeeCaptionWorkflow(); return; }
     setIsRunning(true);
     setLogs([]);
     cancelRef.current = false;
@@ -1344,8 +1539,54 @@ ${STRICT_COPYWRITING_RULES}
                     <span>🏷️ โหมด 4: แปลงลิงก์ + ใช้ชื่อคลิปที่อัพ</span>
                     <span className="text-[9px] font-normal opacity-75 mt-0.5">แปลงลิงก์ด่วน dl=1 + เขียนชื่อคลิปตามชื่อไฟล์ที่อัพไปเลย (ผลลัพธ์: ชื่อคลิป | ลิงก์ที่แปลงแล้ว) โดยไม่เรียกใช้ระบบ AI</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setAutomatorMode('shopee_caption')}
+                    className={`px-3 py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer text-left flex flex-col ${automatorMode === 'shopee_caption' ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-sm border border-amber-400/20' : 'text-slate-400 hover:text-slate-300 bg-slate-950/40 border border-transparent'}`}
+                  >
+                    <span>🛒 โหมด 5: Shopee จับคู่สินค้า + เขียนแคปชั่นขาย</span>
+                    <span className="text-[9px] font-normal opacity-75 mt-0.5">แปลงลิงก์ dl=1 + จับคู่ชื่อไฟล์กับ CSV/Google Sheet สินค้า + AI เขียนแคปชั่นขาย 2 แบบ (ผลลัพธ์: ชื่อสินค้า | Link shopee | Link dropbox | แคปชั่น1 | แคปชั่น2)</span>
+                  </button>
                 </div>
               </div>
+
+              {/* โหมด Shopee: แหล่งฐานข้อมูลสินค้า */}
+              {automatorMode === 'shopee_caption' && (
+                <div className="mt-2 p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-2">
+                  <div className="text-[11px] font-extrabold text-amber-400">🛒 ฐานข้อมูลสินค้า (จับคู่ชื่อไฟล์ → เขียนแคปชั่นขาย)</div>
+                  <div className="text-[10px] text-slate-400">
+                    {shopeeDb.length > 0
+                      ? <>โหลดแล้ว <b className="text-slate-200">{shopeeDb.length}</b> รายการ · {shopeeDbSource}</>
+                      : 'ยังไม่มีข้อมูล — ใส่ลิงก์ Google Sheet หรืออัพโหลด CSV (คอลัมน์: ชื่อในโฟลเดอร์, Link, รายละเอียดสินค้า)'}
+                  </div>
+                  <input
+                    type="text"
+                    value={shopeeDbSheetUrl}
+                    onChange={(e) => setShopeeDbSheetUrl(e.target.value)}
+                    placeholder="วางลิงก์ Google Sheet (แชร์แบบทุกคนที่มีลิงก์ดูได้)..."
+                    className="w-full px-3 py-2 bg-slate-900/40 border border-slate-850 rounded-lg text-[11px] text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void loadShopeeDbFromSheet()}
+                      disabled={shopeeDbLoading}
+                      className="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold disabled:opacity-50 transition-all"
+                    >
+                      {shopeeDbLoading ? '⏳ กำลังดึง...' : '🔗 ดึงจาก Sheet'}
+                    </button>
+                    <input ref={shopeeCsvRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0] || null; e.currentTarget.value = ''; void handleShopeeCsvUpload(f); }} />
+                    <button
+                      type="button"
+                      onClick={() => shopeeCsvRef.current?.click()}
+                      className="px-3 py-2 rounded-lg border border-slate-700 text-slate-300 text-[11px] font-bold hover:border-amber-500 transition-all"
+                    >
+                      ⬆️ CSV
+                    </button>
+                  </div>
+                  <div className="text-[9px] text-slate-500 leading-normal">จับคู่ด้วยเลขหน้าไฟล์: <span className="text-amber-400">001_RiceWarmerGlove_script1_..._output.mp4</span> → <span className="text-amber-400">001_RiceWarmerGlove</span> · ผลลัพธ์: ชื่อสินค้า | Link shopee | Link dropbox | แคปชั่น1 | แคปชั่น2</div>
+                </div>
+              )}
 
               {/* V2 AI Brain Custom Writing Style (Tabs Layout) */}
               <div className="flex-1 flex flex-col min-h-[350px] mt-2">
