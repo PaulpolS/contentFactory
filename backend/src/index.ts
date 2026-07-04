@@ -2079,6 +2079,115 @@ const generateAiHeadline = async (scriptText: string, apiKey: string) => {
   return [];
 };
 
+// เขียนพาดหัวจาก "ข้อมูลสินค้าจริง" (ไม่อิงสคริปต์ตลก) — โทนขายของ Shopee บอกชัดว่าขายอะไร
+const generateDbHeadline = async (productName: string, productDetail: string, apiKey: string, count = 3): Promise<string[]> => {
+  const detail = String(productDetail || '').replace(/^"+|"+$/g, '').replace(/^\s*Script/i, '').trim();
+  if (!apiKey || !detail) return [];
+  const n = Math.max(1, Math.min(5, Number(count) || 3));
+  const prompt = `คุณเป็นนักเขียนพาดหัวสินค้าสำหรับ Shopee/TikTok ภาษาไทย
+จาก "ข้อมูลสินค้าจริง" ด้านล่าง ให้เขียนพาดหัว (headline) ภาษาไทย ${n} แบบที่ต่างกัน
+โดยแต่ละแบบต้อง "บอกชัดว่าขายอะไร" + จุดเด่น 2-3 อย่าง โทนขายของแบบมืออาชีพ
+
+กฎ:
+- บอกชนิดสินค้าให้ชัดเจนตั้งแต่ต้นประโยค (เช่น "ถุงมือกันร้อน...", "ที่วางมือถือในรถ...", "พัดลมพกพา...")
+- ตามด้วยจุดเด่น/ประโยชน์ คั่นแต่ละวลีด้วยการเว้นวรรค
+- กระชับ ประมาณ 6-14 คำ ไม่ตลก ไม่เล่นคำ ไม่ปรัชญา ไม่ clickbait เกินจริง
+- อิงจากข้อมูลสินค้าจริงเท่านั้น ห้ามแต่งสรรพคุณที่ไม่มีในข้อมูล
+- ห้ามใส่ราคา อีโมจิ แฮชแท็ก หรือหมายเลขข้อ
+
+ตัวอย่างสไตล์ที่ต้องการ (คนละสินค้า):
+- "ถุงมือกันร้อนเปิดหม้อข้าว หยิบจับปลอดภัย"
+- "ที่วางมือถือในรถ แน่นหนา ไม่หลุดง่าย"
+- "พัดลมตั้งโต๊ะมีไฟสว่าง ลมแรงคุ้มค่าสุด"
+
+ชื่อสินค้า (อ้างอิงภายใน): ${productName || '-'}
+ข้อมูลสินค้าจริง:
+"""${detail.slice(0, 1500)}"""
+
+ตอบกลับเป็น JSON Array ของสตริง ${n} ตัวเท่านั้น เช่น ["...","...","..."] ห้ามมีข้อความอื่น`;
+
+  try {
+    const data = await callOpenRouterJson(apiKey, 'google/gemini-2.5-flash', prompt);
+    const arr = Array.isArray(data) ? data : (Array.isArray(data?.headlines) ? data.headlines : []);
+    return arr.map((t: any) => String(t || '').replace(/^["'\d.\)\-\s]+/, '').trim()).filter(Boolean).slice(0, n);
+  } catch (e) {
+    console.error('[DB Headline] Failed:', e);
+    return [];
+  }
+};
+
+// เขียน "แคปชั่นโพสต์ขายสั้นๆ" จากข้อมูลสินค้าจริง (ยาวกว่าพาดหัวเล็กน้อย เป็นประโยคชวนซื้อ)
+const generateDbCaption = async (productName: string, productDetail: string, apiKey: string, count = 2): Promise<string[]> => {
+  const detail = String(productDetail || '').replace(/^"+|"+$/g, '').replace(/^\s*Script/i, '').trim();
+  if (!apiKey || !detail) return [];
+  const n = Math.max(1, Math.min(5, Number(count) || 2));
+  const prompt = `คุณเป็นนักเขียนแคปชั่นขายของออนไลน์ภาษาไทย
+จาก "ข้อมูลสินค้าจริง" ด้านล่าง เขียนแคปชั่นโพสต์ขายสั้นๆ เข้าใจง่าย ${n} แบบที่ต่างกัน
+
+กฎ:
+- บอกชัดว่าขายอะไร + จุดเด่น/ประโยชน์ที่ลูกค้าจะได้ โทนขายของเป็นกันเอง ชวนซื้อ
+- สั้น กระชับ 1-2 ประโยค (ประมาณ 15-35 คำ) อ่านจบไว
+- ใส่อีโมจิได้เล็กน้อย (0-2 ตัว) ปิดท้ายด้วยประโยคชวนกด/ทักสั่งซื้อ
+- อิงจากข้อมูลจริงเท่านั้น ห้ามแต่งสรรพคุณเกินจริง ห้ามใส่ราคา
+- แต่ละแบบต้องต่างมุมกัน (เช่น เน้นปัญหาที่แก้ / เน้นจุดเด่น / เน้นความคุ้ม)
+
+ชื่อสินค้า (อ้างอิงภายใน): ${productName || '-'}
+ข้อมูลสินค้าจริง:
+"""${detail.slice(0, 1500)}"""
+
+ตอบกลับเป็น JSON Array ของสตริง ${n} ตัวเท่านั้น เช่น ["...","..."] ห้ามมีข้อความอื่น`;
+
+  try {
+    const data = await callOpenRouterJson(apiKey, 'google/gemini-2.5-flash', prompt);
+    const arr = Array.isArray(data) ? data : (Array.isArray(data?.captions) ? data.captions : (Array.isArray(data?.headlines) ? data.headlines : []));
+    return arr.map((t: any) => String(t || '').trim()).filter(Boolean).slice(0, n);
+  } catch (e) {
+    console.error('[DB Caption] Failed:', e);
+    return [];
+  }
+};
+
+// parse CSV รองรับ field ที่มี comma/newline ในเครื่องหมายคำพูด (RFC4180 อย่างง่าย)
+const parseCsvRows = (text: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  const s = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (s[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+};
+
+// แปลงข้อความ CSV → รายการสินค้า (คอลัมน์: ชื่อในโฟลเดอร์, Link, รายละเอียดสินค้า)
+const parseProductCsvText = (text: string) => {
+  const rows = parseCsvRows(text).filter(r => r.some(c => c.trim() !== ''));
+  if (rows.length === 0) return [];
+  const header = rows[0].map(h => h.trim());
+  const idxName = header.findIndex(h => h.includes('โฟลเดอร์') || h.toLowerCase().includes('name'));
+  const idxLink = header.findIndex(h => h.toLowerCase().includes('link'));
+  const idxDetail = header.findIndex(h => h.includes('รายละเอียด') || h.toLowerCase().includes('detail'));
+  return rows.slice(1).map(r => ({
+    name: (idxName >= 0 ? r[idxName] : r[0] || '').trim(),
+    link: (idxLink >= 0 ? r[idxLink] : '').trim(),
+    detail: (idxDetail >= 0 ? r[idxDetail] : r[r.length - 1] || '').trim(),
+  })).filter(p => p.name);
+};
+const readProductCsv = (csvPath: string) => parseProductCsvText(fs.readFileSync(csvPath, 'utf-8'));
+
 const polishSubtitleSegments = async (
   segments: Array<{ start: number; end: number; text: string }>,
   apiKey: string,
@@ -2322,11 +2431,27 @@ app.post('/api/shopee-pair-folders', (req, res) => {
     });
     const productFolders = productSubs.map(p => ({ name: p.name, path: p.path, clipCount: p.clipCount }));
 
-    const avatarSubs = listSubDirs(avatarFolder);
-    const pairs = avatarSubs.map(name => {
-      const avatarSubPath = path.join(avatarFolder, name);
-      const videos = collectVideos(avatarSubPath);
-      const avatarVideoPath = videos[0] || '';
+    // รวบรวม "ชุด Avatar" — รองรับ 2 แบบ:
+    //   (ก) โฟลเดอร์ย่อย 1 โฟลเดอร์ = 1 ชุด (ใช้วิดีโอตัวแรกในโฟลเดอร์)
+    //   (ข) ไฟล์วิดีโอวางตรงๆ (flat) 1 ไฟล์ = 1 ชุด  ← เช่น 001_RiceWarmerGlove_script1.mp4
+    const VIDEO_EXTS = ['.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm'];
+    const avatarUnits: { name: string; videoPath: string; videoDir: string; cacheKey: string }[] = [];
+    for (const name of listSubDirs(avatarFolder)) {
+      const subPath = path.join(avatarFolder, name);
+      const v = collectVideos(subPath)[0] || '';
+      avatarUnits.push({ name, videoPath: v, videoDir: v ? path.dirname(v) : subPath, cacheKey: subPath });
+    }
+    for (const entry of fs.readdirSync(avatarFolder)) {
+      if (entry.startsWith('.')) continue;
+      const full = path.join(avatarFolder, entry);
+      if (!fs.statSync(full).isFile() || !VIDEO_EXTS.includes(path.extname(entry).toLowerCase())) continue;
+      avatarUnits.push({ name: path.parse(entry).name, videoPath: full, videoDir: avatarFolder, cacheKey: full });
+    }
+    avatarUnits.sort((a, b) => a.name.localeCompare(b.name));
+
+    const pairs = avatarUnits.map(unit => {
+      const name = unit.name;
+      const avatarVideoPath = unit.videoPath;
       const key = normalizeKey(name);
       const id = numericPrefix(name);
 
@@ -2337,9 +2462,9 @@ app.post('/api/shopee-pair-folders', (req, res) => {
 
       return {
         avatarSubfolder: name,
-        avatarSubfolderPath: avatarSubPath,
+        avatarSubfolderPath: unit.cacheKey,
         avatarVideoFile: avatarVideoPath ? path.basename(avatarVideoPath) : '',
-        avatarVideoDir: avatarVideoPath ? path.dirname(avatarVideoPath) : avatarSubPath,
+        avatarVideoDir: avatarVideoPath ? path.dirname(avatarVideoPath) : unit.videoDir,
         productSubfolder: match ? match.name : '',
         productSubfolderPath: match ? match.path : '',
         productClipCount: match ? match.clipCount : 0,
@@ -2350,6 +2475,78 @@ app.post('/api/shopee-pair-folders', (req, res) => {
     res.json({ success: true, pairs, productFolders });
   } catch (e: any) {
     res.status(500).json({ success: false, error: e.message, pairs: [], productFolders: [] });
+  }
+});
+
+// ── โหลดฐานข้อมูลสินค้าเริ่มต้นจาก CSV (สินค้า Shopee.csv ที่รากโปรเจกต์) ──
+app.get('/api/shopee-product-db', (req, res) => {
+  try {
+    const custom = String((req.query || {}).path || '').trim();
+    // ลำดับความสำคัญ: อันนี้แหละ.csv (ครบ 32 สินค้า) ก่อน แล้วค่อย สินค้า Shopee.csv
+    const DEFAULT_CSV_NAMES = ['อันนี้แหละ.csv', 'สินค้า Shopee.csv'];
+    const roots = [path.resolve(process.cwd(), '..'), path.resolve(__dirname, '..', '..'), process.cwd()];
+    const candidates = custom ? [custom] : DEFAULT_CSV_NAMES.flatMap(n => roots.map(r => path.join(r, n)));
+    const found = candidates.find(p => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch { return false; } });
+    if (!found) return res.json({ success: false, error: 'ไม่พบไฟล์ CSV เริ่มต้น (สินค้า Shopee.csv)', products: [], source: '' });
+    const products = readProductCsv(found);
+    res.json({ success: true, products, source: found });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message, products: [], source: '' });
+  }
+});
+
+// ── เขียนพาดหัวจากฐานข้อมูลสินค้าจริง (ไม่อิงสคริปต์) ──
+app.post('/api/shopee-db-headline', async (req, res) => {
+  try {
+    const { productName, productDetail, openRouterKey, count } = req.body || {};
+    if (!openRouterKey) return res.json({ success: false, error: 'ไม่พบ OpenRouter Key (ตั้งค่าในหน้า Settings ก่อน)', headlines: [] });
+    if (!String(productDetail || '').trim()) return res.json({ success: false, error: 'ไม่มีข้อมูลสินค้าสำหรับคลิปนี้ในฐานข้อมูล', headlines: [] });
+    const headlines = await generateDbHeadline(String(productName || ''), String(productDetail || ''), String(openRouterKey), Number(count) || 3);
+    if (headlines.length === 0) return res.json({ success: false, error: 'AI ไม่ได้ส่งพาดหัวกลับมา ลองใหม่อีกครั้ง', headlines: [] });
+    res.json({ success: true, headlines });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message, headlines: [] });
+  }
+});
+
+// ── ดึงฐานข้อมูลสินค้าจาก Google Sheet (ต้องตั้งแชร์ "ทุกคนที่มีลิงก์ดูได้") ──
+app.get('/api/gsheet-products', async (req, res) => {
+  try {
+    const q: any = req.query || {};
+    let id = String(q.id || '').trim();
+    let gid = String(q.gid || '').trim();
+    const url = String(q.url || '').trim();
+    if (url) {
+      const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9\-_]+)/);
+      const gm = url.match(/[?&#]gid=(\d+)/);
+      if (m) id = m[1];
+      if (gm) gid = gm[1];
+    }
+    if (!id) { id = '18sppbH-mkojCxcMhOMz726a8UVwx6jUl-UaXoSHIxi0'; if (!gid) gid = '337821009'; }
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv${gid ? `&gid=${gid}` : ''}`;
+    const resp = await fetch(csvUrl);
+    if (!resp.ok) return res.json({ success: false, error: `ดึง Google Sheet ไม่สำเร็จ (HTTP ${resp.status}) — ตรวจว่าตั้งค่าแชร์เป็น "ทุกคนที่มีลิงก์ดูได้"`, products: [] });
+    const text = await resp.text();
+    if (/^\s*<(!doctype|html)/i.test(text)) return res.json({ success: false, error: 'Sheet ไม่ได้เปิดสาธารณะ (ได้หน้า HTML แทน CSV) — ตั้งค่าแชร์เป็นดูได้ทุกคนที่มีลิงก์', products: [] });
+    const products = parseProductCsvText(text);
+    if (products.length === 0) return res.json({ success: false, error: 'ไม่พบข้อมูลสินค้าใน Sheet (ต้องมีหัวคอลัมน์ ชื่อในโฟลเดอร์/รายละเอียดสินค้า)', products: [] });
+    res.json({ success: true, products, source: csvUrl });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message, products: [] });
+  }
+});
+
+// ── เขียนแคปชั่นโพสต์ขายสั้นๆ จากข้อมูลสินค้าจริง (ใช้ในโหมด Shopee ของ Workflow Automator) ──
+app.post('/api/shopee-caption', async (req, res) => {
+  try {
+    const { productName, productDetail, openRouterKey, count } = req.body || {};
+    if (!openRouterKey) return res.json({ success: false, error: 'ไม่พบ OpenRouter Key (ตั้งค่าก่อน)', captions: [] });
+    if (!String(productDetail || '').trim()) return res.json({ success: false, error: 'ไม่มีข้อมูลสินค้าสำหรับไฟล์นี้', captions: [] });
+    const captions = await generateDbCaption(String(productName || ''), String(productDetail || ''), String(openRouterKey), Number(count) || 2);
+    if (captions.length === 0) return res.json({ success: false, error: 'AI ไม่ได้ส่งแคปชั่นกลับมา ลองใหม่อีกครั้ง', captions: [] });
+    res.json({ success: true, captions });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message, captions: [] });
   }
 });
 

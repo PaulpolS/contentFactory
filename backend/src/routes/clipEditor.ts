@@ -29,10 +29,17 @@ function getFFprobePath(): string {
   return 'ffprobe';
 }
 
-// python ที่มี whisper ติดตั้งอยู่ (CLI whisper อยู่บน framework python 3.11)
+// python ที่มี whisper ติดตั้งอยู่
+// ลำดับแรกใช้ venv เฉพาะของโปรเจกต์ (.venv-whisper) ที่ติดตั้ง openai-whisper ไว้
+// (สร้างด้วย: python3.11 -m venv .venv-whisper && .venv-whisper/bin/pip install openai-whisper)
 function getPythonPath(): string {
+  const repoRoot = path.join(__dirname, '..', '..', '..');
   const candidates = [
+    path.join(process.cwd(), '..', '.venv-whisper', 'bin', 'python'),
+    path.join(process.cwd(), '.venv-whisper', 'bin', 'python'),
+    path.join(repoRoot, '.venv-whisper', 'bin', 'python'),
     '/Library/Frameworks/Python.framework/Versions/3.11/bin/python3',
+    '/opt/homebrew/bin/python3.11',
     '/opt/homebrew/bin/python3',
     '/usr/local/bin/python3',
   ];
