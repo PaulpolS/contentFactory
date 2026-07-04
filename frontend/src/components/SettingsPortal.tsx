@@ -34,6 +34,7 @@ interface CreditDetails {
 interface SettingsPortalProps {
   appScale: number;
   setAppScale: (scale: number) => void;
+  onGoToInsights?: () => void;
 }
 
 const API_BASE = 'http://localhost:5005/api';
@@ -97,7 +98,7 @@ const KEY_REGISTRY = [
   }
 ];
 
-export default function SettingsPortal({ appScale, setAppScale }: SettingsPortalProps) {
+export default function SettingsPortal({ appScale, setAppScale, onGoToInsights }: SettingsPortalProps) {
   // Navigation tabs
   const [activeSubTab, setActiveSubTab] = useState<'api_keys' | 'facebook' | 'display'>('api_keys');
 
@@ -1851,6 +1852,24 @@ export default function SettingsPortal({ appScale, setAppScale }: SettingsPortal
                   >
                     <span>💾 บันทึกเพจทั้งหมด ({fbPages.length})</span>
                   </button>
+
+                  {onGoToInsights && (
+                    <button
+                      onClick={() => {
+                        saveAllPageTokens();
+                        onGoToInsights();
+                      }}
+                      className="px-4 py-2 font-bold text-xs font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 border cursor-pointer"
+                      style={{
+                        backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                        borderColor: 'rgba(99, 102, 241, 0.25)',
+                        color: '#818cf8',
+                        borderRadius: '8px',
+                      }}
+                    >
+                      <span>📊 บันทึก + ดูสถิติเพจ</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>

@@ -1028,6 +1028,11 @@ ${row.article.slice(0, 5000)}
 
   const toggleStyle = (id: string) => saveSel(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]);
   const deleteStyle = (id: string) => { saveStyleGroups(styleGroups.filter(g => g.id !== id)); saveSel(selectedIds.filter(x => x !== id)); };
+  const deleteAllStyles = () => {
+    if (!styleGroups.length) return;
+    if (!window.confirm(`ลบสไตล์ทั้งหมด ${styleGroups.length} อันออกจาก Pool?`)) return;
+    saveStyleGroups([]); saveSel([]);
+  };
 
   const suggestStyles = async () => {
     if (!pageDesc.trim()) { setError('กรุณาใส่รายละเอียดเพจก่อน'); return; }
@@ -1039,13 +1044,15 @@ ${row.article.slice(0, 5000)}
           role: 'user',
           content: `เพจของฉัน: "${pageDesc}"
 
-สร้างกลุ่มสไตล์ภาพ 7 กลุ่มที่หลากหลายมาก เหมาะกับเพจนี้ เพื่อสลับใช้ให้ฟีดไม่น่าเบื่อ
-แต่ละกลุ่มต้องบรรยากาศต่างกันชัดเจน (เช่น สมจริง, พาสเทล, ดาร์ก, การ์ตูน, มินิมอล, แฟนตาซี, สายมู ฯลฯ)
+ขั้นแรก วิเคราะห์ "ธีม / อารมณ์ / กลุ่มเป้าหมาย" ของเพจนี้ก่อน แล้วค่อยออกแบบสไตล์ภาพ
+สร้างกลุ่มสไตล์ภาพ 7 กลุ่ม โดยทุกกลุ่ม "ต้องเข้ากับธีมและอารมณ์ของเพจนี้จริง ๆ" (เช่น เพจธรรมะ/สายมู ต้องสงบ ขลัง อบอุ่น มีมิติทางจิตวิญญาณ)
+ภายใต้ธีมเดียวกันนี้ ค่อยทำให้ "หลากหลายแบบกลมกลืน" — ต่างกันที่โทนสี เทคนิค มุมมอง องค์ประกอบ เพื่อสลับใช้ให้ฟีดไม่น่าเบื่อ
+ห้ามใส่สไตล์ที่ขัดกับธีมเพจเด็ดขาด (เช่น เพจธรรมะ ห้ามมี cyberpunk, sci-fi, แนวล้ำอนาคต หรือแนวที่ดูไม่เข้ากับเนื้อหา)
 
 ตอบกลับ JSON array เท่านั้น:
 [{"id":"style_1","name":"ชื่อสไตล์ไทย","emoji":"🎨","description":"อธิบาย 1-2 ประโยค","keywords":["en","keywords"],"negativeKeywords":["avoid"],"exampleTopic":"ตัวอย่างหัวข้อ"}]
 
-ให้ครบ 7 กลุ่ม หลากหลายมากที่สุด`,
+ให้ครบ 7 กลุ่ม ทุกกลุ่มต้องเข้ากับธีมเพจ และหลากหลายกันภายใต้ธีมนั้น`,
         },
       ], model);
 
@@ -2227,9 +2234,12 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                 {hasStyles && (
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-slate-400">🎲 Pool สุ่ม ({selCount} สไตล์)</span>
-                    <div className="flex gap-2">
-                      <button className="text-[10px] text-cyan-400 font-bold" onClick={() => saveSel(styleGroups.map(g => g.id))}>ทั้งหมด</button>
-                      <button className="text-[10px] text-slate-500 font-bold" onClick={() => saveSel([])}>ล้าง</button>
+                    <div className="flex gap-2 items-center">
+                      <button className="text-[10px] text-cyan-400 font-bold" onClick={() => saveSel(styleGroups.map(g => g.id))}>เลือกหมด</button>
+                      <button className="text-[10px] text-slate-500 font-bold" onClick={() => saveSel([])}>ไม่เลือก</button>
+                      <button className="text-[10px] text-red-400/90 hover:text-red-400 font-bold flex items-center gap-0.5" onClick={deleteAllStyles}>
+                        <Trash2 className="w-3 h-3" /> ลบ Pool
+                      </button>
                     </div>
                   </div>
                 )}
@@ -2244,11 +2254,12 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                         className={`relative rounded-xl border p-3 cursor-pointer transition-all select-none ${selected ? 'border-violet-500 bg-violet-950/15 shadow-lg shadow-violet-500/5' : 'border-slate-800 bg-slate-950/30 hover:border-slate-700'}`}
                         onClick={() => toggleStyle(group.id)}
                       >
-                        <button 
-                          className="absolute top-2.5 right-2.5 text-slate-500 hover:text-red-400 text-[10px] transition-all"
+                        <button
+                          title="ลบสไตล์นี้"
+                          className="absolute top-2 right-2 w-5 h-5 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 hover:bg-red-500 hover:border-red-400 hover:text-white flex items-center justify-center transition-all z-10"
                           onClick={e => { e.stopPropagation(); deleteStyle(group.id); }}
                         >
-                          ✕
+                          <X className="w-3 h-3" strokeWidth={3} />
                         </button>
                         <div className="flex items-center gap-2.5 pr-6">
                           <span className="text-xl">{group.emoji}</span>
