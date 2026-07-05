@@ -79,6 +79,7 @@ ${STRICT_COPYWRITING_RULES}`);
   const [shopeeDbSheetUrl, setShopeeDbSheetUrl] = useState(() => localStorage.getItem('flow_shopee_db_sheet_url') || 'https://docs.google.com/spreadsheets/d/18sppbH-mkojCxcMhOMz726a8UVwx6jUl-UaXoSHIxi0/edit?gid=337821009');
   const [shopeeDbLoading, setShopeeDbLoading] = useState(false);
   const shopeeCsvRef = useRef<HTMLInputElement>(null);
+  const [shopeeRows, setShopeeRows] = useState<string[][]>([]);
 
   useEffect(() => {
     localStorage.setItem('automator_mode', automatorMode);
@@ -784,6 +785,22 @@ ${STRICT_COPYWRITING_RULES}
     return products.find(p => p.name && key.startsWith(p.name.trim().toLowerCase())) || null;
   };
 
+  const downloadShopeeCsv = (rowsArg?: string[][]) => {
+    const rows = rowsArg && rowsArg.length ? rowsArg : shopeeRows;
+    if (!rows || rows.length <= 1) { alert('ยังไม่มีข้อมูลให้ดาวน์โหลด — กด Run โหมด Shopee ให้เสร็จก่อนครับ'); return; }
+    const esc = (s: string) => `"${String(s ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`;
+    const csv = rows.map(r => r.map(esc).join(',')).join('\r\n');
+    const blob = new Blob(["﻿" + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `shopee_captions_${Date.now()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const runShopeeCaptionWorkflow = async () => {
     setIsRunning(true);
     setLogs([]);
@@ -879,16 +896,12 @@ ${STRICT_COPYWRITING_RULES}
         await new Promise(r => setTimeout(r, 2500));
       }
 
+      setShopeeRows(rows);
       if (outputMode === 'csv' && rows.length > 1) {
-        const esc = (s: string) => `"${String(s ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`;
-        const csv = rows.map(r => r.map(esc).join(',')).join('\r\n');
-        const blob = new Blob(["﻿" + csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = `shopee_captions_${Date.now()}.csv`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        downloadShopeeCsv(rows);
         addLog(`📥 ดาวน์โหลด CSV สำเร็จ (${rows.length - 1} แถว)`);
       }
-      addLog('🎉 จบการทำงานโหมด Shopee!');
+      addLog('🎉 จบการทำงานโหมด Shopee! (กดปุ่ม 📥 ดาวน์โหลด .csv ซ้ำได้ตลอด)');
     } catch (err: any) {
       addLog(`🆘 ข้อผิดพลาด: ${err.message || err}`);
     } finally {
@@ -1584,6 +1597,15 @@ ${STRICT_COPYWRITING_RULES}
                       ⬆️ CSV
                     </button>
                   </div>
+                  {shopeeRows.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => downloadShopeeCsv()}
+                      className="w-full py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold transition-all"
+                    >
+                      📥 ดาวน์โหลด .csv ({shopeeRows.length - 1} แถว)
+                    </button>
+                  )}
                   <div className="text-[9px] text-slate-500 leading-normal">จับคู่ด้วยเลขหน้าไฟล์: <span className="text-amber-400">001_RiceWarmerGlove_script1_..._output.mp4</span> → <span className="text-amber-400">001_RiceWarmerGlove</span> · ผลลัพธ์: ชื่อสินค้า | Link shopee | Link dropbox | แคปชั่น1 | แคปชั่น2</div>
                 </div>
               )}
