@@ -25,7 +25,8 @@ import {
   Quote,
   Mic,
   Scissors,
-  Activity
+  Activity,
+  TrendingUp
 } from 'lucide-react';
 import DiscoveryPortal from './components/DiscoveryPortal';
 import SettingsPortal from './components/SettingsPortal';
@@ -36,6 +37,7 @@ import { AvatarVerticalClipPortal } from './components/AvatarVerticalClipPortal'
 import FlowAutomatorPortal from './components/FlowAutomatorPortal';
 import PodcastVideoPortal from './components/PodcastVideoPortal';
 import SingleClipEditorPortal from './components/SingleClipEditorPortal';
+import EngagementDashboardPortal from './components/EngagementDashboardPortal';
 
 
 const API_BASE = 'http://localhost:5005/api';
@@ -349,7 +351,7 @@ export const PALETTE_IMAGE_PROMPT_STYLES: ImagePromptStyle[] = [
 ];
 
 export default function App() {
-  type TabType = 'discovery' | 'vault' | 'canvas' | 'settings' | 'prompt-generator' | 'vertical-video' | 'quote-video' | 'avatar-video' | 'dropbox-csv' | 'podcast-clip' | 'clip-editor' | 'tracking';
+  type TabType = 'discovery' | 'vault' | 'canvas' | 'settings' | 'prompt-generator' | 'vertical-video' | 'quote-video' | 'avatar-video' | 'dropbox-csv' | 'podcast-clip' | 'clip-editor' | 'tracking' | 'fb-insights';
   const validTabs: TabType[] = ['discovery', 'vault', 'canvas', 'settings', 'prompt-generator', 'vertical-video', 'quote-video', 'avatar-video', 'dropbox-csv', 'podcast-clip', 'tracking'];
   const [activeTab, _setActiveTab] = useState<TabType>(() => {
     const saved = localStorage.getItem('active_tab') as TabType | null;
@@ -2416,7 +2418,15 @@ Please rewrite this following the copywriting style tone and output rules above.
             <span>📊 ติดตามงาน (Work Tracking)</span>
           </button>
 
-          <button 
+          <button
+            className={`sidebar-btn ${activeTab === 'fb-insights' ? 'active' : ''}`}
+            onClick={() => setActiveTab('fb-insights')}
+          >
+            <TrendingUp className="w-5 h-5" />
+            <span>📈 สถิติเพจ (FB Insights)</span>
+          </button>
+
+          <button
             className={`sidebar-btn ${activeTab === 'settings' ? 'active' : ''}`}
             onClick={() => setActiveTab('settings')}
           >
@@ -2450,6 +2460,7 @@ Please rewrite this following the copywriting style tone and output rules above.
               {activeTab === 'dropbox-csv' && '☁️ Dropbox/CSV | Workflow Automator (บอท Flow)'}
               {activeTab === 'tracking' && '📊 Work Tracking System | ระบบติดตามงานและจัดการ Stock จาก Google Sheets'}
               {activeTab === 'clip-editor' && '✂️ ตัด/สุ่มต่อคลิป | Single Clip Editor — Jump Cut + สุ่มต่อคลิปด้วย FFmpeg'}
+              {activeTab === 'fb-insights' && '📈 สถิติเพจเฟซบุ๊ก | Dashboard สรุป Reach, Views, Engagement Rate'}
               {activeTab === 'settings' && '⚙️ ตั้งค่าระบบ | แผงควบคุมกุญแจและขนาดการแสดงผล'}
             </h1>
             <p className="text-xs text-slate-400 mt-1">
@@ -2464,6 +2475,7 @@ Please rewrite this following the copywriting style tone and output rules above.
               {activeTab === 'dropbox-csv' && 'เชื่อมต่อ Dropbox → AI Prompt → Google Sheets / CSV อัตโนมัติ ปรับระดับการประมวลผลวิดีโอและรูปภาพ'}
               {activeTab === 'tracking' && 'เชื่อมต่อ Google Sheets ดึงข้อมูล Stock ของนักตัดต่อและคลังบทความโดยตรง สรุปเปรียบเทียบในรูปแบบแผนภูมิกราฟิก'}
               {activeTab === 'clip-editor' && 'ตัดทุกคลิปในโฟลเดอร์ด้วยสูตร Scene 1 + Jump Cuts + เอฟเฟกต์ + Transition + BGM หรือสุ่มหยิบคลิปไม่ซ้ำมาต่อกันให้ได้ความยาวที่กำหนด สั่ง FFmpeg เรนเดอร์พร้อมสตรีม Log สด'}
+              {activeTab === 'fb-insights' && 'ดึงสถิติ Engagement ของเพจจาก Facebook Graph API โดยตรง สรุป Reach, Page Views, Engagement และ Engagement Rate พร้อมกราฟแนวโน้มรายวัน เลือกเพจจาก Token ที่บันทึกไว้ในตั้งค่าระบบ'}
               {activeTab === 'settings' && 'ปรับแต่งระดับการสเกลโปรแกรม ขนาดตัวอักษรและปุ่ม จัดการคีย์ API สำหรับ Scrapers / AI และบันทึกโทเคนเพจเฟซบุ๊กออฟไลน์'}
 
             </p>
@@ -4839,7 +4851,7 @@ Please rewrite this following the copywriting style tone and output rules above.
           {/* TAB 4: SYSTEM SETTINGS PORTAL */}
           {activeTab === 'settings' && (
             <div className="glass-panel p-6">
-              <SettingsPortal appScale={appScale} setAppScale={setAppScale} />
+              <SettingsPortal appScale={appScale} setAppScale={setAppScale} onGoToInsights={() => setActiveTab('fb-insights')} />
             </div>
           )}
 
@@ -4892,6 +4904,11 @@ Please rewrite this following the copywriting style tone and output rules above.
           {/* TAB 11: SINGLE CLIP EDITOR (ตัด/สุ่มต่อคลิป) */}
           {activeTab === 'clip-editor' && (
             <SingleClipEditorPortal />
+          )}
+
+          {/* TAB 12: FACEBOOK ENGAGEMENT DASHBOARD */}
+          {activeTab === 'fb-insights' && (
+            <EngagementDashboardPortal />
           )}
 
         </div>
