@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment, type ReactNode } from 'react';
+import { chatCompletions, getLlmKey, getLlmProvider, getLlmProviderLabel } from './lib/llm';
 import {
   Compass,
   Database,
@@ -362,6 +363,18 @@ export default function App() {
     _setActiveTab(tab);
   };
 
+  // Keep-alive: จำแท็บที่เคยเปิด — Portal จะถูก mount ค้างไว้แล้วซ่อนด้วย CSS แทนการถอดทิ้ง
+  // เพื่อให้งานที่กำลังรันอยู่ (บอท/เรนเดอร์/สตรีม log) ไม่ถูกยกเลิกเวลาสลับแท็บไปมา
+  const [visitedTabs, setVisitedTabs] = useState<TabType[]>([]);
+  useEffect(() => {
+    setVisitedTabs(prev => prev.includes(activeTab) ? prev : [...prev, activeTab]);
+  }, [activeTab]);
+  const keepAlive = (tab: TabType, node: ReactNode) => (
+    visitedTabs.includes(tab) ? (
+      <div style={{ display: activeTab === tab ? undefined : 'none' }}>{node}</div>
+    ) : null
+  );
+
   // Global scale state for accessibility
   const [appScale, setAppScale] = useState<number>(() => {
     const saved = localStorage.getItem('app_scale');
@@ -629,9 +642,9 @@ export default function App() {
       return;
     }
 
-    const openRouterKey = localStorage.getItem('openrouter_key')?.trim();
+    const openRouterKey = getLlmKey();
     if (!openRouterKey) {
-      alert("❌ ไม่พบคีย์ระบบหลังบ้าน OpenRouter API Key!\nกรุณาไปที่แท็บ '⚙️ ตั้งค่าระบบ' (Settings Tab) และกรอกกุญแจในส่วน 'OpenRouter API Key' ก่อนครับ");
+      alert(`❌ ไม่พบคีย์ ${getLlmProviderLabel()} API Key!\nกรุณาไปที่แท็บ '⚙️ ตั้งค่าระบบ' (Settings Tab) และกรอกกุญแจของผู้ให้บริการ AI ที่เลือกไว้ก่อนครับ`);
       return;
     }
 
@@ -667,27 +680,18 @@ ${canvasSelectedItem.raw_content || canvasSelectedItem.title}
 
 Please rewrite this following the copywriting style tone and output rules above.`;
 
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${openRouterKey}`,
-          "HTTP-Referer": "https://contentfactory.antigravity.ai", // Required by OpenRouter
-          "X-Title": "Antigravity ContentFactory"
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userContent }
-          ],
-          temperature: 0.7,
-          response_format: { type: "json_object" }
-        })
+      const response = await chatCompletions({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userContent }
+        ],
+        temperature: 0.7,
+        response_format: { type: "json_object" }
       });
 
       if (!response.ok) {
-        throw new Error(`OpenRouter returned status ${response.status}`);
+        throw new Error(`${getLlmProviderLabel()} returned status ${response.status}`);
       }
 
       const data = await response.json();
@@ -727,7 +731,7 @@ Please rewrite this following the copywriting style tone and output rules above.
     setGeneratingCopywriting(true);
     const activeStyle = allWritingStyles.find(s => s.id === canvasWritingStyle);
     const activeHeadlinePack = PALETTE_HEADLINE_STYLES.find(h => h.id === canvasHeadlineStyle);
-    const openRouterKey = localStorage.getItem('openrouter_key')?.trim() || '';
+    const openRouterKey = getLlmKey();
 
     // Initialize and show logs console
     setShowCanvasLogs(true);
@@ -765,7 +769,8 @@ Please rewrite this following the copywriting style tone and output rules above.
           writing_style_prompt: activeStyle?.content || '',
           writing_style_examples: activeStyle?.examples || [],
           headline_style_examples: activeHeadlinePack?.headlines || [],
-          openrouter_key: openRouterKey
+          openrouter_key: openRouterKey,
+          llm_provider: getLlmProvider()
         })
       });
       const resData = await response.json();
@@ -867,7 +872,7 @@ Please rewrite this following the copywriting style tone and output rules above.
     setGeneratingCopywriting(true);
     const activeStyle = allWritingStyles.find(s => s.id === canvasWritingStyle);
     const activeHeadlinePack = PALETTE_HEADLINE_STYLES.find(h => h.id === canvasHeadlineStyle);
-    const openRouterKey = localStorage.getItem('openrouter_key')?.trim() || '';
+    const openRouterKey = getLlmKey();
 
     // Initialize and show logs console
     setShowCanvasLogs(true);
@@ -909,7 +914,8 @@ Please rewrite this following the copywriting style tone and output rules above.
             writing_style_prompt: activeStyle?.content || '',
             writing_style_examples: activeStyle?.examples || [],
             headline_style_examples: activeHeadlinePack?.headlines || [],
-            openrouter_key: openRouterKey
+            openrouter_key: openRouterKey,
+            llm_provider: getLlmProvider()
           })
         });
         const resData = await response.json();
@@ -1083,7 +1089,7 @@ Please rewrite this following the copywriting style tone and output rules above.
     try {
       const activeStyle = allWritingStyles.find(s => s.id === canvasWritingStyle);
       const activeHeadlinePack = PALETTE_HEADLINE_STYLES.find(h => h.id === canvasHeadlineStyle);
-      const openRouterKey = localStorage.getItem('openrouter_key')?.trim() || '';
+      const openRouterKey = getLlmKey();
       const response = await fetch(`${API_BASE}/vault/contents/${canvasSelectedItem.id}/generate-copywriting`, {
         method: 'POST',
         headers: {
@@ -1096,7 +1102,8 @@ Please rewrite this following the copywriting style tone and output rules above.
           writing_style_prompt: activeStyle?.content || '',
           writing_style_examples: activeStyle?.examples || [],
           headline_style_examples: activeHeadlinePack?.headlines || [],
-          openrouter_key: openRouterKey
+          openrouter_key: openRouterKey,
+          llm_provider: getLlmProvider()
         })
       });
       const resData = await response.json();
@@ -2488,8 +2495,8 @@ Please rewrite this following the copywriting style tone and output rules above.
         <div className="view-container">
           
           {/* TAB 1: DISCOVERY PORTAL */}
-          {activeTab === 'discovery' && (
-            <DiscoveryPortal 
+          {keepAlive('discovery',
+            <DiscoveryPortal
               onApprove={() => {
                 fetchVaultData();
                 fetchApprovedItems();
@@ -2971,31 +2978,23 @@ Please rewrite this following the copywriting style tone and output rules above.
                     <button
                       onClick={async () => {
                         try {
-                          const openRouterKey = localStorage.getItem('openrouter_key')?.trim();
+                          const openRouterKey = getLlmKey();
                           if (!openRouterKey) {
-                            setCreditCheckResults([{ label: 'ไม่พบ API Key', keyPreview: '-', valid: false, balance: '-', usage: '-', error: 'ไม่พบ Key' }]);
+                            setCreditCheckResults([{ label: `ไม่พบ ${getLlmProviderLabel()} API Key`, keyPreview: '-', valid: false, balance: '-', usage: '-', error: 'ไม่พบ Key' }]);
                             return;
                           }
                           const testModel = 'google/gemini-2.5-flash';
                           setCreditCheckResults([{
-                            label: `🧪 กำลังทดสอบ ${testModel}...`,
+                            label: `🧪 กำลังทดสอบ ${testModel} ผ่าน ${getLlmProviderLabel()}...`,
                             keyPreview: String(openRouterKey || '').slice(0, 8) + '...' + String(openRouterKey || '').slice(-4),
                             valid: true,
                             balance: 'กำลังทดสอบ...',
                             usage: '-'
                           }]);
-                          const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                              'Authorization': `Bearer ${openRouterKey}`,
-                              'HTTP-Referer': window.location.origin
-                            },
-                            body: JSON.stringify({
-                              model: testModel,
-                              messages: [{ role: 'user', content: 'ตอบแค่คำว่า "OK"' }],
-                              max_tokens: 5
-                            })
+                          const res = await chatCompletions({
+                            model: testModel,
+                            messages: [{ role: 'user', content: 'ตอบแค่คำว่า "OK"' }],
+                            max_tokens: 5
                           });
                           const data = await res.json();
                           if (res.ok && !data.error) {
@@ -4849,16 +4848,16 @@ Please rewrite this following the copywriting style tone and output rules above.
           )}
 
           {/* TAB 4: SYSTEM SETTINGS PORTAL */}
-          {activeTab === 'settings' && (
+          {keepAlive('settings',
             <div className="glass-panel p-6">
               <SettingsPortal appScale={appScale} setAppScale={setAppScale} onGoToInsights={() => setActiveTab('fb-insights')} />
             </div>
           )}
 
           {/* TAB 11: WORK TRACKING SYSTEM */}
-          {activeTab === 'tracking' && (
-            <iframe 
-              src="/tracking-dashboard.html" 
+          {keepAlive('tracking',
+            <iframe
+              src="/tracking-dashboard.html"
               style={{
                 width: '100%',
                 height: 'calc(100vh - 150px)',
@@ -4872,42 +4871,42 @@ Please rewrite this following the copywriting style tone and output rules above.
           )}
 
           {/* TAB 5: PROMPT GENERATION PORTAL */}
-          {activeTab === 'prompt-generator' && (
+          {keepAlive('prompt-generator',
             <PromptGeneratorPortal />
           )}
 
           {/* TAB 6: VERTICAL VIDEO SUITE PORTAL */}
-          {activeTab === 'vertical-video' && (
+          {keepAlive('vertical-video',
             <VerticalVideoSuitePortal />
           )}
 
           {/* TAB 7: QUOTE VIDEO PORTAL */}
-          {activeTab === 'quote-video' && (
+          {keepAlive('quote-video',
             <QuoteVideoPortal />
           )}
 
           {/* TAB 8: AVATAR VERTICAL CLIP PORTAL */}
-          {activeTab === 'avatar-video' && (
+          {keepAlive('avatar-video',
             <AvatarVerticalClipPortal />
           )}
 
           {/* TAB 9: FLOW AUTOMATOR / DROPBOX CSV */}
-          {activeTab === 'dropbox-csv' && (
+          {keepAlive('dropbox-csv',
             <FlowAutomatorPortal />
           )}
 
           {/* TAB 10: PODCAST VIDEO PORTAL */}
-          {activeTab === 'podcast-clip' && (
+          {keepAlive('podcast-clip',
             <PodcastVideoPortal />
           )}
 
           {/* TAB 11: SINGLE CLIP EDITOR (ตัด/สุ่มต่อคลิป) */}
-          {activeTab === 'clip-editor' && (
+          {keepAlive('clip-editor',
             <SingleClipEditorPortal />
           )}
 
           {/* TAB 12: FACEBOOK ENGAGEMENT DASHBOARD */}
-          {activeTab === 'fb-insights' && (
+          {keepAlive('fb-insights',
             <EngagementDashboardPortal />
           )}
 

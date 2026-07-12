@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { getLlmKey, getLlmProvider } from '../lib/llm';
 import {
   RefreshCw,
   CheckCircle,
@@ -23,7 +24,8 @@ interface AvatarRenderItem {
   progressText?: string;
 }
 
-const getActiveOpenRouterKey = () => localStorage.getItem('openrouter_key')?.trim() || '';
+// คีย์ตามผู้ให้บริการ AI หลักที่เลือกในหน้า Settings (OpenRouter หรือ Kie.ai)
+const getActiveOpenRouterKey = () => getLlmKey();
 
 const BACKEND_BASE = window.location.port !== '5005' ? 'http://localhost:5005' : '';
 
@@ -778,6 +780,7 @@ export function AvatarVerticalClipPortal() {
           avatarFolder,
           avatarFile: fileName,
           openRouterKey,
+          llmProvider: getLlmProvider(),
         }),
       });
 
@@ -983,6 +986,7 @@ export function AvatarVerticalClipPortal() {
             model: subtitleModel,
             aiPolish: subtitleAiPolish,
             openRouterKey,
+            llmProvider: getLlmProvider(),
             openRouterModel: 'google/gemini-2.5-flash',
             density: subtitleDensity,
             position: subtitlePosition,
@@ -1427,7 +1431,7 @@ export function AvatarVerticalClipPortal() {
   const fetchDbHeadlines = async (product: { name: string; detail: string }, key: string) => {
     const res = await fetch(`${BACKEND_BASE}/api/shopee-db-headline`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productName: product.name, productDetail: product.detail, openRouterKey: key, count: 3 }),
+      body: JSON.stringify({ productName: product.name, productDetail: product.detail, openRouterKey: key, count: 3, llmProvider: getLlmProvider() }),
     });
     return res.json();
   };
@@ -1499,7 +1503,7 @@ export function AvatarVerticalClipPortal() {
       const res = await fetch(`${BACKEND_BASE}/api/generate-avatar-headline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ avatarFolder: pair.avatarVideoDir, avatarFile: pair.avatarVideoFile, openRouterKey }),
+        body: JSON.stringify({ avatarFolder: pair.avatarVideoDir, avatarFile: pair.avatarVideoFile, openRouterKey, llmProvider: getLlmProvider() }),
       });
       if (!res.ok) throw new Error(`เซิร์ฟเวอร์ตอบกลับผิดปกติ (${res.status})`);
       const reader = res.body?.getReader();
@@ -1597,6 +1601,7 @@ export function AvatarVerticalClipPortal() {
           subtitle: {
             enabled: subtitleEnabled, style: subtitleStyle, language: subtitleLanguage,
             model: subtitleModel, aiPolish: subtitleAiPolish, openRouterKey,
+            llmProvider: getLlmProvider(),
             openRouterModel: 'google/gemini-2.5-flash', density: subtitleDensity,
             position: subtitlePosition, fontSize: subtitleFontSize, yPosition: subtitleYPosition,
             precomputedSubtitles: hasCachedSubs ? cachedSubs : undefined,
@@ -1712,6 +1717,7 @@ export function AvatarVerticalClipPortal() {
           avatarFolder,
           avatarFile: fileName,
           openRouterKey,
+          llmProvider: getLlmProvider(),
         }),
       });
 

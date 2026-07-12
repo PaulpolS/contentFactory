@@ -296,9 +296,14 @@ def generate_mock_evaluation(title, description):
         "tags": tags
     }
 
-def run_openrouter_evaluation(api_key, model, title, description, link):
-    """Hits OpenRouter API to translate and score articles via prompt-driven AI logic."""
-    url = "https://openrouter.ai/api/v1/chat/completions"
+def run_openrouter_evaluation(api_key, model, title, description, link, llm_provider="openrouter"):
+    """Hits OpenRouter or Kie.ai chat completions to translate and score articles."""
+    if llm_provider == "kie":
+        # Kie.ai ใช้ endpoint แยกตามโมเดล และไม่มี vendor prefix
+        model = model.split("/")[-1]
+        url = f"https://api.kie.ai/{model}/v1/chat/completions"
+    else:
+        url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "HTTP-Referer": "https://github.com/ContentFactory",
@@ -420,6 +425,7 @@ def main():
     parser.add_argument("--url", type=str, default=None, help="Alias for feed_url")
     parser.add_argument("--limit", type=int, default=10, help="Number of items to evaluate")
     parser.add_argument("--openrouter_key", "--openrouter-key", dest="openrouter_key", type=str, default=None, help="Directly override OpenRouter API Key")
+    parser.add_argument("--llm_provider", "--llm-provider", dest="llm_provider", type=str, default="openrouter", help="AI text provider: openrouter or kie")
     
     args, unknown = parser.parse_known_args()
     
@@ -493,13 +499,17 @@ def main():
         
     logger.info(f"Total articles gathered for AI evaluation: {len(scraped_articles)}")
     
-    # Define models fallback list
-    models_sequence = [
-        "google/gemini-2.5-flash",
-        "qwen/qwen-2-7b-instruct:free",
-        "google/gemma-2-9b-it:free",
-        "meta-llama/llama-3-8b-instruct:free"
-    ]
+    # Define models fallback list (Kie.ai ไม่มีโมเดลสำรองสาย :free)
+    llm_provider = (getattr(args, "llm_provider", None) or "openrouter").strip().lower()
+    if llm_provider == "kie":
+        models_sequence = ["google/gemini-2.5-flash"]
+    else:
+        models_sequence = [
+            "google/gemini-2.5-flash",
+            "qwen/qwen-2-7b-instruct:free",
+            "google/gemma-2-9b-it:free",
+            "meta-llama/llama-3-8b-instruct:free"
+        ]
     
     saved_count = 0
     
@@ -517,7 +527,8 @@ def main():
                 try:
                     logger.info(f" - Sending to model: {model}")
                     evaluation = run_openrouter_evaluation(
-                        openrouter_key, model, article["title"], article["description"], article["link"]
+                        openrouter_key, model, article["title"], article["description"], article["link"],
+                        llm_provider=llm_provider
                     )
                     break # Success! Break model trial loop
                 except PermissionError as auth_err:

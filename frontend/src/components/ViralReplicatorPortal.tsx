@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getLlmKey, getLlmProvider } from '../lib/llm';
 import {
   Upload,
   Play,
@@ -135,7 +136,8 @@ export default function ViralReplicatorPortal({ API_BASE, openRouterKey, onAppro
         setLogs(prev => [...prev, `[SYSTEM] 🔗 เปิดการเชื่อมต่อ SSE สำหรับบอทค้นหาข้อมูล...`]);
 
         // 3. Trigger Python Script via SSE
-        const keyQuery = openRouterKey ? `&openrouter_key=${encodeURIComponent(openRouterKey)}` : '';
+        const activeLlmKey = getLlmProvider() === 'kie' ? getLlmKey() : openRouterKey;
+        const keyQuery = activeLlmKey ? `&openrouter_key=${encodeURIComponent(activeLlmKey)}&llm_provider=${getLlmProvider()}` : '';
         const eventUrl = `${API_BASE}/orchestrator/run/replicator?csv_path=${encodeURIComponent(uploadData.filePath)}&limit=${limit}${keyQuery}`;
         
         if (sseConnection.current) {

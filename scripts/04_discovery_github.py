@@ -140,9 +140,14 @@ def generate_mock_github_thread(repo_name, owner, description, repo_url):
     
     return clickbaits, [c1, c2, c3]
 
-def run_openrouter_evaluation(api_key, model, repo_name, owner, description, repo_url):
-    """Calls OpenRouter API to generate Thai clickbait titles and thread structure."""
-    url = "https://openrouter.ai/api/v1/chat/completions"
+def run_openrouter_evaluation(api_key, model, repo_name, owner, description, repo_url, llm_provider="openrouter"):
+    """Calls OpenRouter or Kie.ai chat completions to generate Thai clickbait titles and thread structure."""
+    if llm_provider == "kie":
+        # Kie.ai ใช้ endpoint แยกตามโมเดล และไม่มี vendor prefix
+        model = model.split("/")[-1]
+        url = f"https://api.kie.ai/{model}/v1/chat/completions"
+    else:
+        url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "HTTP-Referer": "https://github.com/ContentFactory",
@@ -374,6 +379,7 @@ def main():
                         help="Trends discovery mode: trending, fresh, rising, active, helpWanted (default: trending)")
     parser.add_argument("--github_token", "--github-token", dest="github_token", type=str, default=None, help="Directly override GitHub API Token")
     parser.add_argument("--openrouter_key", "--openrouter-key", dest="openrouter_key", type=str, default=None, help="Directly override OpenRouter API Key")
+    parser.add_argument("--llm_provider", "--llm-provider", dest="llm_provider", type=str, default="openrouter", help="AI text provider: openrouter or kie")
     parser.add_argument("--query", type=str, default=None, help="Crawl query topic")
     parser.add_argument("--trend_mode", "--trend-mode", dest="trend_mode", type=str, default=None, help="Crawl trend mode")
     parser.add_argument("--limit", type=int, default=5, help="Number of repositories to fetch")
@@ -441,12 +447,17 @@ def main():
             
     logger.info(f"Retrieved {len(repos)} repositories to process.")
     
-    models_sequence = [
-        "google/gemini-2.5-flash",
-        "qwen/qwen-2-7b-instruct:free",
-        "google/gemma-2-9b-it:free",
-        "meta-llama/llama-3-8b-instruct:free"
-    ]
+    llm_provider = (getattr(args, "llm_provider", None) or "openrouter").strip().lower()
+    if llm_provider == "kie":
+        # Kie.ai ไม่มีโมเดลสำรองสาย :free
+        models_sequence = ["google/gemini-2.5-flash"]
+    else:
+        models_sequence = [
+            "google/gemini-2.5-flash",
+            "qwen/qwen-2-7b-instruct:free",
+            "google/gemma-2-9b-it:free",
+            "meta-llama/llama-3-8b-instruct:free"
+        ]
     
     # 4. Process each repository
     for repo in repos:
@@ -472,7 +483,8 @@ def main():
                 try:
                     logger.info(f" - Asking OpenRouter model '{model}' to write Clickbait Threads...")
                     clickbaits, comments = run_openrouter_evaluation(
-                        openrouter_key, model, repo["name"], repo["owner"], repo["description"], repo_url
+                        openrouter_key, model, repo["name"], repo["owner"], repo["description"], repo_url,
+                        llm_provider=llm_provider
                     )
                     break # Success! Break out of model loop
                 except PermissionError as auth_err:

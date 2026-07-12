@@ -1009,13 +1009,14 @@ router.post('/contents/:id/generate-copywriting', async (req: Request, res: Resp
 
     // 2. Query active API key (prefer client-supplied openrouter_key if provided)
     let apiKey = '';
+    const llmProvider = req.body?.llm_provider === 'kie' ? 'kie' : 'openrouter';
     const clientKey = req.body?.openrouter_key;
     if (clientKey && typeof clientKey === 'string' && clientKey.trim() !== '') {
       apiKey = clientKey.trim();
     } else {
       try {
         const activeKeyRow = await dbQueryGet(
-          "SELECT credential_key FROM api_credentials WHERE service_name = 'openrouter' AND is_active = 1 ORDER BY is_primary DESC, updated_at DESC LIMIT 1"
+          `SELECT credential_key FROM api_credentials WHERE service_name = '${llmProvider === 'kie' ? 'kie' : 'openrouter'}' AND is_active = 1 ORDER BY is_primary DESC, updated_at DESC LIMIT 1`
         );
         if (activeKeyRow && activeKeyRow.credential_key && !activeKeyRow.credential_key.startsWith('MOCK_')) {
           apiKey = activeKeyRow.credential_key;
@@ -1176,8 +1177,12 @@ Return ONLY the JSON string. Do not wrap in markdown or any other text.
             choices: [{ message: { content: txt } }]
           };
         } else {
-          // Normal OpenRouter call
-          const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          // OpenRouter หรือ Kie.ai (ทั้งคู่ตอบกลับรูปแบบ OpenAI chat completions)
+          const chatUrl = llmProvider === 'kie'
+            ? 'https://api.kie.ai/gemini-2.5-flash/v1/chat/completions'
+            : 'https://openrouter.ai/api/v1/chat/completions';
+          const chatModel = llmProvider === 'kie' ? 'gemini-2.5-flash' : 'google/gemini-2.5-flash';
+          const response = await fetch(chatUrl, {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${apiKey}`,
@@ -1185,7 +1190,7 @@ Return ONLY the JSON string. Do not wrap in markdown or any other text.
               "Content-Type": "application/json"
             },
             body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
+              model: chatModel,
               messages: [{ role: "user", content: prompt }],
               temperature: 0.5,
               response_format: { type: "json_object" }
@@ -1194,7 +1199,7 @@ Return ONLY the JSON string. Do not wrap in markdown or any other text.
           responseObj = response;
           if (!response.ok) {
             const errBody = await response.text();
-            throw new Error(`OpenRouter API call failed: ${response.status} ${errBody}`);
+            throw new Error(`${llmProvider === 'kie' ? 'Kie.ai' : 'OpenRouter'} API call failed: ${response.status} ${errBody}`);
           }
           resJson = await response.json();
         }

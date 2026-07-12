@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getLlmProvider, setLlmProvider, type LlmProvider } from '../lib/llm';
 import {
   Sliders,
   Eye,
@@ -51,7 +52,7 @@ const KEY_REGISTRY = [
   {
     id: 'kie',
     name: 'KIE.ai API Key',
-    desc: 'สำหรับระบบสกัดตัวหนังสือจากรูปภาพ (OCR) และเรียกเครื่องมือวิเคราะห์เชิงภาพประสิทธิภาพสูง',
+    desc: 'ใช้ Gen รูปภาพ/OCR และใช้เป็นผู้ให้บริการ AI ด้านข้อความแทน OpenRouter ได้ (เลือกที่กล่อง "ผู้ให้บริการ AI หลัก" ด้านบน)',
     placeholder: 'kie-api-key-...',
     storageKey: 'kie_key',
     helperLink: 'https://kie.ai'
@@ -101,6 +102,13 @@ const KEY_REGISTRY = [
 export default function SettingsPortal({ appScale, setAppScale, onGoToInsights }: SettingsPortalProps) {
   // Navigation tabs
   const [activeSubTab, setActiveSubTab] = useState<'api_keys' | 'facebook' | 'display'>('api_keys');
+
+  // ผู้ให้บริการ AI หลักของทั้งโปรแกรม (งานเขียนบทความ/พาดหัว/แคปชั่น ฯลฯ)
+  const [llmProvider, setLlmProviderState] = useState<LlmProvider>(() => getLlmProvider());
+  const handleSelectLlmProvider = (provider: LlmProvider) => {
+    setLlmProvider(provider);
+    setLlmProviderState(provider);
+  };
 
   // Named API Key Profiles States
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -974,8 +982,57 @@ export default function SettingsPortal({ appScale, setAppScale, onGoToInsights }
       {/* SUBTAB 1: API KEYS GRID */}
       {activeSubTab === 'api_keys' && (
         <div className="space-y-6">
-          
-          <div 
+
+          {/* ตัวเลือกผู้ให้บริการ AI หลัก (ใช้ร่วมกันทุกส่วนของโปรแกรม) */}
+          <div
+            className="p-6 border transition-all duration-200"
+            style={{
+              backgroundColor: 'var(--bg-glass)',
+              borderColor: 'var(--border-glass)',
+              borderRadius: '12px',
+              boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
+            }}
+          >
+            <h4 className="text-xs font-bold text-white font-mono flex items-center gap-1.5 uppercase tracking-wider">
+              🧠 ผู้ให้บริการ AI หลัก (AI Text Provider)
+            </h4>
+            <p className="text-[11px] text-slate-400 mt-1 mb-4 font-sans">
+              เลือกว่าจะให้งาน AI ด้านข้อความทั้งหมด (เขียนบทความ พาดหัว แคปชั่น เกลาซับ วิเคราะห์เทรนด์ ฯลฯ) วิ่งผ่านค่ายไหน — ทุกหน้าในโปรแกรมจะใช้ค่านี้ร่วมกันทันที
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {([
+                { id: 'openrouter' as LlmProvider, name: 'OpenRouter', desc: 'ใช้คีย์ OpenRouter API Key ด้านล่าง (sk-or-v1-...) รองรับหลายโมเดล Gemini / Claude / GPT' },
+                { id: 'kie' as LlmProvider, name: 'Kie.ai', desc: 'ใช้คีย์ KIE.ai API Key ด้านล่าง เรียกโมเดลผ่าน api.kie.ai (ราคาถูกกว่า ใช้คีย์เดียวกับระบบ Gen รูป)' },
+              ]).map(opt => {
+                const active = llmProvider === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => handleSelectLlmProvider(opt.id)}
+                    className="p-4 text-left transition-all duration-200 cursor-pointer"
+                    style={{
+                      backgroundColor: active ? 'rgba(34, 211, 238, 0.08)' : 'rgba(0, 0, 0, 0.3)',
+                      border: active ? '1px solid var(--accent-cyan)' : '1px solid var(--border-glass)',
+                      borderRadius: '10px',
+                      boxShadow: active ? 'var(--glow-cyan)' : 'none',
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-sm font-bold font-mono ${active ? 'text-cyan-300' : 'text-white'}`}>{opt.name}</span>
+                      {active && (
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--accent-cyan)', color: '#000' }}>
+                          ใช้งานอยู่
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1.5 font-sans leading-relaxed">{opt.desc}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div
             className="p-6 border space-y-6 transition-all duration-200"
             style={{
               backgroundColor: 'var(--bg-glass)',

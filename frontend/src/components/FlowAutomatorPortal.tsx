@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { chatCompletions, getLlmKey, getLlmProvider, LLM_PROVIDER_LABELS, useLlmProvider } from '../lib/llm';
 
 const STRICT_COPYWRITING_RULES = `
 [กฎเหล็กและรูปแบบการตอบกลับขั้นเด็ดขาด (Strict Output Rules จาก ai_prompt_instructions.md)]
@@ -59,9 +60,14 @@ ${STRICT_COPYWRITING_RULES}`);
   
   const [dropboxStatus, setDropboxStatus] = useState<'connected' | 'disconnected' | 'checking' | 'idle'>('idle');
   const [openRouterStatus, setOpenRouterStatus] = useState<'connected' | 'disconnected' | 'checking' | 'idle'>('idle');
+  // provider ปัจจุบัน (อัพเดตสดเมื่อเปลี่ยนในหน้า Settings)
+  const activeLlmProvider = useLlmProvider();
   
   const [activePromptTab, setActivePromptTab] = useState<'editor' | 'analyzer' | 'tuner'>('editor');
   const [isAnalyzingFile, setIsAnalyzingFile] = useState(false);
+  // กล่องตัวอย่างสำนวน (พิมพ์/วางเอง หรือเทจากไฟล์ .txt) — เพิ่มได้หลายกล่อง
+  const [styleExamples, setStyleExamples] = useState<string[]>(['']);
+  const [styleExamplesBrainName, setStyleExamplesBrainName] = useState('');
   
   const [testKeyword, setTestKeyword] = useState('สร้อยข้อมือหยกขาวแกะสลักสวยๆ');
   const [isGeneratingTest, setIsGeneratingTest] = useState(false);
@@ -263,7 +269,8 @@ ${STRICT_COPYWRITING_RULES}`);
     setLogs(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
   };
 
-  const getOpenRouterKey = () => localStorage.getItem('openrouter_key')?.trim() || '';
+  // ใช้คีย์ตามผู้ให้บริการ AI หลักที่เลือกในหน้า Settings (OpenRouter หรือ Kie.ai)
+  const getOpenRouterKey = () => getLlmKey();
 
   const checkDropboxConnection = async (token: string) => {
     if (!token.trim()) {
@@ -296,6 +303,11 @@ ${STRICT_COPYWRITING_RULES}`);
   const checkOpenRouterConnection = async (key: string) => {
     if (!key.trim()) {
       setOpenRouterStatus('disconnected');
+      return;
+    }
+    // Kie.ai ไม่มี endpoint ตรวจคีย์แบบ OpenRouter — ถือว่าเชื่อมต่อเมื่อมีคีย์
+    if (getLlmProvider() === 'kie') {
+      setOpenRouterStatus('connected');
       return;
     }
     setOpenRouterStatus('checking');
@@ -343,36 +355,55 @@ ${STRICT_COPYWRITING_RULES}`);
     }
   };
 
+  // เช็คการเชื่อมต่อใหม่ทั้งตอนเปิดหน้าและตอนสลับ provider ในหน้า Settings
   useEffect(() => {
     runApiChecks();
-  }, []);
+  }, [activeLlmProvider]);
 
+  // อัพไฟล์ .txt → เทเนื้อหาลงกล่องตัวอย่าง (ยังไม่ส่งวิเคราะห์ทันที เผื่อผู้ใช้เพิ่มตัวอย่างอื่นก่อน)
   const handleTxtFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    try {
+      const text = await file.text();
+      setStyleExamples(prev => {
+        // ถ้ากล่องสุดท้ายยังว่าง เทลงกล่องนั้นเลย ไม่งั้นเพิ่มกล่องใหม่
+        const next = [...prev];
+        if (next.length > 0 && !next[next.length - 1].trim()) next[next.length - 1] = text;
+        else next.push(text);
+        return next;
+      });
+      addLog(`📄 อ่านไฟล์ "${file.name}" ลงกล่องตัวอย่างแล้ว — เพิ่มตัวอย่างอื่นได้ หรือกดปุ่มวิเคราะห์เพื่อสร้างสมอง`);
+    } catch (e: any) {
+      alert(`❌ อ่านไฟล์ไม่สำเร็จ: ${e.message}`);
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  // รวมทุกกล่องตัวอย่างแล้วส่งให้ AI สกัดสำนวนเป็นสมองใหม่
+  const handleAnalyzeStyleExamples = async () => {
+    const samples = styleExamples.map(s => s.trim()).filter(Boolean);
+    if (samples.length === 0) {
+      alert("⚠️ กรุณาใส่ตัวอย่างสำนวนอย่างน้อย 1 กล่อง (พิมพ์/วางเอง หรืออัพไฟล์ .txt) ก่อนครับ");
+      return;
+    }
 
     const openRouterKey = getOpenRouterKey();
     if (!openRouterKey) {
-      alert("⚠️ กรุณาตั้งค่าและตรวจสอบความถูกต้องของ OpenRouter API Key ก่อนวิเคราะห์สำนวนเขียนครับ");
+      alert("⚠️ กรุณาตั้งค่าและตรวจสอบความถูกต้องของ AI API Key ก่อนวิเคราะห์สำนวนเขียนครับ");
       return;
     }
 
     setIsAnalyzingFile(true);
-    addLog(`📄 กำลังอ่านไฟล์ตัวอย่างสำนวนเขียน: ${file.name}...`);
+    addLog(`🤖 กำลังส่งตัวอย่างสำนวน ${samples.length} ชุด ไปให้ AI วิเคราะห์สกัดสำนวนและสร้างสมองใหม่...`);
 
     try {
-      const text = await file.text();
-      addLog(`🤖 กำลังส่งข้อความตัวอย่างไปให้ AI วิเคราะห์สกัดสำนวนและสร้างสมองใหม่...`);
-      
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "HTTP-Referer": window.location.href,
-          "X-Title": "BulkVideoCreator",
-          "Authorization": `Bearer ${openRouterKey.trim()}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
+      const text = samples
+        .map((s, i) => `━━━ ตัวอย่างที่ ${i + 1} ━━━\n${s}`)
+        .join('\n\n');
+
+      const res = await chatCompletions({
           model: "google/gemini-2.5-flash",
           messages: [
             {
@@ -399,8 +430,7 @@ ${STRICT_COPYWRITING_RULES}
 ตอบกลับเฉพาะตัว System Prompt ที่เสร็จแล้วเท่านั้น ไม่ต้องระบุบทนำหรือคำอธิบายภายนอก`
             }
           ]
-        })
-      });
+        });
 
       if (!res.ok) throw new Error(await res.text());
 
@@ -414,8 +444,8 @@ ${STRICT_COPYWRITING_RULES}
         }
         setSystemPrompt(finalPrompt);
         addLog(`✅ วิเคราะห์สำนวนสำเร็จ! ได้เขียนทับลงในช่องกรอก System Prompt เรียบร้อยแล้ว`);
-        
-        const brainName = `สมองจากไฟล์ ${file.name.replace('.txt', '')} (${new Date().toLocaleDateString('th-TH')})`;
+
+        const brainName = styleExamplesBrainName.trim() || `สมองจากตัวอย่าง ${samples.length} ชุด (${new Date().toLocaleDateString('th-TH')})`;
         const newBrainId = 'brain_' + Date.now();
         const newBrain = { id: newBrainId, name: brainName, content: finalPrompt };
         const updatedBrains = [newBrain, ...savedBrains];
@@ -423,16 +453,16 @@ ${STRICT_COPYWRITING_RULES}
         setSavedBrains(updatedBrains);
         setSelectedBrainId(newBrainId);
         addLog(`🧠 บันทึกสมองชุดใหม่ "${brainName}" ลงคลังเรียบร้อย!`);
+        setStyleExamplesBrainName('');
         setActivePromptTab('editor');
       } else {
         addLog(`❌ AI ไม่สามารถสกัดข้อความสำนวนออกมาได้`);
       }
     } catch (e: any) {
-      addLog(`❌ ข้อผิดพลาดในการวิเคราะห์ไฟล์: ${e.message}`);
-      alert(`❌ วิเคราะห์ไฟล์ไม่สำเร็จ: ${e.message}`);
+      addLog(`❌ ข้อผิดพลาดในการวิเคราะห์สำนวน: ${e.message}`);
+      alert(`❌ วิเคราะห์สำนวนไม่สำเร็จ: ${e.message}`);
     } finally {
       setIsAnalyzingFile(false);
-      event.target.value = '';
     }
   };
 
@@ -448,15 +478,7 @@ ${STRICT_COPYWRITING_RULES}
     setFeedbackSuccess(false);
 
     try {
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "HTTP-Referer": window.location.href,
-          "X-Title": "BulkVideoCreator",
-          "Authorization": `Bearer ${openRouterKey.trim()}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
+      const res = await chatCompletions({
           model: "google/gemini-2.5-flash",
           messages: [
             {
@@ -468,8 +490,7 @@ ${STRICT_COPYWRITING_RULES}
               content: `โปรดช่วยเขียนแคปชั่น/โพสต์ หรือคำคมโดยใช้หัวข้อ/ชื่อสินค้า/คำสำคัญนี้: "${keyword}" ตามสไตล์และกฎเหล็กที่ระบุไว้ในระบบของคุณอย่างเคร่งครัด`
             }
           ]
-        })
-      });
+        });
 
       if (!res.ok) throw new Error(await res.text());
 
@@ -498,15 +519,7 @@ ${STRICT_COPYWRITING_RULES}
     setFeedbackSuccess(false);
 
     try {
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "HTTP-Referer": window.location.href,
-          "X-Title": "BulkVideoCreator",
-          "Authorization": `Bearer ${openRouterKey.trim()}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
+      const res = await chatCompletions({
           model: "google/gemini-2.5-flash",
           messages: [
             {
@@ -535,8 +548,7 @@ ${STRICT_COPYWRITING_RULES}
 ตอบกลับเฉพาะตัว System Prompt ใหม่ที่ปรับปรุงเสร็จแล้วเท่านั้น ไม่มีคำอธิบายภายนอกเด็ดขาด`
             }
           ]
-        })
-      });
+        });
 
       if (!res.ok) throw new Error(await res.text());
 
@@ -875,7 +887,7 @@ ${STRICT_COPYWRITING_RULES}
             try {
               const capRes = await fetch(`${BACKEND_BASE_FLOW}/api/shopee-caption`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productName: product.name, productDetail: product.detail, openRouterKey, count: 2 })
+                body: JSON.stringify({ productName: product.name, productDetail: product.detail, openRouterKey, count: 2, llmProvider: getLlmProvider() })
               });
               const capData = await capRes.json();
               if (capData.success && capData.captions?.length) captions = capData.captions;
@@ -1068,15 +1080,7 @@ ${STRICT_COPYWRITING_RULES}
             } else {
               addLog(`📝 กำลังขอให้ AI เขียนแคปชั่นอิงตามชื่อไฟล์: ${file.name}...`);
             }
-            const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "HTTP-Referer": window.location.href,
-                "X-Title": "BulkVideoCreator",
-                "Authorization": `Bearer ${openRouterKey.trim()}`,
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
+            const aiRes = await chatCompletions({
                 model: "google/gemini-2.5-flash",
                 messages: [
                   {
@@ -1101,8 +1105,7 @@ ${STRICT_COPYWRITING_RULES}
   ตอบกลับเฉพาะเนื้อหาโพสต์/แคปชั่นที่แต่งเสร็จสมบูรณ์แล้วเท่านั้น ไม่ต้องมีคำเกริ่นนำหรือคำอธิบายใดๆ เพิ่มเติม`
                   }
                 ]
-              })
-            });
+              });
 
             if (aiRes.ok) {
               const aiData = await aiRes.json();
@@ -1114,15 +1117,7 @@ ${STRICT_COPYWRITING_RULES}
             if (fileUrl) {
                const rawImageUrl = getRawImageLink(fileUrl);
                addLog(`🤖 กำลังส่งรูปลงตู้ AI ให้คิดแคปชั่น (Vision Mode)...`);
-               const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                 method: "POST",
-                 headers: {
-                   "HTTP-Referer": window.location.href,
-                   "X-Title": "BulkVideoCreator",
-                   "Authorization": `Bearer ${openRouterKey.trim()}`,
-                   "Content-Type": "application/json"
-                 },
-                 body: JSON.stringify({
+               const aiRes = await chatCompletions({
                    model: "google/gemini-2.5-flash",
                    messages: [
                      {
@@ -1133,8 +1128,7 @@ ${STRICT_COPYWRITING_RULES}
                        ]
                      }
                    ]
-                 })
-               });
+                 });
 
                if (aiRes.ok) {
                  const aiData = await aiRes.json();
@@ -1281,10 +1275,10 @@ ${STRICT_COPYWRITING_RULES}
             )}
           </div>
 
-          {/* OpenRouter Status */}
+          {/* AI Provider Status (ตามที่เลือกในหน้า Settings) */}
           {automatorMode !== 'only_convert' && automatorMode !== 'filename_convert' && (
             <div className="flex items-center gap-2 bg-slate-900/60 px-3 py-1.5 border border-slate-850 rounded-xl">
-              <span className="text-[11px] font-bold text-slate-300">🤖 OpenRouter:</span>
+              <span className="text-[11px] font-bold text-slate-300">🤖 {LLM_PROVIDER_LABELS[activeLlmProvider]}:</span>
               {openRouterStatus === 'checking' ? (
                 <span className="text-[10px] text-cyan-400 flex items-center gap-1"><span className="animate-spin text-xs">🌀</span> กำลังเช็ค...</span>
               ) : openRouterStatus === 'connected' ? (
@@ -1664,11 +1658,11 @@ ${STRICT_COPYWRITING_RULES}
                                  const match = savedBrains.find(b => b.id === e.target.value);
                                  if (match) setSystemPrompt(match.content);
                               }}
-                              className="px-2 py-1 text-[11px] border border-slate-800 rounded-lg bg-slate-900 text-slate-300 focus:outline-none focus:border-cyan-500 max-w-[160px] cursor-pointer"
+                              className="px-2 py-1 text-[11px] border border-slate-800 rounded-lg bg-slate-900 text-slate-300 focus:outline-none focus:border-cyan-500 w-full max-w-[420px] cursor-pointer"
                             >
                               <option value="">-- สมองที่บันทึกไว้ --</option>
                               {savedBrains.map(b => (
-                                 <option key={b.id} value={b.id}>🧠 {b.name.substring(0, 15)}...</option>
+                                 <option key={b.id} value={b.id}>🧠 {b.name}</option>
                               ))}
                             </select>
                             {selectedBrainId && (
@@ -1710,30 +1704,83 @@ ${STRICT_COPYWRITING_RULES}
 
                 {/* Tab: Analyzer */}
                 {activePromptTab === 'analyzer' && (
-                  <div className="flex-1 flex flex-col bg-slate-900/10 border border-slate-900 border-t-0 p-4 rounded-b-xl min-h-[250px] justify-center items-center text-center">
+                  <div className="flex-1 flex flex-col bg-slate-900/10 border border-slate-900 border-t-0 p-4 rounded-b-xl min-h-[250px]">
                     {isAnalyzingFile ? (
-                      <div className="flex flex-col items-center gap-3">
+                      <div className="flex-1 flex flex-col items-center justify-center gap-3">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
                         <p className="text-xs text-purple-300 font-mono">กำลังส่งคำให้ AI สแกนวิเคราะห์สำนวนเขียนจากข้อความ...</p>
                       </div>
                     ) : (
-                      <div className="space-y-4 p-4">
-                        <div className="text-3xl text-purple-400">📁</div>
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-200 mb-1 font-sans">สร้างสมองใหม่ด้วย AI จากการสกัดสำนวน (.TXT)</h4>
-                          <p className="text-[10px] text-slate-400 max-w-sm leading-relaxed font-sans">
-                            แนบไฟล์ข้อความ `.txt` ที่รวบรวมตัวอย่างโพสต์หรือแคปชั่นที่คุณอยากลอกเลียนแบบ AI จะถอดรหัสและแปลงเงื่อนไขให้กลายเป็น AI Prompt อัตโนมัติ!
+                      <div className="space-y-3">
+                        <div className="text-center">
+                          <h4 className="text-xs font-bold text-slate-200 mb-1 font-sans">สร้างสมองใหม่ด้วย AI จากการสกัดสำนวน</h4>
+                          <p className="text-[10px] text-slate-400 leading-relaxed font-sans">
+                            พิมพ์/วางตัวอย่างโพสต์หรือแคปชั่นที่อยากลอกเลียนลงในกล่องด้านล่าง (เพิ่มได้หลายกล่อง หลายตัวอย่างยิ่งแม่น) หรืออัพไฟล์ `.txt` เทลงกล่องก็ได้ จากนั้นกดปุ่มวิเคราะห์ AI จะถอดรหัสรวมทุกตัวอย่างเป็น AI Prompt อัตโนมัติ!
                           </p>
                         </div>
-                        <label className="inline-block px-4 py-2 bg-purple-950/40 hover:bg-purple-900/60 border border-purple-500/30 text-purple-300 rounded-lg text-xs font-bold cursor-pointer transition-all font-sans">
-                          📎 เลือกไฟล์ตัวอย่างสำนวน (.txt)
+
+                        {/* ตั้งชื่อสมองที่จะบันทึก */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap font-sans">🏷️ ชื่อสมอง:</span>
                           <input
-                            type="file"
-                            accept=".txt"
-                            onChange={handleTxtFileUpload}
-                            className="hidden"
+                            type="text"
+                            value={styleExamplesBrainName}
+                            onChange={(e) => setStyleExamplesBrainName(e.target.value)}
+                            placeholder="เว้นว่างไว้ = ตั้งชื่ออัตโนมัติ (เช่น สมองจากตัวอย่าง 2 ชุด)"
+                            className="flex-1 px-2 py-1.5 text-xs bg-slate-950/60 border border-slate-800 rounded-lg text-slate-200 placeholder-slate-600 outline-none focus:border-purple-500 font-sans"
                           />
-                        </label>
+                        </div>
+
+                        {/* กล่องตัวอย่างสำนวน (หลายกล่อง) */}
+                        <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                          {styleExamples.map((sample, idx) => (
+                            <div key={idx} className="relative border border-purple-500/20 bg-slate-950/60 rounded-lg p-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] font-bold text-purple-300 font-mono">✍️ ตัวอย่างที่ {idx + 1}</span>
+                                {styleExamples.length > 1 && (
+                                  <button
+                                    onClick={() => setStyleExamples(prev => prev.filter((_, i) => i !== idx))}
+                                    className="text-[10px] text-slate-500 hover:text-red-400 font-bold cursor-pointer"
+                                    title="ลบกล่องนี้"
+                                  >
+                                    🗑️ ลบ
+                                  </button>
+                                )}
+                              </div>
+                              <textarea
+                                value={sample}
+                                onChange={(e) => setStyleExamples(prev => prev.map((s, i) => i === idx ? e.target.value : s))}
+                                placeholder="วางตัวอย่างโพสต์/แคปชั่น/สำนวนเขียนที่อยากลอกเลียนที่นี่..."
+                                className="w-full h-24 bg-transparent text-xs text-slate-200 placeholder-slate-600 resize-y outline-none font-sans leading-relaxed"
+                              />
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                          <button
+                            onClick={() => setStyleExamples(prev => [...prev, ''])}
+                            className="px-3 py-2 bg-slate-800/60 hover:bg-slate-700/70 border border-slate-600/40 text-slate-300 rounded-lg text-xs font-bold cursor-pointer transition-all font-sans"
+                          >
+                            ➕ เพิ่มกล่องตัวอย่าง
+                          </button>
+                          <label className="inline-block px-3 py-2 bg-purple-950/40 hover:bg-purple-900/60 border border-purple-500/30 text-purple-300 rounded-lg text-xs font-bold cursor-pointer transition-all font-sans">
+                            📎 อัพไฟล์ .txt ลงกล่อง
+                            <input
+                              type="file"
+                              accept=".txt"
+                              onChange={handleTxtFileUpload}
+                              className="hidden"
+                            />
+                          </label>
+                          <button
+                            onClick={handleAnalyzeStyleExamples}
+                            disabled={styleExamples.every(s => !s.trim())}
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-xs font-black cursor-pointer transition-all font-sans shadow-lg shadow-purple-900/40"
+                          >
+                            🧠 วิเคราะห์สำนวนทั้งหมด ({styleExamples.filter(s => s.trim()).length} ตัวอย่าง)
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

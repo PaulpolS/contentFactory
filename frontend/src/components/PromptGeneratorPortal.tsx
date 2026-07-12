@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
+import { chatCompletions, getLlmKey, getLlmProviderLabel, missingLlmKeyMessage } from '../lib/llm';
 import {
   Sparkles,
   Cpu,
@@ -314,29 +315,20 @@ const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim();
 // ─── API Helper Calls ────────────────────────────────────────────────────────
 
 async function callOpenRouterAI(messages: { role: string; content: string }[], model: string): Promise<string> {
-  const apiKey = localStorage.getItem('openrouter_key')?.trim() || '';
-  if (!apiKey) throw new Error('ไม่พบ OpenRouter Key กรุณากรอก Key ในแท็บ ตั้งค่าระบบ');
+  const apiKey = getLlmKey();
+  if (!apiKey) throw new Error(missingLlmKeyMessage());
 
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': window.location.origin,
-      'X-Title': 'ContentFactory Prompt Builder'
-    },
-    body: JSON.stringify({
-      model: model || 'google/gemini-3.5-flash',
-      messages,
-      temperature: 0.72,
-    }),
+  const res = await chatCompletions({
+    model: model || 'google/gemini-3.5-flash',
+    messages,
+    temperature: 0.72,
   });
 
   const data = await res.json();
   if (res.ok && !data.error) {
     return data.choices?.[0]?.message?.content?.trim() || '';
   }
-  throw new Error(data.error?.message || `OpenRouter API Error: ${res.status}`);
+  throw new Error(data.error?.message || `${getLlmProviderLabel()} API Error: ${res.status}`);
 }
 
 export default function PromptGeneratorPortal() {

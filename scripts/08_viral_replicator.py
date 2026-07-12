@@ -49,9 +49,17 @@ def setup_logger():
 
 logger = setup_logger()
 
+# ผู้ให้บริการ AI ด้านข้อความ (ตั้งจาก --llm-provider): openrouter หรือ kie
+LLM_PROVIDER = "openrouter"
+
 def call_openrouter(api_key, model, prompt):
-    """Hits OpenRouter API to request completions using prompt-driven AI logic."""
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    """Hits OpenRouter or Kie.ai chat completions using prompt-driven AI logic."""
+    if LLM_PROVIDER == "kie":
+        # Kie.ai ใช้ endpoint แยกตามโมเดล และไม่มี vendor prefix
+        model = model.split("/")[-1]
+        url = f"https://api.kie.ai/{model}/v1/chat/completions"
+    else:
+        url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "HTTP-Referer": "https://github.com/ContentFactory",
@@ -462,8 +470,13 @@ def main():
     parser.add_argument("--limit", type=int, default=5, help="Number of new stories to find and evaluate")
     parser.add_argument("--openrouter_key", "--openrouter-key", dest="openrouter_key", type=str, default=None,
                         help="Directly override OpenRouter API Key")
-    
+    parser.add_argument("--llm_provider", "--llm-provider", dest="llm_provider", type=str, default="openrouter",
+                        help="AI text provider: openrouter or kie")
+
     args, unknown = parser.parse_known_args()
+
+    global LLM_PROVIDER
+    LLM_PROVIDER = (args.llm_provider or "openrouter").strip().lower()
     
     logger.info("=== AI Viral Replicator Scraper Started ===")
     

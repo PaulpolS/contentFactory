@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { chatCompletions, getLlmKey, getLlmProvider, getLlmProviderLabel, setLlmProvider, useLlmProvider } from '../lib/llm';
 
 const safeParseJSON = (jsonStr: string): any => {
   let inString = false;
@@ -81,27 +82,23 @@ const callAICompletions = async (apiKey: string, systemPrompt: string, userPromp
     }
     messages.push({ role: 'user', content: userPrompt });
 
-    const models = [
-      'google/gemini-2.5-flash',
-      'google/gemini-2.5-flash:free',
-      'meta-llama/llama-3.1-8b-instruct:free',
-      'qwen/qwen3-8b:free'
-    ];
+    // Kie.ai ไม่มีโมเดลสำรองสาย :free — ใช้ Gemini Flash ตัวเดียว
+    const models = getLlmProvider() === 'kie'
+      ? ['google/gemini-2.5-flash']
+      : [
+          'google/gemini-2.5-flash',
+          'google/gemini-2.5-flash:free',
+          'meta-llama/llama-3.1-8b-instruct:free',
+          'qwen/qwen3-8b:free'
+        ];
 
     let lastError = null;
     for (const model of models) {
       try {
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages
-          })
-        });
+        const response = await chatCompletions({
+          model,
+          messages
+        }, { openRouterKey: apiKey });
         const data = await response.json();
         if (data?.error) {
           throw new Error(data.error.message || JSON.stringify(data.error));
@@ -116,7 +113,7 @@ const callAICompletions = async (apiKey: string, systemPrompt: string, userPromp
         lastError = err;
       }
     }
-    throw new Error(`OpenRouter Error: ${lastError?.message || String(lastError)}`);
+    throw new Error(`${getLlmProviderLabel()} Error: ${lastError?.message || String(lastError)}`);
   }
 };
 
@@ -943,7 +940,9 @@ export default function VerticalVideoSuitePortal() {
 
   // --- OpenRouter Profile States ---
   const [dbProfiles, setDbProfiles] = useState<any[]>([]);
-  const [selectedOpenRouterProfileId, setSelectedOpenRouterProfileId] = useState<string>('default');
+  // provider ปัจจุบัน (อัพเดตสดเมื่อเปลี่ยนในหน้า Settings)
+  const activeLlmProvider = useLlmProvider();
+  const [selectedOpenRouterProfileId, setSelectedOpenRouterProfileId] = useState<string>(() => getLlmProvider() === 'kie' ? 'kie' : 'default');
   const [manualOpenRouterKey, setManualOpenRouterKey] = useState<string>(() => localStorage.getItem('openrouter_key') || '');
   const [openRouterKey, setOpenRouterKey] = useState(() => localStorage.getItem('openrouter_key') || '');
 
@@ -995,7 +994,10 @@ export default function VerticalVideoSuitePortal() {
 
   // Update openRouterKey state when dropdown profile or manual input changes
   useEffect(() => {
-    if (selectedOpenRouterProfileId === 'manual') {
+    if (selectedOpenRouterProfileId === 'kie') {
+      // ใช้ Kie.ai — คีย์ถูกดึงจาก getKieKey() ภายใน chatCompletions โดยตรง
+      setOpenRouterKey((localStorage.getItem('kie_key') || localStorage.getItem('kie_api_key') || '').trim());
+    } else if (selectedOpenRouterProfileId === 'manual') {
       setOpenRouterKey(manualOpenRouterKey);
     } else if (selectedOpenRouterProfileId === 'default') {
       setOpenRouterKey(localStorage.getItem('openrouter_key') || '');
@@ -1006,6 +1008,15 @@ export default function VerticalVideoSuitePortal() {
       }
     }
   }, [selectedOpenRouterProfileId, dbProfiles, manualOpenRouterKey]);
+
+  // เมื่อ provider ถูกเปลี่ยนจากหน้า Settings ให้ dropdown ที่นี่สะท้อนตามทันที
+  useEffect(() => {
+    setSelectedOpenRouterProfileId(prev => {
+      if (activeLlmProvider === 'kie') return 'kie';
+      // สลับกลับมา OpenRouter — ถ้าเดิมค้างที่ 'kie' ให้กลับไปใช้ค่า default
+      return prev === 'kie' ? 'default' : prev;
+    });
+  }, [activeLlmProvider]);
   // --- States ---
   const [resumingHistoryId, setResumingHistoryId] = useState<string | null>(null);
   const [isResumingAllHistory, setIsResumingAllHistory] = useState(false);
@@ -1752,7 +1763,8 @@ export default function VerticalVideoSuitePortal() {
       }
     }
 
-    addLog(`กำลังเจนนิ่งบทความหัวข้อ: "${targetTopic}"...`, 'info');
+    const engineLabel = apiKey.startsWith('AIzaSy') ? 'Google Gemini (Direct)' : getLlmProviderLabel();
+    addLog(`[${engineLabel}] กำลังเจนนิ่งบทความหัวข้อ: "${targetTopic}"...`, 'info');
 
     // Brain personality inject
     const brain = savedBrains.find(b => b.id === selectedBrainId);
@@ -1812,7 +1824,7 @@ ${brain.content}
       );
       const parsed = safeParseJSON(cleanJson);
       
-      addLog(`เจนสคริปต์และพาดหัวสำเร็จสำหรับหัวข้อ: ${targetTopic}`, 'success');
+      addLog(`[${engineLabel}] ✅ เจนสคริปต์และพาดหัวสำเร็จสำหรับหัวข้อ: ${targetTopic}`, 'success');
       return {
         script: parsed.script,
         headline: parsed.headline
@@ -2460,18 +2472,16 @@ Instructions for you:
 2. Do not include conversational filler like "Here is the prompt" or "Understood".`;
 
       let content = '';
-      const models = ['google/gemini-2.5-flash', 'google/gemini-2.5-flash:free'];
+      const models = getLlmProvider() === 'kie'
+        ? ['google/gemini-2.5-flash']
+        : ['google/gemini-2.5-flash', 'google/gemini-2.5-flash:free'];
       let lastError = null;
       for (const model of models) {
         try {
-          const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model,
-              messages: [{ role: 'user', content: prompt }]
-            })
-          });
+          const res = await chatCompletions({
+            model,
+            messages: [{ role: 'user', content: prompt }]
+          }, { openRouterKey: apiKey });
           const data = await res.json();
           if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
           const txt = data.choices?.[0]?.message?.content;
@@ -2980,6 +2990,13 @@ Instructions for you:
     }
 
     if (batchStatus === 'running' && !overrideItems) return;
+
+    // ตรวจโฟลเดอร์ก่อนเริ่ม — ถ้าไม่ครบ ทุกรายการจะตกที่ขั้นตัดต่อ/เรนเดอร์เหมือนกันหมด
+    if (!sourceFolder || !outputFolder) {
+      alert('⚠️ กรุณาเลือก "โฟลเดอร์ต้นทางฟุตเทจ" และ "โฟลเดอร์บันทึกผลลัพธ์" ก่อนเริ่มรันคิว ไม่งั้นทุกหัวข้อจะล้มเหลวที่ขั้นประกอบร่างและเรนเดอร์ครับ');
+      addLog('❌ ยกเลิกการเริ่มคิว: ยังไม่ได้ตั้งค่าโฟลเดอร์ต้นทาง/ปลายทาง', 'error');
+      return;
+    }
 
     setBatchStatus('running');
     batchStatusRef.current = 'running';
@@ -5029,12 +5046,13 @@ Instructions for you:
                                 {isResumingThis ? '⏳ กำลังรัน...' : '⚡ รันส่วนที่เหลือ'}
                               </button>
                             )}
-                            {item.videoUrl && (
+                            {item.audioUrl && (
                               <button
                                 onClick={async () => {
-                                  if (!confirm('ต้องการตัดต่อวิดีโอใหม่สำหรับรายการนี้ใช่หรือไม่?')) return;
+                                  // ถ้าเคยตัดต่อแล้วให้ยืนยันก่อน re-render / ถ้ายังไม่เคย → ตัดต่อเลยโดยใช้เสียง+ซับเดิม
+                                  if (item.videoUrl && !confirm('ต้องการตัดต่อวิดีโอใหม่สำหรับรายการนี้ใช่หรือไม่?')) return;
                                   setIsAssembling(true);
-                                  addLog(`🎬 กำลัง re-render: "${item.topic}"...`, 'info');
+                                  addLog(`🎬 กำลังตัดต่อ (ใช้เสียง+ซับเดิม): "${item.topic}"...`, 'info');
                                   const activeBgm = await resolveBgmFileRandomly(bgmFile);
                                   try {
                                     let newsPayloadToUse = item.newsPayload;
@@ -5056,19 +5074,19 @@ Instructions for you:
                                     );
                                     if (renderPath) {
                                       saveToHistory({ ...item, videoUrl: renderPath });
-                                      addLog(`✅ Re-render สำเร็จ: ${renderPath}`, 'success');
+                                      addLog(`✅ ตัดต่อสำเร็จ: ${renderPath}`, 'success');
                                     } else {
-                                      addLog(`❌ Re-render ล้มเหลว`, 'error');
+                                      addLog(`❌ การตัดต่อล้มเหลว`, 'error');
                                     }
                                   } finally {
                                     setIsAssembling(false);
                                   }
                                 }}
-                                disabled={isResumingThis || isResumingAllHistory}
-                                className="px-2.5 py-1 bg-amber-700 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg transition-all active:scale-95 shadow-md w-full"
-                                title="ตัดต่อวิดีโอใหม่ด้วยการตั้งค่าปัจจุบัน"
+                                disabled={isResumingThis || isResumingAllHistory || isAssembling}
+                                className={`px-2.5 py-1 ${item.videoUrl ? 'bg-amber-700 hover:bg-amber-600' : 'bg-gradient-to-r from-orange-600 to-rose-600 hover:from-orange-500 hover:to-rose-500'} text-white text-[10px] font-bold rounded-lg transition-all active:scale-95 shadow-md w-full`}
+                                title={item.videoUrl ? 'ตัดต่อวิดีโอใหม่ด้วยการตั้งค่าปัจจุบัน' : 'ตัดต่อรวมคลิปทันที โดยใช้เสียงพากย์และซับที่ทำเสร็จแล้ว (ไม่ทำซับใหม่)'}
                               >
-                                🔄 ตัดต่อใหม่
+                                {item.videoUrl ? '🔄 ตัดต่อใหม่' : '🎬 ตัดต่อเลย (ใช้ซับเดิม)'}
                               </button>
                             )}
                             {item.srtContent && (
@@ -5354,23 +5372,27 @@ Instructions for you:
           </p>
         </div>
 
-        {/* Real-time OpenRouter Profile Selector */}
+        {/* Real-time AI Provider / Key Selector */}
         <div className="flex items-center gap-2 flex-wrap bg-slate-950/40 p-2.5 rounded-2xl border border-white/5 backdrop-blur-md">
-          <span className="text-[10px] text-purple-300 font-bold uppercase tracking-wider whitespace-nowrap">🔑 OpenRouter Profile:</span>
+          <span className="text-[10px] text-purple-300 font-bold uppercase tracking-wider whitespace-nowrap">🔑 {getLlmProviderLabel()} Profile:</span>
           <select
             value={selectedOpenRouterProfileId}
             onChange={(e) => {
-              setSelectedOpenRouterProfileId(e.target.value);
+              const val = e.target.value;
+              setSelectedOpenRouterProfileId(val);
+              // เลือก Kie.ai = สลับ provider หลักเป็น kie, เลือกอันอื่น = กลับไป openrouter
+              setLlmProvider(val === 'kie' ? 'kie' : 'openrouter');
             }}
             className="bg-slate-900/95 border border-purple-500/30 rounded-xl px-3 py-1.5 text-xs text-slate-200 cursor-pointer focus:outline-none focus:border-teal-400 min-w-48 font-sans shadow-md"
           >
-            <option value="default" className="bg-slate-950 text-white">⚙️ ใช้คีย์หลักเบราว์เซอร์ (Default)</option>
+            <option value="kie" className="bg-slate-950 text-white">🧠 Kie.ai (ตามที่ตั้งค่าไว้)</option>
+            <option value="default" className="bg-slate-950 text-white">⚙️ OpenRouter: ใช้คีย์หลักเบราว์เซอร์ (Default)</option>
             {dbProfiles.filter(p => p.service_name === 'openrouter').map(p => (
               <option key={p.id} value={String(p.id)} className="bg-slate-950 text-white font-sans">
-                👤 {p.key_name} (SQLite)
+                👤 OpenRouter: {p.key_name} (SQLite)
               </option>
             ))}
-            <option value="manual" className="bg-slate-950 text-white">✍️ กรอกคีย์เองแบบแมนนวล...</option>
+            <option value="manual" className="bg-slate-950 text-white">✍️ OpenRouter: กรอกคีย์เองแบบแมนนวล...</option>
           </select>
 
           {selectedOpenRouterProfileId === 'manual' && (

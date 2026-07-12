@@ -374,6 +374,29 @@ app.get('/api/kie-status', async (req, res) => {
   }
 });
 
+// Proxy chat completions ไปยัง Kie.ai (endpoint แยกตามโมเดล, ตอบกลับรูปแบบ OpenAI)
+app.post('/api/kie-chat', async (req, res) => {
+  const { apiKey, model, payload } = req.body || {};
+  if (!apiKey) {
+    return res.status(400).json({ error: { message: 'ไม่พบ KIE API Key' } });
+  }
+  const modelSlug = String(model || payload?.model || 'gemini-2.5-flash').split('/').pop();
+  try {
+    const response = await fetch(`https://api.kie.ai/${modelSlug}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({ ...(payload || {}), model: modelSlug, stream: false })
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
 // === Serve public folder statically under root path ===
 app.use(express.static(path.resolve(__dirname, '../../public')));
 
@@ -1998,10 +2021,15 @@ const runWhisper = async (audioPath: string, tempDir: string, model: string, lan
   return readWhisperSegments(jsonPath);
 };
 
-const callOpenRouterJson = (apiKey: string, model: string, prompt: string) => new Promise<any>((resolve, reject) => {
+// เรียก LLM แบบขอผลลัพธ์ JSON — เลือก provider ได้ ('openrouter' | 'kie')
+// Kie.ai ใช้ endpoint แยกตามโมเดล (ตัด vendor prefix ออก) แต่ตอบกลับรูปแบบ OpenAI เหมือนกัน
+const callOpenRouterJson = (apiKey: string, model: string, prompt: string, provider: string = 'openrouter') => new Promise<any>((resolve, reject) => {
   const https = require('https');
+  const isKie = provider === 'kie';
+  const resolvedModel = model || 'google/gemini-2.5-flash';
+  const kieModel = resolvedModel.includes('/') ? resolvedModel.split('/').pop()! : resolvedModel;
   const body = JSON.stringify({
-    model: model || 'google/gemini-2.5-flash',
+    model: isKie ? kieModel : resolvedModel,
     messages: [
       { role: 'system', content: 'You correct Whisper subtitle text or generate viral hook headlines. Return valid JSON only.' },
       { role: 'user', content: prompt },
@@ -2010,8 +2038,8 @@ const callOpenRouterJson = (apiKey: string, model: string, prompt: string) => ne
     max_tokens: 3000,
   });
   const req = https.request({
-    hostname: 'openrouter.ai',
-    path: '/api/v1/chat/completions',
+    hostname: isKie ? 'api.kie.ai' : 'openrouter.ai',
+    path: isKie ? `/${kieModel}/v1/chat/completions` : '/api/v1/chat/completions',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -2027,7 +2055,7 @@ const callOpenRouterJson = (apiKey: string, model: string, prompt: string) => ne
     response.on('end', () => {
       try {
         const data = JSON.parse(raw || '{}');
-        if (data.error) throw new Error(data.error.message || 'OpenRouter error');
+        if (data.error) throw new Error(data.error.message || (isKie ? 'Kie.ai error' : 'OpenRouter error'));
         const content = String(data.choices?.[0]?.message?.content || '').trim();
         const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] || content;
         const start = Math.min(...[fenced.indexOf('['), fenced.indexOf('{')].filter(index => index >= 0));
@@ -2042,13 +2070,13 @@ const callOpenRouterJson = (apiKey: string, model: string, prompt: string) => ne
   });
   req.on('error', reject);
   req.on('timeout', () => {
-    req.destroy(new Error('OpenRouter timeout'));
+    req.destroy(new Error(isKie ? 'Kie.ai timeout' : 'OpenRouter timeout'));
   });
   req.write(body);
   req.end();
 });
 
-const generateAiHeadline = async (scriptText: string, apiKey: string) => {
+const generateAiHeadline = async (scriptText: string, apiKey: string, llmProvider: string = 'openrouter') => {
   if (!apiKey || !scriptText.trim()) return [];
   // คิดพาดหัว 3 สไตล์ตามลำดับ: 1) สุขุม/สารคดี/ปรัชญา (สไตล์เจ้าของช่อง) 2) Clickbait 3) บอกประโยชน์ตรงๆ
   const prompt = `คุณเป็นนักการตลาดสายคอนเทนต์ ขายของบน TikTok/Reels/Shopee
@@ -2071,7 +2099,7 @@ const generateAiHeadline = async (scriptText: string, apiKey: string) => {
 "${scriptText}"`;
 
   try {
-    const data = await callOpenRouterJson(apiKey, 'google/gemini-2.5-flash', prompt);
+    const data = await callOpenRouterJson(apiKey, 'google/gemini-2.5-flash', prompt, llmProvider);
     if (Array.isArray(data)) return data.map(t => String(t || '').trim()).filter(Boolean);
   } catch(e) {
     console.error('[AI Headline] Failed:', e);
@@ -2080,7 +2108,7 @@ const generateAiHeadline = async (scriptText: string, apiKey: string) => {
 };
 
 // เขียนพาดหัวจาก "ข้อมูลสินค้าจริง" (ไม่อิงสคริปต์ตลก) — โทนขายของ Shopee บอกชัดว่าขายอะไร
-const generateDbHeadline = async (productName: string, productDetail: string, apiKey: string, count = 3): Promise<string[]> => {
+const generateDbHeadline = async (productName: string, productDetail: string, apiKey: string, count = 3, llmProvider: string = 'openrouter'): Promise<string[]> => {
   const detail = String(productDetail || '').replace(/^"+|"+$/g, '').replace(/^\s*Script/i, '').trim();
   if (!apiKey || !detail) return [];
   const n = Math.max(1, Math.min(5, Number(count) || 3));
@@ -2107,7 +2135,7 @@ const generateDbHeadline = async (productName: string, productDetail: string, ap
 ตอบกลับเป็น JSON Array ของสตริง ${n} ตัวเท่านั้น เช่น ["...","...","..."] ห้ามมีข้อความอื่น`;
 
   try {
-    const data = await callOpenRouterJson(apiKey, 'google/gemini-2.5-flash', prompt);
+    const data = await callOpenRouterJson(apiKey, 'google/gemini-2.5-flash', prompt, llmProvider);
     const arr = Array.isArray(data) ? data : (Array.isArray(data?.headlines) ? data.headlines : []);
     return arr.map((t: any) => String(t || '').replace(/^["'\d.\)\-\s]+/, '').trim()).filter(Boolean).slice(0, n);
   } catch (e) {
@@ -2117,7 +2145,7 @@ const generateDbHeadline = async (productName: string, productDetail: string, ap
 };
 
 // เขียน "แคปชั่นโพสต์ขายสั้นๆ" จากข้อมูลสินค้าจริง (ยาวกว่าพาดหัวเล็กน้อย เป็นประโยคชวนซื้อ)
-const generateDbCaption = async (productName: string, productDetail: string, apiKey: string, count = 2): Promise<string[]> => {
+const generateDbCaption = async (productName: string, productDetail: string, apiKey: string, count = 2, llmProvider: string = 'openrouter'): Promise<string[]> => {
   const detail = String(productDetail || '').replace(/^"+|"+$/g, '').replace(/^\s*Script/i, '').trim();
   if (!apiKey || !detail) return [];
   const n = Math.max(1, Math.min(5, Number(count) || 2));
@@ -2138,7 +2166,7 @@ const generateDbCaption = async (productName: string, productDetail: string, api
 ตอบกลับเป็น JSON Array ของสตริง ${n} ตัวเท่านั้น เช่น ["...","..."] ห้ามมีข้อความอื่น`;
 
   try {
-    const data = await callOpenRouterJson(apiKey, 'google/gemini-2.5-flash', prompt);
+    const data = await callOpenRouterJson(apiKey, 'google/gemini-2.5-flash', prompt, llmProvider);
     const arr = Array.isArray(data) ? data : (Array.isArray(data?.captions) ? data.captions : (Array.isArray(data?.headlines) ? data.headlines : []));
     return arr.map((t: any) => String(t || '').trim()).filter(Boolean).slice(0, n);
   } catch (e) {
@@ -2194,6 +2222,7 @@ const polishSubtitleSegments = async (
   model: string,
   language: string,
   sendCallback: (obj: any) => void,
+  llmProvider: string = 'openrouter',
 ) => {
   if (!apiKey || segments.length === 0) return segments;
   const next = [...segments];
@@ -2216,7 +2245,7 @@ Rules:
 Input:
 ${JSON.stringify(payload)}`;
     sendCallback({ log: `AI กำลังเกลาซับ ${offset + 1}-${offset + chunk.length}/${next.length}` });
-    const data = await callOpenRouterJson(apiKey, model, prompt);
+    const data = await callOpenRouterJson(apiKey, model, prompt, llmProvider);
     const corrections = Array.isArray(data) ? data : [];
     for (const item of corrections) {
       const index = Number(item.i);
@@ -2498,10 +2527,10 @@ app.get('/api/shopee-product-db', (req, res) => {
 // ── เขียนพาดหัวจากฐานข้อมูลสินค้าจริง (ไม่อิงสคริปต์) ──
 app.post('/api/shopee-db-headline', async (req, res) => {
   try {
-    const { productName, productDetail, openRouterKey, count } = req.body || {};
-    if (!openRouterKey) return res.json({ success: false, error: 'ไม่พบ OpenRouter Key (ตั้งค่าในหน้า Settings ก่อน)', headlines: [] });
+    const { productName, productDetail, openRouterKey, count, llmProvider } = req.body || {};
+    if (!openRouterKey) return res.json({ success: false, error: 'ไม่พบ AI API Key (ตั้งค่าในหน้า Settings ก่อน)', headlines: [] });
     if (!String(productDetail || '').trim()) return res.json({ success: false, error: 'ไม่มีข้อมูลสินค้าสำหรับคลิปนี้ในฐานข้อมูล', headlines: [] });
-    const headlines = await generateDbHeadline(String(productName || ''), String(productDetail || ''), String(openRouterKey), Number(count) || 3);
+    const headlines = await generateDbHeadline(String(productName || ''), String(productDetail || ''), String(openRouterKey), Number(count) || 3, String(llmProvider || 'openrouter'));
     if (headlines.length === 0) return res.json({ success: false, error: 'AI ไม่ได้ส่งพาดหัวกลับมา ลองใหม่อีกครั้ง', headlines: [] });
     res.json({ success: true, headlines });
   } catch (e: any) {
@@ -2539,10 +2568,10 @@ app.get('/api/gsheet-products', async (req, res) => {
 // ── เขียนแคปชั่นโพสต์ขายสั้นๆ จากข้อมูลสินค้าจริง (ใช้ในโหมด Shopee ของ Workflow Automator) ──
 app.post('/api/shopee-caption', async (req, res) => {
   try {
-    const { productName, productDetail, openRouterKey, count } = req.body || {};
-    if (!openRouterKey) return res.json({ success: false, error: 'ไม่พบ OpenRouter Key (ตั้งค่าก่อน)', captions: [] });
+    const { productName, productDetail, openRouterKey, count, llmProvider } = req.body || {};
+    if (!openRouterKey) return res.json({ success: false, error: 'ไม่พบ AI API Key (ตั้งค่าก่อน)', captions: [] });
     if (!String(productDetail || '').trim()) return res.json({ success: false, error: 'ไม่มีข้อมูลสินค้าสำหรับไฟล์นี้', captions: [] });
-    const captions = await generateDbCaption(String(productName || ''), String(productDetail || ''), String(openRouterKey), Number(count) || 2);
+    const captions = await generateDbCaption(String(productName || ''), String(productDetail || ''), String(openRouterKey), Number(count) || 2, String(llmProvider || 'openrouter'));
     if (captions.length === 0) return res.json({ success: false, error: 'AI ไม่ได้ส่งแคปชั่นกลับมา ลองใหม่อีกครั้ง', captions: [] });
     res.json({ success: true, captions });
   } catch (e: any) {
@@ -2581,7 +2610,7 @@ app.post('/api/generate-avatar-headline', (req, res) => {
   };
 
   let tempDir = '';
-  const { avatarFolder, avatarFile, openRouterKey } = req.body;
+  const { avatarFolder, avatarFile, openRouterKey, llmProvider } = req.body;
   
   (async () => {
     try {
@@ -2625,7 +2654,7 @@ app.post('/api/generate-avatar-headline', (req, res) => {
 
       send({ status: 'generating_headline', log: '💡 [3/3] กำลังวิเคราะห์สคริปต์และสร้างพาดหัวดึงดูดใจ...' });
 
-      const headlines = await generateAiHeadline(transcriptText, openRouterKey);
+      const headlines = await generateAiHeadline(transcriptText, openRouterKey, String(llmProvider || 'openrouter'));
 
       send({
         success: true,
@@ -2862,7 +2891,7 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
       const transcriptText = subtitleSegments.map(s => s.text).join(' ');
       if (headlineAiEnabled && !customTitleText && transcriptText.trim() && subtitleOptions.openRouterKey) {
         send({ log: 'กำลังเรียก AI ให้เลือกพาดหัว (Hook) ที่ดีที่สุดอัตโนมัติ...' });
-        const aiHooks = await generateAiHeadline(transcriptText, subtitleOptions.openRouterKey);
+        const aiHooks = await generateAiHeadline(transcriptText, subtitleOptions.openRouterKey, String(subtitleOptions.llmProvider || 'openrouter'));
         if (aiHooks.length > 0) {
           customTitleText = aiHooks[0];
           send({ log: `✨ ได้พาดหัวที่ดีที่สุดจาก AI: "${customTitleText}"` });
@@ -2922,6 +2951,7 @@ app.post('/api/render-avatar-vertical-clip', (req, res) => {
               String(subtitleOptions.openRouterModel || 'google/gemini-2.5-flash'),
               String(subtitleOptions.language || 'th'),
               send,
+              String(subtitleOptions.llmProvider || 'openrouter'),
             );
             send({ log: 'AI ช่วยตรวจและเกลาคำผิดของภาษาไทยเรียบร้อย (รักษา Timestamp เดิม)' });
           } catch (e: any) {

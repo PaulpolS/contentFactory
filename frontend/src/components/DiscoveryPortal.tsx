@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { chatCompletions, getLlmKey, getLlmProvider, getLlmProviderLabel } from '../lib/llm';
 import {
   Play,
   RefreshCw,
@@ -749,7 +750,7 @@ export default function DiscoveryPortal({ onApprove, onSendToVideoSuite }: { onA
       scrollTerminal('youtube');
 
       await new Promise<void>((resolve) => {
-        const queryParams = `url=${encodeURIComponent(video.url)}&limit=${ytLimit}&openrouter_key=${encodeURIComponent(openRouterKey)}`;
+        const queryParams = `url=${encodeURIComponent(video.url)}&limit=${ytLimit}&openrouter_key=${encodeURIComponent(getLlmProvider() === 'kie' ? getLlmKey() : openRouterKey)}&llm_provider=${getLlmProvider()}`;
         const eventUrl = `${API_BASE}/orchestrator/run/youtube?${queryParams}`;
         const source = new EventSource(eventUrl);
         sseConnection.current = source;
@@ -1325,24 +1326,15 @@ ${repo.html_url}
   };
 
   const callOpenRouterDirect = async (messages: { role: string; content: string }[], modelName: string) => {
-    if (!openRouterKey.trim()) {
+    if (getLlmProvider() === 'openrouter' && !openRouterKey.trim()) {
       throw new Error('กรุณากรอก OpenRouter API Key หรือเลือกโปรไฟล์ก่อนรัน AI');
     }
-    
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openRouterKey.trim()}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': window.location.origin,
-        'X-Title': 'ContentFactory V2 - GitHub Finder',
-      },
-      body: JSON.stringify({
-        model: modelName,
-        messages,
-        temperature: 0.9
-      })
-    });
+
+    const res = await chatCompletions({
+      model: modelName,
+      messages,
+      temperature: 0.9
+    }, { openRouterKey: openRouterKey.trim() });
 
     const data = await res.json();
     if (!res.ok) {
@@ -1724,8 +1716,8 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
 
   // Enriched AI scoring, Chat send, and copywriting generator triggers
   const runAiScoringForPost = async (post: VaultContent) => {
-    if (!openRouterKey.trim()) {
-      alert('❌ กรุณากรอก OpenRouter API Key ด้านบนก่อนครับ');
+    if (getLlmProvider() === 'openrouter' ? !openRouterKey.trim() : !getLlmKey()) {
+      alert(`❌ กรุณากรอก ${getLlmProviderLabel()} API Key ก่อนครับ`);
       return;
     }
     
@@ -1738,23 +1730,14 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
 ตอบเป็น JSON เท่านั้น: { "viral_score": 8, "evergreen_score": 5 }`;
 
     try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openRouterKey.trim()}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'ContentFactory V2',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: post.raw_content || post.title }
-          ]
-        })
-      });
+      const res = await chatCompletions({
+        model: 'google/gemini-2.5-flash',
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: post.raw_content || post.title }
+        ]
+      }, { openRouterKey: openRouterKey.trim() });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -1784,7 +1767,7 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
   };
 
   const runAiChatSend = async () => {
-    if (!chatInputText.trim() || !openRouterKey.trim()) return;
+    if (!chatInputText.trim() || (getLlmProvider() === 'openrouter' ? !openRouterKey.trim() : !getLlmKey())) return;
     
     const newMsg = { role: 'user' as const, content: chatInputText };
     const updatedMsgs = [...chatMessages, newMsg];
@@ -1793,15 +1776,7 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
     setIsChatting(true);
 
     try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openRouterKey.trim()}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'ContentFactory V2',
-        },
-        body: JSON.stringify({
+      const res = await chatCompletions({
           model: chatModel,
           messages: [
             { 
@@ -1818,8 +1793,7 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
             },
             ...updatedMsgs
           ]
-        })
-      });
+        }, { openRouterKey: openRouterKey.trim() });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -1833,8 +1807,8 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
   };
 
   const runClickbaitSpawner = async (post: VaultContent) => {
-    if (!openRouterKey.trim()) {
-      alert('❌ กรุณากรอก OpenRouter API Key ด้านบนก่อนครับ');
+    if (getLlmProvider() === 'openrouter' ? !openRouterKey.trim() : !getLlmKey()) {
+      alert(`❌ กรุณากรอก ${getLlmProviderLabel()} API Key ก่อนครับ`);
       return;
     }
 
@@ -1883,23 +1857,14 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
     }
 
     try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openRouterKey.trim()}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'ContentFactory V2',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: post.raw_content || post.title }
-          ]
-        })
-      });
+      const res = await chatCompletions({
+        model: 'google/gemini-2.5-flash',
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: post.raw_content || post.title }
+        ]
+      }, { openRouterKey: openRouterKey.trim() });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -2741,7 +2706,7 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
       scrollTerminal('github');
 
       await new Promise<void>((resolve) => {
-        const queryParams = `query=${encodeURIComponent(qVal)}&trend_mode=${ghMode}&limit=${ghLimit}&github_token=${encodeURIComponent(tokenToPass)}&openrouter_key=${encodeURIComponent(openRouterKey)}`;
+        const queryParams = `query=${encodeURIComponent(qVal)}&trend_mode=${ghMode}&limit=${ghLimit}&github_token=${encodeURIComponent(tokenToPass)}&openrouter_key=${encodeURIComponent(getLlmProvider() === 'kie' ? getLlmKey() : openRouterKey)}&llm_provider=${getLlmProvider()}`;
         const eventUrl = `${API_BASE}/orchestrator/run/github?${queryParams}`;
         const source = new EventSource(eventUrl);
         sseConnection.current = source;
@@ -2805,7 +2770,7 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
     }));
 
     await new Promise<void>((resolve) => {
-      const queryParams = `query=${encodeURIComponent(qVal)}&trend_mode=${modeVal}&limit=${limitVal}&github_token=${encodeURIComponent(tokenToPass)}&openrouter_key=${encodeURIComponent(openRouterKey)}`;
+      const queryParams = `query=${encodeURIComponent(qVal)}&trend_mode=${modeVal}&limit=${limitVal}&github_token=${encodeURIComponent(tokenToPass)}&openrouter_key=${encodeURIComponent(getLlmProvider() === 'kie' ? getLlmKey() : openRouterKey)}&llm_provider=${getLlmProvider()}`;
       const eventUrl = `${API_BASE}/orchestrator/run/github?${queryParams}`;
       const source = new EventSource(eventUrl);
       sseConnection.current = source;
@@ -3385,7 +3350,7 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
                   <button
                     type="button"
                     onClick={() => {
-                      const queryParams = `url=${encodeURIComponent(rssUrl)}&limit=${rssLimit}&openrouter_key=${encodeURIComponent(openRouterKey)}`;
+                      const queryParams = `url=${encodeURIComponent(rssUrl)}&limit=${rssLimit}&openrouter_key=${encodeURIComponent(getLlmProvider() === 'kie' ? getLlmKey() : openRouterKey)}&llm_provider=${getLlmProvider()}`;
                       runContentScraper('rss', queryParams);
                     }}
                     disabled={contentRunning.rss}
@@ -3679,7 +3644,7 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
                       <button
                         type="button"
                         onClick={() => {
-                          const queryParams = `url=${encodeURIComponent(ytUrl)}&limit=${ytLimit}&openrouter_key=${encodeURIComponent(openRouterKey)}`;
+                          const queryParams = `url=${encodeURIComponent(ytUrl)}&limit=${ytLimit}&openrouter_key=${encodeURIComponent(getLlmProvider() === 'kie' ? getLlmKey() : openRouterKey)}&llm_provider=${getLlmProvider()}`;
                           runContentScraper('youtube', queryParams);
                         }}
                         disabled={contentRunning.youtube}
@@ -4311,7 +4276,7 @@ ${readmeContent ? `📖 README (บางส่วน):\n${readmeContent}` : ''}
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              const queryParams = `url=${encodeURIComponent(video.url)}&limit=${ytLimit}&openrouter_key=${encodeURIComponent(openRouterKey)}`;
+                                              const queryParams = `url=${encodeURIComponent(video.url)}&limit=${ytLimit}&openrouter_key=${encodeURIComponent(getLlmProvider() === 'kie' ? getLlmKey() : openRouterKey)}&llm_provider=${getLlmProvider()}`;
                                               runContentScraper('youtube', queryParams);
                                               alert(`กำลังรันโปรเซสสกัด OpenCV สไลด์และดึงสคริปต์วิดีโอนี้เข้าคลังหลังบ้าน...`);
                                               setYtActiveMode('extractor');

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { chatCompletions, getLlmKey, getLlmProviderLabel } from '../lib/llm';
 import {
   Film,
   Settings,
@@ -192,9 +193,9 @@ export default function PodcastVideoPortal() {
 
     if (!enableAiTitle) return defaultDetails;
 
-    const orKey = (localStorage.getItem('openrouter_key') || '').trim();
+    const orKey = getLlmKey();
     if (!orKey) {
-      addLog(`[AI Brainstorm] ⚠️ ไม่พบ OpenRouter Key ในการตั้งค่าระบบ จึงข้ามการคิดหัวข้ออัจฉริยะ (ใช้ชื่อดั้งเดิม: "${topicName}")`);
+      addLog(`[AI Brainstorm] ⚠️ ไม่พบ ${getLlmProviderLabel()} Key ในการตั้งค่าระบบ จึงข้ามการคิดหัวข้ออัจฉริยะ (ใช้ชื่อดั้งเดิม: "${topicName}")`);
       return defaultDetails;
     }
 
@@ -261,15 +262,7 @@ Return ONLY a valid JSON object in this exact format, with no markdown backticks
   "subjectPrompt": "Description of the visual subject..."
 }`;
 
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${orKey}`,
-          'HTTP-Referer': 'http://localhost:5173',
-          'X-Title': 'ContentFactory'
-        },
-        body: JSON.stringify({
+      const response = await chatCompletions({
           model: 'google/gemini-2.5-flash',
           messages: [
             {
@@ -283,11 +276,10 @@ Return ONLY a valid JSON object in this exact format, with no markdown backticks
           ],
           temperature: 0.7,
           response_format: { type: 'json_object' }
-        })
-      });
+        });
 
       if (!response.ok) {
-        throw new Error(`OpenRouter API responded with status ${response.status}`);
+        throw new Error(`${getLlmProviderLabel()} API responded with status ${response.status}`);
       }
 
       const resData = await response.json();
