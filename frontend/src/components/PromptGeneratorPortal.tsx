@@ -286,8 +286,8 @@ const VOICEOVER_LENGTHS = [
 ];
 
 const PRESET_MODELS = [
-  { value: 'google/gemini-3.5-flash',               label: 'Gemini 3.5 Flash (แนะนำ)' },
-  { value: 'google/gemini-2.5-flash',               label: 'Gemini 2.5 Flash' },
+  { value: 'google/gemini-2.5-flash',               label: 'Gemini 2.5 Flash (แนะนำ)' },
+  { value: 'google/gemini-3-flash-preview',         label: 'Gemini 3 Flash (ใหม่)' },
   { value: 'anthropic/claude-3.5-haiku',            label: 'Claude 3.5 Haiku' },
   { value: 'openai/gpt-4o-mini',                    label: 'GPT-4o Mini' },
   { value: 'meta-llama/llama-3.1-8b-instruct:free', label: 'Llama 3.1 8B (ฟรี)' },
@@ -319,16 +319,24 @@ async function callOpenRouterAI(messages: { role: string; content: string }[], m
   if (!apiKey) throw new Error(missingLlmKeyMessage());
 
   const res = await chatCompletions({
-    model: model || 'google/gemini-3.5-flash',
+    model: model || 'google/gemini-2.5-flash',
     messages,
     temperature: 0.72,
   });
 
   const data = await res.json();
   if (res.ok && !data.error) {
-    return data.choices?.[0]?.message?.content?.trim() || '';
+    const content = data.choices?.[0]?.message?.content?.trim() || '';
+    if (!content) {
+      // Kie.ai อาจตอบ 200 พร้อม {code, msg} เมื่อโมเดลไม่ถูกต้อง — โชว์ msg จริงให้ผู้ใช้เห็น
+      const kieMsg = data.msg && data.code && data.code !== 200 ? ` — ${getLlmProviderLabel()}: ${data.msg}` : '';
+      const finish = data.choices?.[0]?.finish_reason;
+      throw new Error(`AI ตอบกลับมาว่างเปล่า (model: ${model || 'default'}${finish ? `, finish_reason: ${finish}` : ''})${kieMsg} — ลองเปลี่ยน AI Model แล้วลองใหม่`);
+    }
+    return content;
   }
-  throw new Error(data.error?.message || `${getLlmProviderLabel()} API Error: ${res.status}`);
+  // Kie.ai ตอบ error เป็นรูปแบบ {code, msg} ไม่ใช่ {error: {message}} แบบ OpenRouter
+  throw new Error(data.error?.message || data.msg || `${getLlmProviderLabel()} API Error: ${res.status}`);
 }
 
 export default function PromptGeneratorPortal() {
@@ -513,7 +521,7 @@ Pattern ที่ต้องเลียนแบบ:
   "comments": ["1/3...", "2/3...", "3/3..."]
 }`;
 
-          const raw = await callOpenRouterAI([{ role: 'user', content: prompt }], 'google/gemini-3.5-flash');
+          const raw = await callOpenRouterAI([{ role: 'user', content: prompt }], 'google/gemini-2.5-flash');
           const parsed = JSON.parse(cleanClickbaitText(raw));
 
           item = {
@@ -613,7 +621,7 @@ ${row.article.slice(0, 5000)}
   "comments": ["1/3...", "2/3...", "3/3..."]
 }`;
 
-        const raw = await callOpenRouterAI([{ role: 'user', content: prompt }], 'google/gemini-3.5-flash');
+        const raw = await callOpenRouterAI([{ role: 'user', content: prompt }], 'google/gemini-2.5-flash');
         const parsed = JSON.parse(cleanClickbaitText(raw));
 
         item = {
@@ -697,7 +705,7 @@ ${row.article.slice(0, 5000)}
 
 เขียนบทพูดทั้งหมดเป็นความเรียงที่พร้อมสำหรับนำไปใส่ AI Avatar Voiceover เพื่อใช้แปลงเป็นเสียงสังเคราะห์ทันที`;
 
-        const raw = await callOpenRouterAI([{ role: 'user', content: prompt }], 'google/gemini-3.5-flash');
+        const raw = await callOpenRouterAI([{ role: 'user', content: prompt }], 'google/gemini-2.5-flash');
 
         logVo(`[สำเร็จ] หัวข้อที่ ${currentIdx}: "${topic}" เขียนสคริปต์เสร็จเรียบร้อย!`);
         item = {
@@ -944,7 +952,7 @@ ${row.article.slice(0, 5000)}
             + `\n\n[\u0e1b\u0e23\u0e31\u0e1a\u0e04\u0e27\u0e32\u0e21\u0e22\u0e32\u0e27] ${activeLength.description} (~${activeLength.targetChars} \u0e15\u0e31\u0e27\u0e2d\u0e31\u0e01\u0e29\u0e23)`
             + variationNote;
 
-          const raw = await callOpenRouterAI([{ role: 'user', content: prompt }], 'google/gemini-3.5-flash');
+          const raw = await callOpenRouterAI([{ role: 'user', content: prompt }], 'google/gemini-2.5-flash');
           const parsed = JSON.parse(cleanClickbaitText(raw));
 
           // \u0e43\u0e0a\u0e49\u0e0a\u0e37\u0e48\u0e2d\u0e2d\u0e31\u0e07\u0e01\u0e24\u0e29\u0e08\u0e32\u0e01\u0e2a\u0e04\u0e23\u0e34\u0e1b\u0e15\u0e4c\u0e0a\u0e38\u0e14\u0e41\u0e23\u0e01\u0e40\u0e1b\u0e47\u0e19\u0e21\u0e32\u0e15\u0e23\u0e10\u0e32\u0e19\u0e02\u0e2d\u0e07\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32\u0e19\u0e35\u0e49\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14
@@ -1055,8 +1063,9 @@ ${row.article.slice(0, 5000)}
   const [selectedIds, setSelectedIds]      = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('masterprompt_selected_style_ids') || '[]'); } catch { return []; } });
   const [model, setModelState]             = useState(() => {
     const saved = localStorage.getItem('masterprompt_model');
-    if (saved === 'google/gemini-2.0-flash-001') return 'google/gemini-3.5-flash';
-    return saved || 'google/gemini-3.5-flash';
+    // migrate ค่าเก่าที่ใช้ไม่ได้แล้ว (gemini-3.5-flash ไม่มีจริงบน Kie.ai — ทำให้ตอบว่างเปล่า)
+    if (saved === 'google/gemini-2.0-flash-001' || saved === 'google/gemini-2.5-flash') return 'google/gemini-2.5-flash';
+    return saved || 'google/gemini-2.5-flash';
   });
   const [target, setTargetState]           = useState<TargetGenerator>(() => (localStorage.getItem('masterprompt_target') as TargetGenerator) || 'imagen4');
   const [contentMode, setContentModeState] = useState<ContentMode>(() => (localStorage.getItem('masterprompt_content_mode') as ContentMode) || 'infographic');
@@ -1070,6 +1079,10 @@ ${row.article.slice(0, 5000)}
   const [results, setResults]           = useState<GeneratedPrompt[]>([]);
   const [genStatus, setGenStatus]       = useState('');
   const [error, setError]               = useState('');
+  // ความคืบหน้าแบบมีโครงสร้าง (แทน string ยาว ๆ ที่อ่านยาก) + ธงขอหยุดกลางคัน
+  const [genProgress, setGenProgress]   = useState<{ current: number; total: number; styleEmoji: string; styleName: string; topic: string } | null>(null);
+  const [stopRequested, setStopRequested] = useState(false); // ไว้เปลี่ยนป้ายปุ่มทันทีที่กด
+  const stopRequestedRef = useRef(false);                    // ไว้เช็คใน loop (state อ่านค่าเก่าใน closure)
 
   const isImagen = target === 'imagen4';
   const isInfo   = contentMode === 'infographic';
@@ -1112,10 +1125,31 @@ ${row.article.slice(0, 5000)}
         },
       ], model);
 
-      const m = raw.match(/\[[\s\S]*\]/);
-      if (!m) throw new Error('รูปแบบ JSON ไม่ถูกต้อง');
-      const parsed: StyleGroup[] = JSON.parse(m[0]);
-      if (!Array.isArray(parsed) || !parsed.length) throw new Error('ไม่ได้รับ style groups');
+      // ลอก markdown fence ออกก่อน (บางโมเดลใส่ ```json มาแม้จะสั่งห้าม)
+      const cleaned = raw.replace(/```(?:json)?/gi, '').trim();
+      let parsed: StyleGroup[] = [];
+      const m = cleaned.match(/\[[\s\S]*\]/);
+      if (m) {
+        try { parsed = JSON.parse(m[0]); } catch { /* ไป fallback ด้านล่าง */ }
+      }
+      if (!Array.isArray(parsed) || !parsed.length) {
+        // Fallback: คำตอบอาจโดนตัดกลางทาง (ไม่มี ] ปิด) — ดึงทีละ object ที่สมบูรณ์แทน
+        const objs = cleaned.match(/\{[^{}]*\}/g) || [];
+        parsed = objs.flatMap(o => { try { const g = JSON.parse(o); return g && g.name ? [g] : []; } catch { return []; } });
+      }
+      if (!Array.isArray(parsed) || !parsed.length) {
+        throw new Error(`AI ตอบกลับมาไม่ใช่ JSON ที่อ่านได้ — ข้อความที่ได้: "${raw.slice(0, 200)}${raw.length > 200 ? '...' : ''}"`);
+      }
+      // กันข้อมูลไม่ครบ field จนหน้าอื่นพัง
+      parsed = parsed.map((g, idx) => ({
+        id: g.id || `style_${Date.now()}_${idx}`,
+        name: g.name || `สไตล์ ${idx + 1}`,
+        emoji: g.emoji || '🎨',
+        description: g.description || '',
+        keywords: Array.isArray(g.keywords) ? g.keywords : [],
+        negativeKeywords: Array.isArray(g.negativeKeywords) ? g.negativeKeywords : [],
+        exampleTopic: g.exampleTopic || '',
+      }));
 
       const newIds = parsed.map(g => g.id);
       const merged = [...styleGroups.filter(g => !newIds.includes(g.id)), ...parsed];
@@ -1125,19 +1159,29 @@ ${row.article.slice(0, 5000)}
     finally { setIsSuggesting(false); }
   };
 
-  const generateImagePrompts = async () => {
+  // resume = true: ทำต่อจากหัวข้อที่ค้างไว้ (ไม่ล้างผลลัพธ์เดิม) — ใช้กับปุ่ม "ทำต่อ" หลังกดหยุด
+  const generateImagePrompts = async (resume = false) => {
     const topicList = topics.split('\n').map(t => t.trim()).filter(Boolean);
     if (!topicList.length) { setError('กรุณาใส่หัวข้ออย่างน้อย 1 บรรทัด'); return; }
     if (!selectedIds.length) { setError('กรุณาเลือกสไตล์ใน Pool อย่างน้อย 1 สไตล์ก่อน'); return; }
-    setError(''); setResults([]); setIsGenerating(true);
+    setError(''); setIsGenerating(true);
+    stopRequestedRef.current = false; setStopRequested(false);
+
+    const startIdx = resume ? Math.min(results.length, topicList.length) : 0;
+    if (!resume) setResults([]);
 
     const pool = styleGroups.filter(g => selectedIds.includes(g.id));
-    const out: GeneratedPrompt[] = [];
+    const out: GeneratedPrompt[] = resume ? [...results] : [];
 
-    for (let i = 0; i < topicList.length; i++) {
+    for (let i = startIdx; i < topicList.length; i++) {
+      if (stopRequestedRef.current) {
+        setGenStatus(`⏸ หยุดไว้ที่ ${out.length}/${topicList.length} หัวข้อ — กด "ทำต่อ" เพื่อทำที่เหลือ`);
+        setGenProgress(null); setIsGenerating(false);
+        return;
+      }
       const currentTopic = topicList[i];
       const g = pool[Math.floor(Math.random() * pool.length)];
-      setGenStatus(`หัวข้อ ${i + 1}/${topicList.length} · 🎲 ${g.emoji} ${g.name} · "${currentTopic.slice(0, 30)}${currentTopic.length > 30 ? '...' : ''}"`);
+      setGenProgress({ current: i + 1, total: topicList.length, styleEmoji: g.emoji, styleName: g.name, topic: currentTopic });
       try {
         let row: GeneratedPrompt = { styleId: `${g.id}_${i}`, styleName: g.name, styleEmoji: g.emoji, mode: contentMode, target };
 
@@ -1235,13 +1279,14 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
         row.topicLabel = currentTopic;
         out.push(row);
       } catch (e: any) {
-        out.push({ styleId: `${g.id}_${i}`, styleName: g.name, styleEmoji: g.emoji, prompt: `[Error: ${e.message}]`, mode: contentMode, target });
+        out.push({ styleId: `${g.id}_${i}`, styleName: g.name, styleEmoji: g.emoji, prompt: `[Error: ${e.message}]`, mode: contentMode, target, topicLabel: currentTopic });
       }
       setResults([...out]);
       if (i < topicList.length - 1) await new Promise(r => setTimeout(r, 500));
     }
 
-    setGenStatus(''); setIsGenerating(false);
+    setGenStatus(`✅ เสร็จครบ ${out.length}/${topicList.length} หัวข้อ`);
+    setGenProgress(null); setIsGenerating(false);
   };
 
   const exportCSV = (rows: GeneratedPrompt[]) => {
@@ -2337,7 +2382,7 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
           <div className="grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
             
             {/* LEFT: Style Groups */}
-            <div className="lg:col-span-3 border-r border-slate-800 p-4 space-y-4 flex flex-col justify-between">
+            <div className="lg:col-span-3 min-w-0 border-r border-slate-800 p-4 space-y-4 flex flex-col justify-between">
               <div className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">🏷️ รายละเอียดเพจ (Profile Niche)</label>
@@ -2431,7 +2476,7 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
             </div>
 
             {/* MIDDLE: Content Controls */}
-            <div className="lg:col-span-4 border-r border-slate-800 p-4 space-y-4">
+            <div className="lg:col-span-4 min-w-0 border-r border-slate-800 p-4 space-y-4">
               <div className={`rounded-xl p-3 border ${isInfo ? 'bg-cyan-950/10 border-cyan-800/40 text-cyan-400' : 'bg-slate-950/30 border-slate-800 text-slate-300'}`}>
                 <p className="text-xs font-bold mb-1">{isInfo ? '📊 โหมด: อินโฟกราฟฟิค' : '🖼️ โหมด: ภาพ AI ทั่วไป'}</p>
                 <p className="text-[9px] text-slate-400 leading-relaxed">
@@ -2482,22 +2527,63 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
 
               {error && <div className="rounded-xl bg-red-950/20 border border-red-800/40 p-3 text-[10px] text-red-400">⚠️ {error}</div>}
 
-              <button
-                className="gradient-btn w-full py-3 text-xs font-bold text-slate-950"
-                onClick={generateImagePrompts}
-                disabled={isGenerating || selectedIds.length === 0}
-              >
-                {isGenerating ? '⏳ กำลังแต่งคลัง Prompt...' : `✨ สร้าง ${topics.split('\n').filter(Boolean).length || ''} Master Prompts`}
-              </button>
-              
-              {isGenerating && <p className="text-[10px] text-center text-cyan-400 animate-pulse mt-2">{genStatus}</p>}
+              {/* ปุ่มหลักแปลงร่างเป็นปุ่มหยุดสีแดงระหว่างรัน — อยู่ตำแหน่งเดิม เห็นแน่นอน */}
+              {!isGenerating ? (
+                <button
+                  className="gradient-btn w-full py-3 text-xs font-bold text-slate-950"
+                  onClick={() => generateImagePrompts(false)}
+                  disabled={selectedIds.length === 0}
+                >
+                  ✨ สร้าง {topics.split('\n').filter(Boolean).length || ''} Master Prompts
+                </button>
+              ) : (
+                <button
+                  className="w-full py-3 rounded-xl text-xs font-bold bg-red-950/60 border border-red-700 text-red-300 hover:bg-red-900/50 transition-all animate-pulse"
+                  onClick={() => { stopRequestedRef.current = true; setStopRequested(true); }}
+                  disabled={stopRequested}
+                >
+                  {stopRequested ? '⏳ กำลังหยุด... (รอหัวข้อปัจจุบันเสร็จก่อน)' : '⏹ หยุดการสร้าง (กดเพื่อหยุด)'}
+                </button>
+              )}
+              {!isGenerating && results.length > 0 && results.length < topics.split('\n').filter(t => t.trim()).length && (
+                <button
+                  className="w-full py-2.5 mt-2 rounded-xl text-xs font-bold bg-emerald-950/40 border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/40 transition-all"
+                  onClick={() => generateImagePrompts(true)}
+                >
+                  ▶ ทำต่ออีก {topics.split('\n').filter(t => t.trim()).length - results.length} หัวข้อที่เหลือ
+                </button>
+              )}
+
+              {/* กล่องความคืบหน้า — อ่านง่าย แยกบรรทัด มี progress bar */}
+              {isGenerating && genProgress && (
+                <div className="mt-2 rounded-xl bg-slate-950/70 border border-slate-800 p-3 space-y-2">
+                  <div className="flex justify-between items-center text-[10px] font-bold">
+                    <span className="text-cyan-400 animate-pulse">⏳ กำลังสร้าง Prompt...</span>
+                    <span className="text-slate-300">{genProgress.current} / {genProgress.total}</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-cyan-500 rounded-full transition-all" style={{ width: `${Math.round(((genProgress.current - 1) / genProgress.total) * 100)}%` }} />
+                  </div>
+                  <p className="text-[10px] text-slate-400 truncate">🎲 สไตล์: {genProgress.styleEmoji} {genProgress.styleName}</p>
+                  <p className="text-[10px] text-slate-400 truncate">📝 หัวข้อ: {genProgress.topic}</p>
+                </div>
+              )}
+              {!isGenerating && genStatus && (
+                <p className="text-[10px] text-center text-slate-400 font-bold mt-2">{genStatus}</p>
+              )}
             </div>
 
             {/* RIGHT: Prompt outputs */}
-            <div className="lg:col-span-5 p-4 space-y-4 flex flex-col justify-between overflow-hidden">
+            <div className="lg:col-span-5 min-w-0 p-4 space-y-4 flex flex-col justify-between overflow-hidden">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-extrabold text-white flex items-center gap-2">
                   <span>{isInfo ? '📊 Infographic Content ที่สร้างได้' : '🖼️ AI Prompts ที่สร้างได้'}</span>
+                  {results.length > 0 && <span className="text-[10px] text-cyan-400 font-bold bg-cyan-950/40 border border-cyan-800/50 px-2 py-0.5 rounded-full">{results.length} รายการ</span>}
+                  {isGenerating && genProgress && (
+                    <span className="text-[10px] text-amber-400 font-bold bg-amber-950/40 border border-amber-800/50 px-2 py-0.5 rounded-full animate-pulse">
+                      ⏳ กำลังทำ {genProgress.current}/{genProgress.total}
+                    </span>
+                  )}
                 </h4>
                 {results.length > 0 && (
                   <div className="flex gap-2">
@@ -2507,7 +2593,7 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                     >
                       <Download className="w-3 h-3" /> Export CSV
                     </button>
-                    <button className="text-[10px] text-slate-500 font-extrabold hover:text-slate-300" onClick={() => setResults([])}>ล้าง</button>
+                    <button className="text-[10px] text-slate-500 font-extrabold hover:text-slate-300" onClick={() => { setResults([]); setGenStatus(''); }}>ล้าง</button>
                   </div>
                 )}
               </div>
@@ -2536,9 +2622,9 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                     const isResultInfo = res.mode === 'infographic';
                     const isResultImagen = res.target === 'imagen4';
                     return (
-                      <div key={idx} className="card-item space-y-3.5 border-l-4 border-l-violet-500">
+                      <div key={idx} className="card-item space-y-3.5 border-l-4 border-l-violet-500 overflow-hidden">
                         <div className="flex justify-between items-center gap-4">
-                          <span className="text-xs font-bold text-white">{res.styleEmoji} {res.styleName}</span>
+                          <span className="text-xs font-bold text-white"><span className="text-slate-500 mr-1.5">#{idx + 1}</span>{res.styleEmoji} {res.styleName}</span>
                           <span className="text-[9px] bg-violet-950/60 border border-violet-850 text-violet-400 px-2 py-0.5 rounded-full font-bold">
                             {res.target.toUpperCase()} · {ratio}
                           </span>
@@ -2563,7 +2649,7 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                                 คัดลอก
                               </button>
                             </div>
-                            <div className="bg-slate-950/80 rounded-xl p-3 text-[11px] text-slate-200 leading-relaxed font-sans border border-slate-900/60">
+                            <div className="bg-slate-950/80 rounded-xl p-3 text-[11px] text-slate-200 leading-relaxed font-sans border border-slate-900/60 break-words">
                               {res.designPrompt}
                             </div>
                           </div>
@@ -2584,7 +2670,7 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                                 คัดลอก
                               </button>
                             </div>
-                            <div className="bg-slate-950/80 rounded-xl p-3 text-[11px] text-slate-200 leading-relaxed">
+                            <div className="bg-slate-950/80 rounded-xl p-3 text-[11px] text-slate-200 leading-relaxed break-words">
                               {res.content}
                             </div>
                           </div>
@@ -2605,14 +2691,15 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                                 คัดลอก
                               </button>
                             </div>
-                            <div className="bg-slate-950/80 rounded-xl p-3 text-[10px] text-violet-300 font-mono leading-relaxed">
+                            <div className="bg-slate-950/80 rounded-xl p-3 text-[10px] text-violet-300 font-mono leading-relaxed break-words">
                               {`${res.designPrompt} ${ratio}`}
                             </div>
                           </div>
                         )}
 
                         {/* RENDER GENERAL MODE PROMPT */}
-                        {!isResultInfo && res.prompt && (
+                        {/* โหมด infographic ปกติไม่ใช้ res.prompt แต่แถว error เก็บข้อความไว้ในนี้ — ต้องโชว์ให้เห็น */}
+                        {(!isResultInfo || (!res.designPrompt && !res.content)) && res.prompt && (
                           <div className="space-y-1.5">
                             <div className="flex justify-between items-center">
                               <span className="text-[10px] font-bold text-slate-500">{isResultImagen ? 'Master Prompt (ภาษาไทย)' : 'Prompt'}</span>
@@ -2626,7 +2713,7 @@ ${extraDetail ? `Extra: ${extraDetail}` : ''}`;
                                 คัดลอก
                               </button>
                             </div>
-                            <div className="bg-slate-950/80 rounded-xl p-3 text-[11px] text-slate-200 leading-relaxed font-sans">
+                            <div className="bg-slate-950/80 rounded-xl p-3 text-[11px] text-slate-200 leading-relaxed font-sans break-words">
                               {isResultImagen ? res.prompt : `${res.prompt} ${ratio}`}
                             </div>
                           </div>

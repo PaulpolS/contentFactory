@@ -4184,6 +4184,310 @@ app.post('/api/news/build-image-slideshow', (req, res) => {
   }
 });
 
+// ── "ทำคลิปดูเพลินๆ" (Relaxing Clip) ────────────────────────────────────────
+// สุ่มฟุตเทจต่อกันให้ครบความยาวเสียง + เสียงพากย์ฟรีในเครื่อง (say) + ซับไทย เผาลงคลิป
+// ไม่มีพาดหัว — ออกเป็นวิดีโอแนวตั้ง 9:16
+
+// สร้างไฟล์ .ass จาก segment [{start,end,text}] ตามสไตล์ที่เลือก
+function buildRelaxingAss(
+  segments: Array<{ start: number; end: number; text: string }>,
+  style: any = {}
+): string {
+  const hexToAss = (hex: string) => {
+    if (!hex) return 'FFFFFF';
+    const h = hex.replace('#', '').toUpperCase();
+    if (h.length !== 6) return 'FFFFFF';
+    return `${h.substring(4, 6)}${h.substring(2, 4)}${h.substring(0, 2)}`;
+  };
+  const fmt = (sec: number) => {
+    const s = Math.max(0, sec);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const ss = Math.floor(s % 60);
+    const cs = Math.round((s - Math.floor(s)) * 100);
+    const cc = Math.min(99, cs);
+    return `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}.${String(cc).padStart(2, '0')}`;
+  };
+
+  const fontName = style.fontName || 'Kanit';
+  const fontSize = Math.round((Number(style.fontSize) || 22) * 8 / 3);
+  const outline = (style.outlineThickness !== undefined ? Number(style.outlineThickness) : 3) * 2.0;
+  const shadow = (style.shadowThickness !== undefined ? Number(style.shadowThickness) : 0.4) * 2.0;
+  const pri = hexToAss(style.primaryColor || '#ffffff');
+  const out = hexToAss(style.outlineColor || '#000000');
+  const marginV = Number(style.marginV) || 150;
+
+  let ass = `[Script Info]
+Title: Relaxing Clip Subtitles
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,${fontName},${fontSize},&H00${pri},&H000000FF,&H00${out},&H64000000,-1,0,0,0,100,100,0,0,1,${outline},${shadow},2,60,60,${marginV},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+
+  for (const seg of segments) {
+    const text = String(seg.text || '').trim().replace(/\r?\n/g, '\\N').replace(/\{/g, '(').replace(/\}/g, ')');
+    if (!text) continue;
+    const start = Number(seg.start) || 0;
+    let end = Number(seg.end);
+    if (!Number.isFinite(end) || end <= start) end = start + 2;
+    ass += `Dialogue: 0,${fmt(start)},${fmt(end)},Default,,0,0,0,,${text}\n`;
+  }
+  return ass;
+}
+
+// แบ่งบทเป็นซับตามสัดส่วนความยาว (ใช้เป็น fallback เมื่อ whisper ใช้ไม่ได้)
+function buildSegmentsFromScript(
+  scriptText: string,
+  audioDuration: number
+): Array<{ start: number; end: number; text: string }> {
+  const rawLines = String(scriptText || '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  // แตกบรรทัดยาวให้เป็นวลีสั้น ~<=42 ตัวอักษร ตามช่องว่าง/เครื่องหมาย
+  const chunks: string[] = [];
+  for (const line of rawLines) {
+    if (line.length <= 42) { chunks.push(line); continue; }
+    const parts = line.split(/(?<=[ ,;“”"…])/);
+    let buf = '';
+    for (const p of parts) {
+      if ((buf + p).length > 42 && buf) { chunks.push(buf.trim()); buf = p; }
+      else buf += p;
+    }
+    if (buf.trim()) chunks.push(buf.trim());
+  }
+  const totalChars = chunks.reduce((a, c) => a + Math.max(1, c.length), 0) || 1;
+  const segments: Array<{ start: number; end: number; text: string }> = [];
+  let cursor = 0;
+  for (const c of chunks) {
+    const dur = (Math.max(1, c.length) / totalChars) * audioDuration;
+    segments.push({ start: +cursor.toFixed(2), end: +(cursor + dur).toFixed(2), text: c });
+    cursor += dur;
+  }
+  return segments;
+}
+
+app.post('/api/render-relaxing-clip', async (req, res) => {
+  req.setTimeout(0);
+  res.setTimeout(0);
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+  const send = (obj: object) => {
+    if (!res.writableEnded) {
+      try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); } catch {}
+    }
+  };
+  const { spawn } = require('child_process');
+  const env = {
+    ...process.env,
+    PATH: `/opt/homebrew/opt/ffmpeg-full/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
+  };
+  const run = (cmd: string, args: string[], opts: any = {}): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const p = spawn(cmd, args, { env, ...opts });
+      let stderr = '';
+      if (p.stderr) p.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+      if (opts.onStderr && p.stderr) p.stderr.on('data', (d: Buffer) => opts.onStderr(d.toString()));
+      p.on('error', reject);
+      p.on('close', (code: number | null) => {
+        if (code === 0) resolve();
+        else reject(new Error(`${path.basename(cmd)} exited ${code}: ${stderr.slice(-400)}`));
+      });
+    });
+  const probeDuration = (file: string): Promise<number> =>
+    new Promise((resolve) => {
+      const p = spawn(getFFprobePath(), ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], { env, timeout: 20000 });
+      let outStr = '';
+      p.stdout.on('data', (d: Buffer) => { outStr += d.toString(); });
+      p.on('close', () => { const n = parseFloat(outStr.trim()); resolve(Number.isFinite(n) && n > 0 ? n : 0); });
+      p.on('error', () => resolve(0));
+    });
+
+  let tempDir = '';
+  try {
+    const b = req.body || {};
+    const sourceFolder = String(b.sourceFolder || '').trim();
+    const outputFolder = String(b.outputFolder || '').trim();
+    const scriptText = String(b.scriptText || '').trim();
+    const voice = (String(b.voice || 'Kanya').replace(/[^A-Za-z ]/g, '').trim()) || 'Kanya';
+    const rate = Number(b.rate);
+    const burnSubtitles = b.burnSubtitles !== false;
+    const subStyle = b.subtitleStyle || {};
+    const bgMusicPath = String(b.bgMusicPath || '').trim();
+    const bgMusicVolume = Number.isFinite(Number(b.bgMusicVolume)) ? Number(b.bgMusicVolume) : 0.12;
+    const minSeconds = Number(b.minSeconds) || 0;
+    const outputBase = (String(b.outputName || 'relaxing_clip')
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').replace(/\s+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80)) || 'relaxing_clip';
+
+    if (!scriptText) { send({ type: 'error', text: 'ยังไม่มีบทพากย์ (script)' }); return res.end(); }
+    if (!sourceFolder || !fs.existsSync(sourceFolder) || !fs.statSync(sourceFolder).isDirectory()) {
+      send({ type: 'error', text: 'ไม่พบโฟลเดอร์คลิปต้นทาง' }); return res.end();
+    }
+    try { fs.mkdirSync(outputFolder, { recursive: true }); }
+    catch (e: any) { send({ type: 'error', text: 'สร้างโฟลเดอร์ปลายทางไม่ได้: ' + e.message }); return res.end(); }
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    tempDir = path.join(outputFolder, `.relaxing_${Date.now()}`);
+    fs.mkdirSync(tempDir, { recursive: true });
+    const fontsDir = path.resolve(__dirname, '../../public/Font_stock');
+
+    // ── 1) เสียงพากย์ฟรีในเครื่อง (macOS say) ──
+    send({ type: 'log', text: `🎙️ สังเคราะห์เสียงพากย์ (เสียง ${voice})...` });
+    const txtPath = path.join(tempDir, 'narration.txt');
+    const aiffPath = path.join(tempDir, 'voice.aiff');
+    const voiceMp3 = path.join(tempDir, 'voice.mp3');
+    fs.writeFileSync(txtPath, scriptText, 'utf8');
+    const sayArgs = ['-v', voice, '-f', txtPath, '-o', aiffPath];
+    if (Number.isFinite(rate) && rate >= 120 && rate <= 320) sayArgs.push('-r', String(Math.round(rate)));
+    await run('say', sayArgs);
+    if (!fs.existsSync(aiffPath)) throw new Error('สร้างไฟล์เสียงจาก say ไม่สำเร็จ (ตรวจว่ามีเสียงพากย์ภาษาไทยติดตั้งอยู่)');
+    await run(getFFmpegPath(), ['-y', '-i', aiffPath, '-codec:a', 'libmp3lame', '-qscale:a', '2', voiceMp3]);
+    const audioDuration = await probeDuration(voiceMp3);
+    if (audioDuration <= 0) throw new Error('อ่านความยาวไฟล์เสียงไม่ได้');
+    send({ type: 'log', text: `✅ เสียงพากย์ยาว ${audioDuration.toFixed(1)} วินาที` });
+
+    // ── 2) ซับไทยอัตโนมัติ (whisper → fallback แบ่งจากบท) ──
+    let segments: Array<{ start: number; end: number; text: string }> = [];
+    let assPath = '';
+    if (burnSubtitles) {
+      try {
+        send({ type: 'log', text: '📝 ถอดเสียงทำซับไตเติ้ล...' });
+        segments = await runWhisper(voiceMp3, tempDir, 'large-v3-turbo', 'th', (o: any) => { if (o?.log) send({ type: 'log', text: o.log }); }, res);
+      } catch (e: any) {
+        send({ type: 'log', text: `whisper ใช้ไม่ได้ (${e.message}) — ใช้วิธีแบ่งซับจากบทแทน` });
+      }
+      if (!segments || segments.length === 0) {
+        segments = buildSegmentsFromScript(scriptText, audioDuration);
+        send({ type: 'log', text: `แบ่งซับจากบทได้ ${segments.length} ประโยค` });
+      }
+      const ass = buildRelaxingAss(segments, subStyle);
+      assPath = path.join(tempDir, 'subs.ass');
+      fs.writeFileSync(assPath, ass, 'utf8');
+    }
+
+    // ── 3) สแกน + สุ่มฟุตเทจให้ครบความยาวเสียง ──
+    const VIDEO_EXTS = ['.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm'];
+    const allVideos: string[] = [];
+    (function scan(dir: string) {
+      let entries: string[] = [];
+      try { entries = fs.readdirSync(dir); } catch { return; }
+      for (const e of entries) {
+        if (e.startsWith('.')) continue;
+        const fp = path.join(dir, e);
+        let st: fs.Stats;
+        try { st = fs.statSync(fp); } catch { continue; }
+        if (st.isDirectory()) scan(fp);
+        else if (VIDEO_EXTS.includes(path.extname(e).toLowerCase())) allVideos.push(fp);
+      }
+    })(sourceFolder);
+    if (allVideos.length === 0) throw new Error('ไม่พบไฟล์วิดีโอในโฟลเดอร์ต้นทาง');
+    send({ type: 'log', text: `📁 พบ ${allVideos.length} คลิป กำลังอ่านความยาว...` });
+
+    const clips: Array<{ path: string; duration: number }> = [];
+    for (const v of allVideos) {
+      const d = await probeDuration(v);
+      if (d >= 0.5) clips.push({ path: v, duration: d });
+    }
+    if (clips.length === 0) throw new Error('อ่านความยาวคลิปไม่ได้ (ตรวจ ffprobe/ไฟล์วิดีโอ)');
+
+    const target = Math.max(audioDuration + 0.4, minSeconds);
+    const plan: Array<{ path: string; start: number; dur: number }> = [];
+    let remaining = target;
+    let lastPath = '';
+    let guard = 0;
+    while (remaining > 0.1 && guard < 5000) {
+      guard++;
+      let pool = clips;
+      if (clips.length > 1) { const f = clips.filter((c) => c.path !== lastPath); if (f.length) pool = f; }
+      const clip = pool[Math.floor(Math.random() * pool.length)];
+      const take = remaining <= 6 ? remaining : 3 + Math.random() * 3;
+      const dur = Math.min(clip.duration, remaining, Math.max(0.8, take));
+      const maxStart = Math.max(0, clip.duration - dur);
+      const start = maxStart > 0 ? Math.random() * maxStart : 0;
+      plan.push({ path: clip.path, start: +start.toFixed(2), dur: +dur.toFixed(2) });
+      remaining -= dur;
+      lastPath = clip.path;
+    }
+    send({ type: 'log', text: `🎬 วางแผนตัดฟุตเทจ ${plan.length} ท่อน (~${target.toFixed(0)}s)` });
+
+    // ── 4) normalize แต่ละท่อนเป็น 1080x1920 แล้ว concat เป็นวิดีโอเงียบ ──
+    const vf = 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,format=yuv420p';
+    const segPaths: string[] = [];
+    for (let i = 0; i < plan.length; i++) {
+      const seg = plan[i];
+      const segOut = path.join(tempDir, `seg_${String(i + 1).padStart(3, '0')}.mp4`);
+      await run(getFFmpegPath(), [
+        '-y', '-ss', String(seg.start), '-i', seg.path, '-t', String(seg.dur),
+        '-map', '0:v:0', '-an', '-vf', vf,
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-movflags', '+faststart', segOut,
+      ]);
+      segPaths.push(segOut);
+      if ((i + 1) % 3 === 0 || i === plan.length - 1) send({ type: 'log', text: `   ตัดฟุตเทจ ${i + 1}/${plan.length}` });
+    }
+    const listPath = path.join(tempDir, 'concat.txt');
+    fs.writeFileSync(listPath, segPaths.map((p) => `file '${p.replace(/'/g, `'\\''`)}'`).join('\n'), 'utf8');
+    const silentPath = path.join(tempDir, 'silent.mp4');
+    await run(getFFmpegPath(), ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', silentPath]);
+
+    // ── 5) รวมเสียงพากย์ (+เพลงประกอบ) + เผาซับ → ไฟล์สุดท้าย ──
+    send({ type: 'log', text: '🎞️ รวมภาพ เสียง และซับไตเติ้ล...' });
+    const hasBg = bgMusicPath && fs.existsSync(bgMusicPath);
+    const outName = `${outputBase}_${stamp}.mp4`;
+    const outputPath = path.join(outputFolder, outName);
+    const finalArgs: string[] = ['-y', '-i', silentPath, '-i', voiceMp3];
+    if (hasBg) finalArgs.push('-stream_loop', '-1', '-i', bgMusicPath);
+
+    const filters: string[] = [];
+    let vLabel = '0:v';
+    if (assPath) { filters.push(`[0:v]subtitles=subs.ass:fontsdir=${fontsDir}[v]`); vLabel = '[v]'; }
+    let aLabel = '1:a';
+    if (hasBg) {
+      const vol = Math.max(0, Math.min(1, bgMusicVolume));
+      filters.push(`[1:a]volume=1.0[voice];[2:a]volume=${vol}[music];[voice][music]amix=inputs=2:duration=first:dropout_transition=0[a]`);
+      aLabel = '[a]';
+    }
+    if (filters.length) finalArgs.push('-filter_complex', filters.join(';'));
+    finalArgs.push('-map', vLabel, '-map', aLabel);
+    finalArgs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', '30',
+      '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-shortest', outputPath);
+
+    await run(getFFmpegPath(), finalArgs, {
+      cwd: tempDir,
+      onStderr: (s: string) => {
+        const m = s.match(/time=(\d{2}:\d{2}:\d{2}\.\d{2})/);
+        if (m) send({ type: 'log', text: `เรนเดอร์... ${m[1]}` });
+      },
+    });
+
+    if (!fs.existsSync(outputPath)) throw new Error('เรนเดอร์ไม่สำเร็จ (ไม่พบไฟล์ผลลัพธ์)');
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    send({
+      type: 'done',
+      outputPath,
+      fileName: outName,
+      duration: audioDuration,
+      clipsUsed: plan.length,
+      subtitleCount: segments.length,
+    });
+    res.end();
+  } catch (err: any) {
+    try { if (tempDir && fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    send({ type: 'error', text: err?.message || String(err) });
+    if (!res.writableEnded) res.end();
+  }
+});
+
 // Start listening
 const PORT = process.env.PORT || 5005;
 const server = app.listen(PORT, () => {
