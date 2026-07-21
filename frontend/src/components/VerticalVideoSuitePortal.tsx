@@ -121,7 +121,7 @@ export function useKieTTS() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generateAudio = async ({ text, voiceId = 'Adam', stability = 0.5, apiKey, onLog }: any) => {
+  const generateAudio = async ({ text, voiceId = 'EkK5I93UQWFDigLMpZcX', stability = 0.5, apiKey, onLog }: any) => {
     setIsGenerating(true);
     setError(null);
 
@@ -152,6 +152,8 @@ export function useKieTTS() {
                 dialogue: [
                   {
                     text: text,
+                    // สเปคทางการของ kie.ai ใช้ฟิลด์ชื่อ "voice" (ส่ง voice_id ควบคู่เผื่อ backend เวอร์ชันเก่า)
+                    voice: voiceId,
                     voice_id: voiceId
                   }
                 ],
@@ -704,6 +706,60 @@ const DEFAULT_STYLES: CopyStyle[] = [
     description: 'เล่าเรื่องจริงชวนอึ้ง วิทยาศาสตร์น่าทึ่ง และเกร็ดความรู้แปลกใหม่รอบตัว ด้วยน้ำเสียงที่กระตุ้นความสงสัย ดึงดูดผู้ฟังให้อยากรู้เฉลย',
     example: 'รู้หรือไม่? จริงๆ แล้วร่างกายของคุณมีทองคำซ่อนอยู่! และกระดูกคนเราก็แข็งแกร่งกว่าคอนกรีตถึง 4 เท่า! มาดู 3 เรื่องจริงสุดทึ่งที่คุณอาจไม่เคยรู้มาก่อน...',
   },
+  {
+    id: 'psychology-selfdev',
+    name: 'จิตวิทยาพัฒนาตนเอง',
+    description: 'อธิบายกลไกจิตใจด้วยภาษาง่ายๆ ยกตัวอย่างสถานการณ์ใกล้ตัว จบด้วยข้อคิดที่นำไปใช้ได้ทันที น้ำเสียงจริงใจเหมือนเพื่อนแนะนำ',
+    example: 'เคยสงสัยมั้ย ทำไมยิ่งบังคับตัวเองให้ขยัน กลับยิ่งขี้เกียจ? นักจิตวิทยาเรียกสิ่งนี้ว่า "แรงต้านของสมอง" และวิธีแก้ง่ายกว่าที่คิด...',
+  },
+  {
+    id: 'horror-mystery',
+    name: 'เรื่องเล่าสยองขวัญลี้ลับ',
+    description: 'เล่าช้า เว้นจังหวะสร้างความกดดัน บรรยายบรรยากาศให้เห็นภาพ ค่อยๆ เผยปมทีละนิดจนขนลุกตอนจบ',
+    example: 'คืนนั้นฝนตกหนัก... เสียงเคาะประตูดังขึ้นสามครั้ง ทั้งที่บ้านหลังนั้น ไม่มีใครอาศัยอยู่มากว่าสิบปีแล้ว...',
+  },
+  {
+    id: 'life-drama',
+    name: 'ดราม่าชีวิตซึ้งกินใจ',
+    description: 'เล่าเรื่องราวชีวิตคนธรรมดาที่มีจุดพลิกผัน น้ำเสียงอบอุ่นแฝงความเศร้า ปิดท้ายด้วยบทเรียนชีวิตที่กระแทกใจ',
+    example: 'ชายชราคนหนึ่งนั่งขายลอตเตอรี่หน้าโรงพยาบาลทุกวัน... ไม่มีใครรู้ว่าเงินทุกบาทที่เขาหาได้ กำลังต่อชีวิตใครบางคนอยู่ข้างใน...',
+  },
+  {
+    id: 'business-finance',
+    name: 'ธุรกิจการเงินฉลาดคิด',
+    description: 'สรุปหลักคิดการเงินและกลยุทธ์ธุรกิจให้เข้าใจง่าย ใช้ตัวเลขและกรณีศึกษาจริง น้ำเสียงมั่นใจ กระชับ น่าเชื่อถือ',
+    example: 'ถ้าคุณเก็บเงินวันละ 100 บาท แต่ไม่รู้จักสิ่งที่เรียกว่า "ดอกเบี้ยทบต้น" คุณกำลังพลาดเงินล้านโดยไม่รู้ตัว...',
+  },
+  {
+    id: 'motivation-firedup',
+    name: 'แรงบันดาลใจปลุกไฟ',
+    description: 'น้ำเสียงทรงพลัง จังหวะเร้าใจขึ้นเรื่อยๆ ใช้ประโยคสั้นกระแทกใจ ท้าทายให้ผู้ฟังลุกขึ้นมาเปลี่ยนตัวเองทันที',
+    example: 'คุณไม่ได้แพ้เพราะไม่เก่ง... คุณแพ้เพราะยอมแพ้ก่อนจะได้เริ่ม! วันนี้คือวันที่คุณจะพิสูจน์ว่าตัวเองคิดผิด...',
+  },
+  {
+    id: 'true-crime',
+    name: 'คดีดังสะเทือนขวัญ',
+    description: 'เล่าแบบสารคดีสืบสวน เรียงลำดับเหตุการณ์ชัดเจน เปิดปมด้วยคำถาม ทิ้งเงื่อนงำให้ติดตามจนวินาทีสุดท้าย',
+    example: 'ปี 1996 หญิงสาวคนหนึ่งหายตัวไปจากลานจอดรถ... กล้องวงจรปิดจับภาพสุดท้ายของเธอได้ และสิ่งที่อยู่ในภาพนั้น ทำให้ตำรวจทั้งเมืองต้องอึ้ง...',
+  },
+  {
+    id: 'health-wellness',
+    name: 'สุขภาพดีน่ารู้',
+    description: 'ให้ความรู้สุขภาพ อาหาร การนอน การออกกำลังกาย ด้วยน้ำเสียงห่วงใย อ้างอิงหลักวิทยาศาสตร์ เข้าใจง่าย ทำตามได้จริง',
+    example: 'แค่เปลี่ยนเวลานอนเร็วขึ้น 1 ชั่วโมง ร่างกายคุณจะเปลี่ยนไปมากกว่าที่คิด... และนี่คือสิ่งที่เกิดขึ้นภายใน 7 วัน...',
+  },
+  {
+    id: 'folk-legend',
+    name: 'ตำนานเรื่องเล่าพื้นบ้าน',
+    description: 'เล่าตำนาน ความเชื่อ และเรื่องเล่าเก่าแก่ ด้วยน้ำเสียงขลังชวนติดตาม ผสมข้อเท็จจริงทางประวัติศาสตร์กับความลี้ลับ',
+    example: 'ก่อนที่เมืองนี้จะถูกสร้างขึ้น... คนเฒ่าคนแก่เล่ากันว่า ใต้ต้นไทรร้อยปีต้นนั้น มีบางสิ่งถูกฝังเอาไว้พร้อมคำสาป...',
+  },
+  {
+    id: 'gossip-entertainment',
+    name: 'เม้าท์มอยบันเทิงติดเทรนด์',
+    description: 'เล่าเร็ว สนุก เป็นกันเองเหมือนเม้าท์กับเพื่อน ใช้ภาษาวัยรุ่น อัปเดตกระแสร้อนแรง ชวนคอมเมนต์แชร์ความเห็น',
+    example: 'แม่จ๋าาา ดราม่านี้แซ่บมาก! ใครยังไม่รู้ฟังทางนี้ เรื่องมันเริ่มจาก... แล้วพีคสุดคือตอนจบที่ไม่มีใครคาดคิด!',
+  },
 ];
 
 // MacOS Native say command voices
@@ -715,40 +771,63 @@ const MACOS_VOICES = [
   { id: 'mac_Daniel', name: 'Daniel (English - ชาย - คุณภาพสูง)', lang: 'en-GB' },
 ];
 
+// แมปค่าเก่า (ชื่อเสียง และ ElevenLabs voice ID เดิมที่ kie.ai ไม่รองรับ) ไปยัง voice ID
+// ในลิสต์ทางการของ kie.ai (elevenlabs/text-to-dialogue-v3) — ใช้ตอนโหลดโปรไฟล์/ประวัติที่เซฟไว้
 const VOICE_NAME_TO_ID: Record<string, string> = {
-  'Rachel': '21m00Tcm4TlvDq8ikWAM',
-  'Aria': '9BWtsMINqrJLrRacOk9x',
-  'Sarah': 'EXAVITQu4vr4xnSDxMaL',
-  'Laura': 'FGY2Mi7P5L5L4P2G1J9H',
-  'Lily': 'pFZP5JQG7iQjIQuC4Bku',
-  'Roger': 'CwhRBWXjGAHq8TQ4Fs17',
-  'George': 'JBFqnCBsd6RMkjVDRZzb',
-  'Eric': 'cJ0tnMe1xobypO9Xp77S',
-  'Chris': 'iP95p4xoKVk53GoZ742B',
-  'Brian': 'nPczCjzI2devNBz1zQrb',
-  'Daniel': 'onwK4e9ZLuTAKqWW03F9'
+  // ชื่อเสียงเดิม → เสียงบุคลิกใกล้เคียงที่ kie.ai รองรับ
+  'Rachel': 'hpp4J3VqNfWAUOO0d1Us',   // → Bella
+  'Aria': 'BZgkqPqms7Kj9ulSkVzn',     // → Eve
+  'Sarah': '5l5f8iK3YPeGga21rQIX',    // → Adeline
+  'Laura': 'FGY2WhTYpPnrIDTdsKH5',    // → Laura (ID ที่ถูกต้อง)
+  'Lily': '1wGbFxmAM3Fgw63G1zZJ',     // → Allison
+  'Roger': 'EkK5I93UQWFDigLMpZcX',    // → James
+  'George': 'LruHrtVF6PSyGItzMNHS',   // → Benjamin
+  'Eric': 'TX3LPaxmHKxFdv7VOQHJ',     // → Liam
+  'Chris': 'nzeAacJi50IvxcyDnMXa',    // → Marshal
+  'Brian': 'nPczCjzI2devNBz1zQrb',    // → Brian (รองรับอยู่แล้ว)
+  'Daniel': 'qDuRKMlYmrm8trt5QyBn',   // → Taksh
+  'Adam': 'EkK5I93UQWFDigLMpZcX',     // → James
+  // ElevenLabs ID เดิมที่เคยใช้ในแอป → เสียงทดแทน
+  '21m00Tcm4TlvDq8ikWAM': 'hpp4J3VqNfWAUOO0d1Us', // Rachel → Bella
+  '9BWtsMINqrJLrRacOk9x': 'BZgkqPqms7Kj9ulSkVzn', // Aria → Eve
+  'EXAVITQu4vr4xnSDxMaL': '5l5f8iK3YPeGga21rQIX', // Sarah → Adeline
+  'FGY2Mi7P5L5L4P2G1J9H': 'FGY2WhTYpPnrIDTdsKH5', // Laura (ID ผิด) → Laura
+  'pFZP5JQG7iQjIQuC4Bku': '1wGbFxmAM3Fgw63G1zZJ', // Lily → Allison
+  'CwhRBWXjGAHq8TQ4Fs17': 'EkK5I93UQWFDigLMpZcX', // Roger → James
+  'JBFqnCBsd6RMkjVDRZzb': 'LruHrtVF6PSyGItzMNHS', // George → Benjamin
+  'cJ0tnMe1xobypO9Xp77S': 'TX3LPaxmHKxFdv7VOQHJ', // Eric → Liam
+  'iP95p4xoKVk53GoZ742B': 'nzeAacJi50IvxcyDnMXa', // Chris → Marshal
+  'onwK4e9ZLuTAKqWW03F9': 'qDuRKMlYmrm8trt5QyBn', // Daniel → Taksh
 };
 
+// เสียงทั้งหมดมาจากลิสต์ทางการของ kie.ai (docs.kie.ai/market/elevenlabs/text-to-dialogue-v3)
+// ฟังตัวอย่างเสียงได้ที่ https://static.aiquickdraw.com/elevenlabs/voice/<voice_id>.mp3
 const KIEAI_VOICES = [
   // สุภาพสตรี (Females)
-  { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel (หญิง - เสียงนุ่ม สงบ เป็นมืออาชีพ เหมาะกับเล่าเรื่อง/สารคดี)', lang: 'th-TH' },
-  { id: '9BWtsMINqrJLrRacOk9x', name: 'Aria (หญิง - เสียงหวาน สดใส ละมุน ยอดนิยมสำหรับคลิปทั่วไป)', lang: 'th-TH' },
-  { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah (หญิง - เสียงนุ่มนวล อบอุ่น เป็นกันเอง เหมาะกับคลิปไลฟ์สไตล์)', lang: 'th-TH' },
-  { id: 'FGY2Mi7P5L5L4P2G1J9H', name: 'Laura (หญิง - เสียงใส สดใสร่าเริง เหมาะกับคลิปสั้นสนุก)', lang: 'th-TH' },
-  { id: 'pFZP5JQG7iQjIQuC4Bku', name: 'Lily (หญิง - เสียงนุ่มนวลเป็นธรรมชาติ เหมาะกับ ASMR/เล่าเรื่องก่อนนอน)', lang: 'th-TH' },
+  { id: 'hpp4J3VqNfWAUOO0d1Us', name: 'Bella (หญิง - มืออาชีพ สดใส อบอุ่น เหมาะกับเล่าเรื่อง/สารคดี)', lang: 'th-TH' },
+  { id: 'Z3R5wn05IrDiVCyEkUrK', name: 'Arabella (หญิง - ลึกลับ มีอารมณ์ร่วม เหมาะกับเรื่องเล่าลี้ลับ/ดราม่า)', lang: 'th-TH' },
+  { id: '5l5f8iK3YPeGga21rQIX', name: 'Adeline (หญิง - นุ่มนวล เป็นกันเอง เหมาะกับคลิปไลฟ์สไตล์)', lang: 'th-TH' },
+  { id: 'BZgkqPqms7Kj9ulSkVzn', name: 'Eve (หญิง - สดใส มีพลัง ร่าเริง เหมาะกับคลิปสั้นสนุก)', lang: 'th-TH' },
+  { id: 'FGY2WhTYpPnrIDTdsKH5', name: 'Laura (หญิง - ขี้เล่น มีเอกลักษณ์ เหมาะกับคลิปสั้นวัยรุ่น)', lang: 'th-TH' },
+  { id: 'kPzsL2i3teMYv0FxEYQ6', name: 'Brittney (หญิง - วัยรุ่น สนุก ทันสมัย เหมาะกับโซเชียลคอนเทนต์)', lang: 'th-TH' },
+  { id: '6aDn1KB0hjpdcocrUkmq', name: 'Tiffany (หญิง - เป็นธรรมชาติ อบอุ่นน่าฟัง เหมาะกับคลิปทั่วไป)', lang: 'th-TH' },
+  { id: '1wGbFxmAM3Fgw63G1zZJ', name: 'Allison (หญิง - สงบ ผ่อนคลาย เหมาะกับ ASMR/เล่าเรื่องก่อนนอน)', lang: 'th-TH' },
+  { id: 'pPdl9cQBQq4p6mRkZy2Z', name: 'Emma (หญิง - น่ารัก สดใส เหมาะกับคลิปบันเทิง/ไลฟ์สไตล์)', lang: 'th-TH' },
 
   // สุภาพบุรุษ (Males)
-  { id: 'CwhRBWXjGAHq8TQ4Fs17', name: 'Roger (ชาย - เสียงหล่อ เข้ม อบอุ่น เล่าเรื่องประวัติศาสตร์/สารคดีดีเลิศ)', lang: 'th-TH' },
-  { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George (ชาย - เสียงสุภาพ อบอุ่น นุ่มลึก เหมาะกับคลิปพัฒนาตนเอง)', lang: 'th-TH' },
-  { id: 'cJ0tnMe1xobypO9Xp77S', name: 'Eric (ชาย - เสียงวัยรุ่น คล่องแคล่ว ทันสมัย เหมาะกับแนวไอที/ข่าวสั้น)', lang: 'th-TH' },
-  { id: 'iP95p4xoKVk53GoZ742B', name: 'Chris (ชาย - เสียงกลาง ชัดเจน เป็นมิตร เหมาะกับคลิปสอน/How-to)', lang: 'th-TH' },
-  { id: 'nPczCjzI2devNBz1zQrb', name: 'Brian (ชาย - เสียงหนักแน่น ผู้นำ โทนข่าว/สารคดีระดับสากล)', lang: 'th-TH' },
-  { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel (ชาย - เสียงเรียบสุขุม เหมาะกับคลิปธุรกิจ/การเงิน)', lang: 'th-TH' },
+  { id: 'EkK5I93UQWFDigLMpZcX', name: 'James (ชาย - เข้ม ทรงพลัง ดึงดูด เหมาะกับสารคดี/ประวัติศาสตร์)', lang: 'th-TH' },
+  { id: 'nPczCjzI2devNBz1zQrb', name: 'Brian (ชาย - ทุ้มลึก หนักแน่น อบอุ่น โทนข่าว/สารคดีระดับสากล)', lang: 'th-TH' },
+  { id: 'LruHrtVF6PSyGItzMNHS', name: 'Benjamin (ชาย - ทุ้ม อบอุ่น สุขุม เหมาะกับคลิปพัฒนาตนเอง/ปรัชญา)', lang: 'th-TH' },
+  { id: 'MJ0RnG71ty4LH3dvNfSd', name: 'Leon (ชาย - นุ่มลึก ผ่อนคลาย เหมาะกับเล่าเรื่องก่อนนอน/ธรรมะ)', lang: 'th-TH' },
+  { id: 'TX3LPaxmHKxFdv7VOQHJ', name: 'Liam (ชาย - กระฉับกระเฉง ทันสมัย เหมาะกับแนวไอที/ข่าวสั้น)', lang: 'th-TH' },
+  { id: 'nzeAacJi50IvxcyDnMXa', name: 'Marshal (ชาย - เป็นมิตร สนุก สไตล์อาจารย์เล่าเรื่อง เหมาะกับคลิปสอน/How-to)', lang: 'th-TH' },
+  { id: 'qDuRKMlYmrm8trt5QyBn', name: 'Taksh (ชาย - เรียบ สุขุม จริงจัง เหมาะกับคลิปธุรกิจ/การเงิน)', lang: 'th-TH' },
+  { id: '6F5Zhi321D3Oq7v1oNT4', name: 'Hank (ชาย - ทุ้มลึก นักเล่าเรื่อง เหมาะกับเรื่องยาว/พอดแคสต์)', lang: 'th-TH' },
 ];
 
 // Set of valid Kie.ai voice IDs for validation
 const VALID_KIEAI_VOICE_IDS = new Set(KIEAI_VOICES.map(v => v.id));
-const DEFAULT_VOICE_ID = KIEAI_VOICES[0].id; // Rachel
+const DEFAULT_VOICE_ID = KIEAI_VOICES[0].id; // Bella
 
 /** Returns a valid voice ID — falls back to DEFAULT_VOICE_ID if invalid */
 const resolveValidVoiceId = (id: string | undefined | null): string => {
@@ -766,7 +845,7 @@ const resolveValidVoiceId = (id: string | undefined | null): string => {
 
 /** Get a friendly display name from a voice_id */
 const getVoiceDisplayName = (id: string | undefined | null): string => {
-  if (!id) return 'Domi';
+  if (!id) return 'Bella';
   if (id.startsWith('mac_')) return `Mac: ${id.split('_')[1] || 'System'}`;
   const resolvedId = VOICE_NAME_TO_ID[id] || id;
   const found = KIEAI_VOICES.find(v => v.id === resolvedId);
@@ -1021,12 +1100,20 @@ export default function VerticalVideoSuitePortal() {
   const [resumingHistoryId, setResumingHistoryId] = useState<string | null>(null);
   const [isResumingAllHistory, setIsResumingAllHistory] = useState(false);
   const [channelConcept, setChannelConcept] = useState('ให้ความรู้จิตวิทยา พัฒนาตนเอง ข้อคิดการดำเนินชีวิต');
+  // ชุด default เวอร์ชันเก่าที่เคยเซฟลง localStorage — ถ้าเจอให้รีเฟรชเป็นชุดใหม่
+  // (สไตล์ที่ผู้ใช้เจนเองมี id ขึ้นต้นด้วย gen-style- จึงไม่โดนรีเซ็ต)
+  const isStaleDefaultStyles = (parsed: any): boolean => {
+    const defaultIds = new Set(DEFAULT_STYLES.map(s => s.id));
+    return Array.isArray(parsed)
+      && parsed.length < DEFAULT_STYLES.length
+      && parsed.every((s: any) => defaultIds.has(s?.id));
+  };
   const [copyStyles, setCopyStyles] = useState<CopyStyle[]>(() => {
     const saved = localStorage.getItem('auto_video_styles');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length === 3 && parsed.some(s => s.id === 'deep-philosophy')) {
+        if (isStaleDefaultStyles(parsed)) {
           localStorage.removeItem('auto_video_styles');
           return DEFAULT_STYLES;
         }
@@ -1042,7 +1129,7 @@ export default function VerticalVideoSuitePortal() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length === 3 && parsed.some(s => s.id === 'deep-philosophy')) {
+        if (isStaleDefaultStyles(parsed)) {
           return DEFAULT_STYLES[0].id;
         }
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -1070,7 +1157,7 @@ export default function VerticalVideoSuitePortal() {
   }, [scriptLength]);
 
   // TTS State
-  const [voiceId, setVoiceId] = useState(KIEAI_VOICES[0].id); // Rachel
+  const [voiceId, setVoiceId] = useState(KIEAI_VOICES[0].id); // Bella
   const [audioUrl, setAudioUrl] = useState('');
   const [audioDuration, setAudioDuration] = useState(0);
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
