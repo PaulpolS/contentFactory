@@ -614,6 +614,84 @@ app.get('/api/mac-tts', async (req, res) => {
   }
 });
 
+// 2.4.5 Microsoft Edge Neural TTS (เสียงสำรองคุณภาพสูง ฟรี ไม่ใช้คีย์ — มีเสียงไทยชาย Niwat/หญิง Premwadee)
+// ใช้เป็นชั้นสำรองเวลา Kie.ai (ElevenLabs) ล่ม เพื่อให้ยังได้เสียง Neural ที่ตรงเพศที่เลือก แทนที่จะตกไปเสียง Mac ทันที
+const edgeTtsHandler = async (req: any, res: any) => {
+  const text = String((req.body && req.body.text) || req.query.text || '').trim();
+  const voiceName = String((req.body && req.body.voice) || req.query.voice || 'th-TH-PremwadeeNeural').trim();
+
+  if (!text) return res.status(400).json({ error: 'Missing text parameter' });
+  // กัน SSML injection ผ่านชื่อ voice (รูปแบบมาตรฐาน เช่น th-TH-NiwatNeural)
+  if (!/^[a-zA-Z0-9-]+$/.test(voiceName)) return res.status(400).json({ error: 'Invalid voice name' });
+
+  try {
+    const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
+    const stockDir = path.resolve(__dirname, '../../public/Voice_stock');
+    if (!fs.existsSync(stockDir)) fs.mkdirSync(stockDir, { recursive: true });
+
+    const uniqueId = Date.now().toString();
+    const tmpDir = path.join(stockDir, `.edge-tts-tmp-${uniqueId}`);
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const finalMp3Path = path.join(stockDir, `edge-tts-${uniqueId}.mp3`);
+
+    // ไลบรารีไม่ escape SSML ให้ — ต้อง escape เอง กันบทที่มี & < > ทำ XML พัง
+    const safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const tts = new MsEdgeTTS();
+    try {
+      await Promise.race([
+        (async () => {
+          await tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+          await tts.toFile(tmpDir, safeText);
+        })(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Edge TTS timeout (60s)')), 60000)),
+      ]);
+    } finally {
+      try { tts.close(); } catch {}
+    }
+
+    const generatedPath = path.join(tmpDir, 'audio.mp3');
+    if (!fs.existsSync(generatedPath) || fs.statSync(generatedPath).size === 0) {
+      throw new Error('Edge TTS ไม่ได้สร้างไฟล์เสียง');
+    }
+    fs.renameSync(generatedPath, finalMp3Path);
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+
+    // อ่านความยาวไฟล์เสียงด้วย ffprobe (เหมือน mac-tts)
+    const { exec } = require('child_process');
+    const probeCmd = `"${getFFprobePath()}" -v error -show_entries format=duration -of csv=p=0 "${finalMp3Path}"`;
+    let duration = 0;
+    await new Promise<void>((resolve) => {
+      exec(probeCmd, (error: any, stdout: any) => {
+        const dur = parseFloat(String(stdout).trim());
+        if (!error && Number.isFinite(dur) && dur > 0) duration = dur;
+        resolve();
+      });
+    });
+
+    // ลงทะเบียนใน sfx catalog เหมือนเสียงจาก mac-tts
+    const catalogPath = path.join(stockDir, 'sfx_catalog.json');
+    let catalog: any[] = [];
+    if (fs.existsSync(catalogPath)) {
+      try { catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8')); } catch {}
+    }
+    const safeName = `edge-tts-${uniqueId}.mp3`;
+    catalog.push({
+      fileName: safeName,
+      prompt: text.substring(0, 50),
+      tags: ['online', 'edge-neural', voiceName],
+      updatedAt: new Date().toISOString(),
+    });
+    fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2));
+
+    res.json({ success: true, audioUrl: `/Voice_stock/${safeName}`, duration: duration || 5.0 });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+app.get('/api/edge-tts', edgeTtsHandler);
+app.post('/api/edge-tts', edgeTtsHandler);
+
 // 2.5. Whisper Subtitle Generator for standard videos
 app.post('/api/generate-whisper-subtitles', async (req, res) => {
   const { audioUrl, scriptText } = req.body;
@@ -2295,36 +2373,79 @@ const wrapWord = (word: string, maxChars: number): string[] => {
   return chunks;
 };
 
-const wrapTitleLine = (line: string, maxChars: number) => {
-  const words = line.split(' ').filter(Boolean);
-  if (words.length === 0) return [];
-  const out: string[] = [];
-  let current = '';
-  for (const word of words) {
-    const wordGraphemes = segmentGraphemes(word);
-    if (wordGraphemes.length > maxChars) {
+// ตัดคำไทย/อังกฤษด้วยพจนานุกรม ICU (Intl.Segmenter) เพื่อไม่ให้ตัดบรรทัด "กลางคำ"
+// เช่น "ชั่วโมง" จะไม่ถูกหั่นเป็น "ชั่วโ" + "มง" อีกต่อไป (ภาษาไทยไม่มีช่องว่างระหว่างคำ)
+const segmentIntoWords = (line: string): string[] => {
+  try {
+    const Segmenter = (Intl as any).Segmenter;
+    if (Segmenter) {
+      const seg = new Segmenter('th', { granularity: 'word' });
+      const parts = Array.from(seg.segment(line), (s: any) => s.segment as string).filter(Boolean);
+      if (parts.length) return parts;
+    }
+  } catch { /* ตกไป fallback ด้านล่าง */ }
+  // fallback: แยกด้วยช่องว่าง (กรณี runtime ไม่รองรับ Intl.Segmenter)
+  return line.split(/(\s+)/).filter(Boolean);
+};
+
+const isSpaceToken = (token: string) => /^\s+$/.test(token);
+
+// จัดบรรทัดพาดหัวแบบ "ตัดที่ขอบคำ + เกลี่ยความยาวให้สมดุล"
+// 1) ตัดที่ขอบคำเสมอ (ยกเว้นคำเดี่ยวที่ยาวเกิน maxChars จริง ๆ ค่อย fallback ตัดตามตัวอักษร)
+// 2) เกลี่ยให้แต่ละบรรทัดยาวใกล้เคียงกัน โดยไม่เพิ่มจำนวนบรรทัด (หาความกว้างที่น้อยที่สุดที่ยังพอดี)
+const wrapTitleLine = (line: string, maxChars: number): string[] => {
+  const tokens = segmentIntoWords(line).filter(Boolean);
+  if (tokens.length === 0) return [];
+
+  const greedy = (width: number): string[] => {
+    const out: string[] = [];
+    let current = '';
+    for (const token of tokens) {
+      if (!current && isSpaceToken(token)) continue;
+      const candidate = current + token;
+      if (segmentGraphemes(candidate).length <= width) {
+        current = candidate;
+        continue;
+      }
       if (current) {
-        out.push(current);
+        out.push(current.replace(/\s+$/, ''));
         current = '';
       }
-      const subWords = wrapWord(word, maxChars);
-      for (let i = 0; i < subWords.length - 1; i++) {
-        out.push(subWords[i]);
-      }
-      current = subWords[subWords.length - 1];
-    } else {
-      const next = current ? `${current} ${word}` : word;
-      const nextGraphemes = segmentGraphemes(next);
-      if (nextGraphemes.length > maxChars && current) {
-        out.push(current);
-        current = word;
+      if (isSpaceToken(token)) continue;
+      if (segmentGraphemes(token).length > width) {
+        const chunks = wrapWord(token, width);
+        for (let i = 0; i < chunks.length - 1; i++) out.push(chunks[i]);
+        current = chunks[chunks.length - 1];
       } else {
-        current = next;
+        current = token;
       }
     }
+    if (current.trim()) out.push(current.replace(/\s+$/, ''));
+    return out;
+  };
+
+  const baseLineCount = greedy(maxChars).length;
+  if (baseLineCount <= 1) return greedy(maxChars);
+
+  // ความกว้างขั้นต่ำต้องไม่น้อยกว่าคำที่ยาวที่สุด เพื่อไม่ให้กลับไปตัดกลางคำตอนเกลี่ย
+  const longestWord = Math.max(
+    1,
+    ...tokens.filter(t => !isSpaceToken(t)).map(t => segmentGraphemes(t).length)
+  );
+
+  let lo = longestWord;
+  let hi = maxChars;
+  let best = maxChars;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (greedy(mid).length <= baseLineCount) {
+      best = mid;
+      hi = mid - 1;
+    } else {
+      lo = mid + 1;
+    }
   }
-  if (current) out.push(current);
-  return out;
+  return greedy(best);
 };
 
 const makeTitle = (fileName: string, customTitle?: string) => {
@@ -4181,6 +4302,432 @@ app.post('/api/news/build-image-slideshow', (req, res) => {
   } catch (e: any) {
     res.statusCode = 500;
     res.end(JSON.stringify({ error: e.message }));
+  }
+});
+
+// ── "ทำคลิปดูเพลินๆ" (Relaxing Clip) ────────────────────────────────────────
+// สุ่มฟุตเทจต่อกันให้ครบความยาวเสียง + เสียงพากย์ฟรีในเครื่อง (say) + ซับไทย เผาลงคลิป
+// ไม่มีพาดหัว — ออกเป็นวิดีโอแนวตั้ง 9:16
+
+// สร้างไฟล์ .ass จาก segment [{start,end,text}] ตามสไตล์ที่เลือก
+function buildRelaxingAss(
+  segments: Array<{ start: number; end: number; text: string }>,
+  style: any = {}
+): string {
+  const hexToAss = (hex: string) => {
+    if (!hex) return 'FFFFFF';
+    const h = hex.replace('#', '').toUpperCase();
+    if (h.length !== 6) return 'FFFFFF';
+    return `${h.substring(4, 6)}${h.substring(2, 4)}${h.substring(0, 2)}`;
+  };
+  const fmt = (sec: number) => {
+    const s = Math.max(0, sec);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const ss = Math.floor(s % 60);
+    const cs = Math.round((s - Math.floor(s)) * 100);
+    const cc = Math.min(99, cs);
+    return `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}.${String(cc).padStart(2, '0')}`;
+  };
+
+  const fontName = style.fontName || 'Kanit';
+  const fontSize = Math.round((Number(style.fontSize) || 22) * 8 / 3);
+  const outline = (style.outlineThickness !== undefined ? Number(style.outlineThickness) : 3) * 2.0;
+  const shadow = (style.shadowThickness !== undefined ? Number(style.shadowThickness) : 0.4) * 2.0;
+  const pri = hexToAss(style.primaryColor || '#ffffff');
+  const out = hexToAss(style.outlineColor || '#000000');
+  const marginV = Number(style.marginV) || 150;
+
+  let ass = `[Script Info]
+Title: Relaxing Clip Subtitles
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,${fontName},${fontSize},&H00${pri},&H000000FF,&H00${out},&H64000000,-1,0,0,0,100,100,0,0,1,${outline},${shadow},2,60,60,${marginV},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+
+  for (const seg of segments) {
+    const text = String(seg.text || '').trim().replace(/\r?\n/g, '\\N').replace(/\{/g, '(').replace(/\}/g, ')');
+    if (!text) continue;
+    const start = Number(seg.start) || 0;
+    let end = Number(seg.end);
+    if (!Number.isFinite(end) || end <= start) end = start + 2;
+    ass += `Dialogue: 0,${fmt(start)},${fmt(end)},Default,,0,0,0,,${text}\n`;
+  }
+  return ass;
+}
+
+// แบ่งบทเป็นซับตามสัดส่วนความยาว (ใช้เป็น fallback เมื่อ whisper ใช้ไม่ได้)
+function buildSegmentsFromScript(
+  scriptText: string,
+  audioDuration: number
+): Array<{ start: number; end: number; text: string }> {
+  const rawLines = String(scriptText || '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  // แตกบรรทัดยาวให้เป็นวลีสั้น ~<=42 ตัวอักษร ตามช่องว่าง/เครื่องหมาย
+  const chunks: string[] = [];
+  for (const line of rawLines) {
+    if (line.length <= 42) { chunks.push(line); continue; }
+    const parts = line.split(/(?<=[ ,;“”"…])/);
+    let buf = '';
+    for (const p of parts) {
+      if ((buf + p).length > 42 && buf) { chunks.push(buf.trim()); buf = p; }
+      else buf += p;
+    }
+    if (buf.trim()) chunks.push(buf.trim());
+  }
+  const totalChars = chunks.reduce((a, c) => a + Math.max(1, c.length), 0) || 1;
+  const segments: Array<{ start: number; end: number; text: string }> = [];
+  let cursor = 0;
+  for (const c of chunks) {
+    const dur = (Math.max(1, c.length) / totalChars) * audioDuration;
+    segments.push({ start: +cursor.toFixed(2), end: +(cursor + dur).toFixed(2), text: c });
+    cursor += dur;
+  }
+  return segments;
+}
+
+app.post('/api/render-relaxing-clip', async (req, res) => {
+  req.setTimeout(0);
+  res.setTimeout(0);
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+  const send = (obj: object) => {
+    if (!res.writableEnded) {
+      try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); } catch {}
+    }
+  };
+  const { spawn } = require('child_process');
+  const env = {
+    ...process.env,
+    PATH: `/opt/homebrew/opt/ffmpeg-full/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
+  };
+  const run = (cmd: string, args: string[], opts: any = {}): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const p = spawn(cmd, args, { env, ...opts });
+      let stderr = '';
+      if (p.stderr) p.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+      if (opts.onStderr && p.stderr) p.stderr.on('data', (d: Buffer) => opts.onStderr(d.toString()));
+      p.on('error', reject);
+      p.on('close', (code: number | null) => {
+        if (code === 0) resolve();
+        else reject(new Error(`${path.basename(cmd)} exited ${code}: ${stderr.slice(-400)}`));
+      });
+    });
+  const probeDuration = (file: string): Promise<number> =>
+    new Promise((resolve) => {
+      const p = spawn(getFFprobePath(), ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], { env, timeout: 20000 });
+      let outStr = '';
+      p.stdout.on('data', (d: Buffer) => { outStr += d.toString(); });
+      p.on('close', () => { const n = parseFloat(outStr.trim()); resolve(Number.isFinite(n) && n > 0 ? n : 0); });
+      p.on('error', () => resolve(0));
+    });
+
+  let tempDir = '';
+  try {
+    const b = req.body || {};
+    const sourceFolder = String(b.sourceFolder || '').trim();
+    const outputFolder = String(b.outputFolder || '').trim();
+    const scriptText = String(b.scriptText || '').trim();
+    const voice = (String(b.voice || 'Kanya').replace(/[^A-Za-z ]/g, '').trim()) || 'Kanya';
+    const rate = Number(b.rate);
+    // เสียงพากย์: 'kie' = เสียงพรีเมียม Kie.ai (ElevenLabs), อื่นๆ = เสียงฟรีในเครื่อง (macOS say)
+    const voiceEngine = String(b.voiceEngine || 'free').toLowerCase();
+    const kieApiKey = String(b.kieApiKey || '').trim();
+    const kieVoiceId = String(b.kieVoiceId || '').replace(/[^A-Za-z0-9]/g, '').trim();
+    const kieStability = Number.isFinite(Number(b.kieStability)) ? Number(b.kieStability) : 0.5;
+    // เสียงสำรอง Edge Neural (ใช้เมื่อ Kie.ai ล่ม) — frontend ส่งมาให้ตรงเพศกับเสียง kie ที่เลือก
+    const edgeVoiceRaw = String(b.edgeVoice || 'th-TH-PremwadeeNeural').trim();
+    const edgeVoice = /^[a-zA-Z0-9-]+$/.test(edgeVoiceRaw) ? edgeVoiceRaw : 'th-TH-PremwadeeNeural';
+    const burnSubtitles = b.burnSubtitles !== false;
+    const subStyle = b.subtitleStyle || {};
+    const bgMusicPath = String(b.bgMusicPath || '').trim();
+    const bgMusicVolume = Number.isFinite(Number(b.bgMusicVolume)) ? Number(b.bgMusicVolume) : 0.12;
+    const minSeconds = Number(b.minSeconds) || 0;
+    const outputBase = (String(b.outputName || 'relaxing_clip')
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').replace(/\s+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80)) || 'relaxing_clip';
+
+    if (!scriptText) { send({ type: 'error', text: 'ยังไม่มีบทพากย์ (script)' }); return res.end(); }
+    if (!sourceFolder || !fs.existsSync(sourceFolder) || !fs.statSync(sourceFolder).isDirectory()) {
+      send({ type: 'error', text: 'ไม่พบโฟลเดอร์คลิปต้นทาง' }); return res.end();
+    }
+    try { fs.mkdirSync(outputFolder, { recursive: true }); }
+    catch (e: any) { send({ type: 'error', text: 'สร้างโฟลเดอร์ปลายทางไม่ได้: ' + e.message }); return res.end(); }
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    tempDir = path.join(outputFolder, `.relaxing_${Date.now()}`);
+    fs.mkdirSync(tempDir, { recursive: true });
+    const fontsDir = path.resolve(__dirname, '../../public/Font_stock');
+
+    // ── 1) เสียงพากย์ ──
+    const txtPath = path.join(tempDir, 'narration.txt');
+    const aiffPath = path.join(tempDir, 'voice.aiff');
+    const voiceMp3 = path.join(tempDir, 'voice.mp3');
+    fs.writeFileSync(txtPath, scriptText, 'utf8');
+
+    // สังเคราะห์เสียงพรีเมียมด้วย Kie.ai (ElevenLabs Turbo v2.5) แล้วดาวน์โหลดเป็น mp3
+    const synthKieVoice = async (): Promise<void> => {
+      const createRes = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${kieApiKey}` },
+        body: JSON.stringify({
+          // ใช้ Turbo v2.5 (TTS เสียงเดี่ยวมาตรฐาน เสถียรกว่า text-to-dialogue-v3 มาก)
+          model: 'elevenlabs/text-to-speech-turbo-2-5',
+          input: {
+            text: scriptText,
+            voice: kieVoiceId,
+            stability: kieStability,
+            language_code: 'th',
+          },
+        }),
+      });
+      if (!createRes.ok) {
+        throw new Error(`createTask HTTP ${createRes.status} — ${(await createRes.text()).slice(0, 200)}`);
+      }
+      const createData: any = await createRes.json();
+      const taskId = createData?.data?.taskId || createData?.taskId;
+      if (!taskId) throw new Error(`ไม่ได้รับ Task ID จาก Kie.ai: ${JSON.stringify(createData).slice(0, 200)}`);
+      send({ type: 'log', text: `⏳ รอ Kie.ai ประมวลผลเสียง (Task ${String(taskId).slice(0, 6)}...)` });
+
+      let audioUrl: string | null = null;
+      for (let attempt = 0; attempt < 120; attempt++) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const pollRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(String(taskId))}`, {
+          headers: { 'Authorization': `Bearer ${kieApiKey}` },
+        });
+        const pollData: any = await pollRes.json();
+        const state = String(pollData?.data?.state || pollData?.state || '').toLowerCase();
+        if (state === 'success' || state === 'completed') {
+          const resultJsonStr = pollData?.data?.resultJson || pollData?.resultJson;
+          if (resultJsonStr) {
+            try {
+              const p = JSON.parse(resultJsonStr);
+              audioUrl = p.audio_url || p.url || p.resultUrls?.[0] || p.audioUrl || null;
+            } catch { /* ignore parse error */ }
+          }
+          break;
+        } else if (state === 'fail' || state === 'failed') {
+          throw new Error(pollData?.data?.failMsg || pollData?.failMsg || 'Kie.ai task failed');
+        }
+      }
+      if (!audioUrl) throw new Error('Kie.ai แจ้งสำเร็จแต่ไม่พบไฟล์เสียง (timeout/ไม่มี audio_url)');
+
+      const audioRes = await fetch(audioUrl);
+      if (!audioRes.ok) throw new Error(`ดาวน์โหลดเสียง HTTP ${audioRes.status}`);
+      const buf = Buffer.from(await audioRes.arrayBuffer());
+      const rawPath = path.join(tempDir, 'voice_kie.raw');
+      fs.writeFileSync(rawPath, buf);
+      // แปลงเป็น mp3 มาตรฐานเพื่อให้ขั้นตอน ffmpeg ถัดไปทำงานเหมือนเสียงจาก say
+      await run(getFFmpegPath(), ['-y', '-i', rawPath, '-codec:a', 'libmp3lame', '-qscale:a', '2', voiceMp3]);
+      try { fs.unlinkSync(rawPath); } catch { /* ignore */ }
+    };
+
+    // เสียงสำรองชั้นที่ 2: Microsoft Edge Neural TTS (ฟรี ไม่ใช้คีย์ เสียง Neural ตรงเพศที่เลือก)
+    const synthEdgeVoice = async (): Promise<void> => {
+      const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
+      const edgeTmpDir = path.join(tempDir, 'edge_tts');
+      fs.mkdirSync(edgeTmpDir, { recursive: true });
+      const safeText = scriptText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const tts = new MsEdgeTTS();
+      try {
+        await Promise.race([
+          (async () => {
+            await tts.setMetadata(edgeVoice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+            await tts.toFile(edgeTmpDir, safeText);
+          })(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Edge TTS timeout (60s)')), 60000)),
+        ]);
+      } finally {
+        try { tts.close(); } catch { /* ignore */ }
+      }
+      const generated = path.join(edgeTmpDir, 'audio.mp3');
+      if (!fs.existsSync(generated) || fs.statSync(generated).size === 0) throw new Error('Edge TTS ไม่ได้สร้างไฟล์เสียง');
+      fs.renameSync(generated, voiceMp3);
+      try { fs.rmSync(edgeTmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    };
+
+    // สังเคราะห์เสียงฟรีในเครื่อง (macOS say)
+    const synthMacVoice = async (): Promise<void> => {
+      send({ type: 'log', text: `🎙️ สังเคราะห์เสียงพากย์ (เสียง ${voice})...` });
+      const sayArgs = ['-v', voice, '-f', txtPath, '-o', aiffPath];
+      if (Number.isFinite(rate) && rate >= 120 && rate <= 320) sayArgs.push('-r', String(Math.round(rate)));
+      await run('say', sayArgs);
+      if (!fs.existsSync(aiffPath)) throw new Error('สร้างไฟล์เสียงจาก say ไม่สำเร็จ (ตรวจว่ามีเสียงพากย์ภาษาไทยติดตั้งอยู่)');
+      await run(getFFmpegPath(), ['-y', '-i', aiffPath, '-codec:a', 'libmp3lame', '-qscale:a', '2', voiceMp3]);
+    };
+
+    const useKie = voiceEngine === 'kie' && !!kieApiKey && !!kieVoiceId;
+    let voiceSource = '';
+    if (useKie) {
+      try {
+        send({ type: 'log', text: `🎙️ สังเคราะห์เสียงพากย์พรีเมียม Kie.ai (ElevenLabs)...` });
+        await synthKieVoice();
+        if (fs.existsSync(voiceMp3) && fs.statSync(voiceMp3).size > 0) voiceSource = 'Kie.ai';
+      } catch (e: any) {
+        send({ type: 'log', text: `⚠️ Kie.ai ล้มเหลว (${e?.message || e}) — ใช้เสียงสำรอง Edge Neural แทน` });
+      }
+    } else if (voiceEngine === 'kie') {
+      send({ type: 'log', text: `⚠️ เลือกเสียง Kie.ai แต่ยังไม่ได้ตั้งค่า API Key/เสียง — ใช้เสียงสำรองแทน` });
+    }
+    // ชั้นที่ 2: Edge Neural (เฉพาะเมื่อผู้ใช้เลือกโหมดพรีเมียม — ถ้าเลือกเสียงฟรีในเครื่องเอง ให้ข้ามไป say เลย)
+    if (!voiceSource && voiceEngine === 'kie') {
+      try {
+        send({ type: 'log', text: `🎙️ สังเคราะห์เสียงสำรอง Edge Neural (${edgeVoice})...` });
+        await synthEdgeVoice();
+        if (fs.existsSync(voiceMp3) && fs.statSync(voiceMp3).size > 0) voiceSource = 'Edge Neural';
+      } catch (e: any) {
+        send({ type: 'log', text: `⚠️ Edge Neural ล้มเหลว (${e?.message || e}) — สลับไปใช้เสียงฟรี ${voice} แทนอัตโนมัติ` });
+      }
+    }
+    if (!voiceSource) {
+      await synthMacVoice();
+      voiceSource = `macOS ${voice}`;
+    }
+
+    const audioDuration = await probeDuration(voiceMp3);
+    if (audioDuration <= 0) throw new Error('อ่านความยาวไฟล์เสียงไม่ได้');
+    send({ type: 'log', text: `✅ เสียงพากย์ยาว ${audioDuration.toFixed(1)} วินาที (${voiceSource})` });
+
+    // ── 2) ซับไทยอัตโนมัติ (whisper → fallback แบ่งจากบท) ──
+    let segments: Array<{ start: number; end: number; text: string }> = [];
+    let assPath = '';
+    if (burnSubtitles) {
+      try {
+        send({ type: 'log', text: '📝 ถอดเสียงทำซับไตเติ้ล...' });
+        segments = await runWhisper(voiceMp3, tempDir, 'large-v3-turbo', 'th', (o: any) => { if (o?.log) send({ type: 'log', text: o.log }); }, res);
+      } catch (e: any) {
+        send({ type: 'log', text: `whisper ใช้ไม่ได้ (${e.message}) — ใช้วิธีแบ่งซับจากบทแทน` });
+      }
+      if (!segments || segments.length === 0) {
+        segments = buildSegmentsFromScript(scriptText, audioDuration);
+        send({ type: 'log', text: `แบ่งซับจากบทได้ ${segments.length} ประโยค` });
+      }
+      const ass = buildRelaxingAss(segments, subStyle);
+      assPath = path.join(tempDir, 'subs.ass');
+      fs.writeFileSync(assPath, ass, 'utf8');
+    }
+
+    // ── 3) สแกน + สุ่มฟุตเทจให้ครบความยาวเสียง ──
+    const VIDEO_EXTS = ['.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm'];
+    const allVideos: string[] = [];
+    (function scan(dir: string) {
+      let entries: string[] = [];
+      try { entries = fs.readdirSync(dir); } catch { return; }
+      for (const e of entries) {
+        if (e.startsWith('.')) continue;
+        const fp = path.join(dir, e);
+        let st: fs.Stats;
+        try { st = fs.statSync(fp); } catch { continue; }
+        if (st.isDirectory()) scan(fp);
+        else if (VIDEO_EXTS.includes(path.extname(e).toLowerCase())) allVideos.push(fp);
+      }
+    })(sourceFolder);
+    if (allVideos.length === 0) throw new Error('ไม่พบไฟล์วิดีโอในโฟลเดอร์ต้นทาง');
+    send({ type: 'log', text: `📁 พบ ${allVideos.length} คลิป กำลังอ่านความยาว...` });
+
+    const clips: Array<{ path: string; duration: number }> = [];
+    for (const v of allVideos) {
+      const d = await probeDuration(v);
+      if (d >= 0.5) clips.push({ path: v, duration: d });
+    }
+    if (clips.length === 0) throw new Error('อ่านความยาวคลิปไม่ได้ (ตรวจ ffprobe/ไฟล์วิดีโอ)');
+
+    const target = Math.max(audioDuration + 0.4, minSeconds);
+    const plan: Array<{ path: string; start: number; dur: number }> = [];
+    let remaining = target;
+    let lastPath = '';
+    let guard = 0;
+    while (remaining > 0.1 && guard < 5000) {
+      guard++;
+      let pool = clips;
+      if (clips.length > 1) { const f = clips.filter((c) => c.path !== lastPath); if (f.length) pool = f; }
+      const clip = pool[Math.floor(Math.random() * pool.length)];
+      const take = remaining <= 6 ? remaining : 3 + Math.random() * 3;
+      const dur = Math.min(clip.duration, remaining, Math.max(0.8, take));
+      const maxStart = Math.max(0, clip.duration - dur);
+      const start = maxStart > 0 ? Math.random() * maxStart : 0;
+      plan.push({ path: clip.path, start: +start.toFixed(2), dur: +dur.toFixed(2) });
+      remaining -= dur;
+      lastPath = clip.path;
+    }
+    send({ type: 'log', text: `🎬 วางแผนตัดฟุตเทจ ${plan.length} ท่อน (~${target.toFixed(0)}s)` });
+
+    // ── 4) normalize แต่ละท่อนเป็น 1080x1920 แล้ว concat เป็นวิดีโอเงียบ ──
+    const vf = 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,format=yuv420p';
+    const segPaths: string[] = [];
+    for (let i = 0; i < plan.length; i++) {
+      const seg = plan[i];
+      const segOut = path.join(tempDir, `seg_${String(i + 1).padStart(3, '0')}.mp4`);
+      await run(getFFmpegPath(), [
+        '-y', '-ss', String(seg.start), '-i', seg.path, '-t', String(seg.dur),
+        '-map', '0:v:0', '-an', '-vf', vf,
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-movflags', '+faststart', segOut,
+      ]);
+      segPaths.push(segOut);
+      if ((i + 1) % 3 === 0 || i === plan.length - 1) send({ type: 'log', text: `   ตัดฟุตเทจ ${i + 1}/${plan.length}` });
+    }
+    const listPath = path.join(tempDir, 'concat.txt');
+    fs.writeFileSync(listPath, segPaths.map((p) => `file '${p.replace(/'/g, `'\\''`)}'`).join('\n'), 'utf8');
+    const silentPath = path.join(tempDir, 'silent.mp4');
+    await run(getFFmpegPath(), ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', silentPath]);
+
+    // ── 5) รวมเสียงพากย์ (+เพลงประกอบ) + เผาซับ → ไฟล์สุดท้าย ──
+    send({ type: 'log', text: '🎞️ รวมภาพ เสียง และซับไตเติ้ล...' });
+    const hasBg = bgMusicPath && fs.existsSync(bgMusicPath);
+    const outName = `${outputBase}_${stamp}.mp4`;
+    const outputPath = path.join(outputFolder, outName);
+    const finalArgs: string[] = ['-y', '-i', silentPath, '-i', voiceMp3];
+    if (hasBg) finalArgs.push('-stream_loop', '-1', '-i', bgMusicPath);
+
+    const filters: string[] = [];
+    let vLabel = '0:v';
+    if (assPath) { filters.push(`[0:v]subtitles=subs.ass:fontsdir=${fontsDir}[v]`); vLabel = '[v]'; }
+    let aLabel = '1:a';
+    if (hasBg) {
+      const vol = Math.max(0, Math.min(1, bgMusicVolume));
+      filters.push(`[1:a]volume=1.0[voice];[2:a]volume=${vol}[music];[voice][music]amix=inputs=2:duration=first:dropout_transition=0[a]`);
+      aLabel = '[a]';
+    }
+    if (filters.length) finalArgs.push('-filter_complex', filters.join(';'));
+    finalArgs.push('-map', vLabel, '-map', aLabel);
+    finalArgs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', '30',
+      '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-shortest', outputPath);
+
+    await run(getFFmpegPath(), finalArgs, {
+      cwd: tempDir,
+      onStderr: (s: string) => {
+        const m = s.match(/time=(\d{2}:\d{2}:\d{2}\.\d{2})/);
+        if (m) send({ type: 'log', text: `เรนเดอร์... ${m[1]}` });
+      },
+    });
+
+    if (!fs.existsSync(outputPath)) throw new Error('เรนเดอร์ไม่สำเร็จ (ไม่พบไฟล์ผลลัพธ์)');
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    send({
+      type: 'done',
+      outputPath,
+      fileName: outName,
+      duration: audioDuration,
+      clipsUsed: plan.length,
+      subtitleCount: segments.length,
+    });
+    res.end();
+  } catch (err: any) {
+    try { if (tempDir && fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    send({ type: 'error', text: err?.message || String(err) });
+    if (!res.writableEnded) res.end();
   }
 });
 

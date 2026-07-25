@@ -27,7 +27,8 @@ import {
   Mic,
   Scissors,
   Activity,
-  TrendingUp
+  TrendingUp,
+  Film
 } from 'lucide-react';
 import DiscoveryPortal from './components/DiscoveryPortal';
 import SettingsPortal from './components/SettingsPortal';
@@ -37,6 +38,7 @@ import QuoteVideoPortal from './components/QuoteVideoPortal';
 import { AvatarVerticalClipPortal } from './components/AvatarVerticalClipPortal';
 import FlowAutomatorPortal from './components/FlowAutomatorPortal';
 import PodcastVideoPortal from './components/PodcastVideoPortal';
+import RelaxingClipPortal from './components/RelaxingClipPortal';
 import SingleClipEditorPortal from './components/SingleClipEditorPortal';
 import EngagementDashboardPortal from './components/EngagementDashboardPortal';
 
@@ -352,8 +354,8 @@ export const PALETTE_IMAGE_PROMPT_STYLES: ImagePromptStyle[] = [
 ];
 
 export default function App() {
-  type TabType = 'discovery' | 'vault' | 'canvas' | 'settings' | 'prompt-generator' | 'vertical-video' | 'quote-video' | 'avatar-video' | 'dropbox-csv' | 'podcast-clip' | 'clip-editor' | 'tracking' | 'fb-insights';
-  const validTabs: TabType[] = ['discovery', 'vault', 'canvas', 'settings', 'prompt-generator', 'vertical-video', 'quote-video', 'avatar-video', 'dropbox-csv', 'podcast-clip', 'tracking'];
+  type TabType = 'discovery' | 'vault' | 'canvas' | 'settings' | 'prompt-generator' | 'vertical-video' | 'quote-video' | 'avatar-video' | 'dropbox-csv' | 'podcast-clip' | 'relaxing-clip' | 'clip-editor' | 'tracking' | 'fb-insights';
+  const validTabs: TabType[] = ['discovery', 'vault', 'canvas', 'settings', 'prompt-generator', 'vertical-video', 'quote-video', 'avatar-video', 'dropbox-csv', 'podcast-clip', 'relaxing-clip', 'tracking'];
   const [activeTab, _setActiveTab] = useState<TabType>(() => {
     const saved = localStorage.getItem('active_tab') as TabType | null;
     return saved && validTabs.includes(saved) ? saved : 'discovery';
@@ -2402,6 +2404,15 @@ Please rewrite this following the copywriting style tone and output rules above.
           </button>
 
           <button
+            className={`sidebar-btn sidebar-btn-hot ${activeTab === 'relaxing-clip' ? 'active' : ''}`}
+            onClick={() => setActiveTab('relaxing-clip')}
+          >
+            <Film className="w-5 h-5" />
+            <span>🍿 ทำคลิปดูเพลินๆ</span>
+            <span className="sidebar-btn-badge">ใหม่</span>
+          </button>
+
+          <button
             className={`sidebar-btn ${activeTab === 'clip-editor' ? 'active' : ''}`}
             onClick={() => setActiveTab('clip-editor')}
           >
@@ -2464,6 +2475,7 @@ Please rewrite this following the copywriting style tone and output rules above.
               {activeTab === 'quote-video' && '🎨 ทำคลิปคำคม | ระบบสร้างวิดีโอคำคมแนวตั้ง 9:16'}
               {activeTab === 'avatar-video' && '🧑‍💼 Avatar Vertical Clip Maker | ห้องตัดต่อวิดีโออวาตาร์แนวตั้ง'}
               {activeTab === 'podcast-clip' && '🎙️ สร้างคลิปpodcast | ระบบตัดต่อ B-Roll ซ้อนเสียงพากย์อัตโนมัติ'}
+              {activeTab === 'relaxing-clip' && '🍿 ทำคลิปดูเพลินๆ | ละครสั้นแนวตั้ง สุ่มบท+พากย์+ซับ อัตโนมัติ'}
               {activeTab === 'dropbox-csv' && '☁️ Dropbox/CSV | Workflow Automator (บอท Flow)'}
               {activeTab === 'tracking' && '📊 Work Tracking System | ระบบติดตามงานและจัดการ Stock จาก Google Sheets'}
               {activeTab === 'clip-editor' && '✂️ ตัด/สุ่มต่อคลิป | Single Clip Editor — Jump Cut + สุ่มต่อคลิปด้วย FFmpeg'}
@@ -2479,6 +2491,7 @@ Please rewrite this following the copywriting style tone and output rules above.
               {activeTab === 'quote-video' && 'สร้างคลิปสั้นคำคมและซีรีส์ความลับเทรดเดอร์ด้วยระบบ Drag-and-Drop ผสาน FFmpeg.wasm เรนเดอร์ออฟไลน์ระดับความเร็วสูง'}
               {activeTab === 'avatar-video' && 'สุ่มฟุตเทจ B-Roll ปิดเสียงซ้อนทับกรีนสกรีนหรือแบ่งหน้าจอ เจนพาดหัว Hook AI และเบิร์นซับไตเติ้ลภาษาไทยเว้นวรรคคำ'}
               {activeTab === 'podcast-clip' && 'สุ่มหยิบฟุตเทจ B-Roll จากโฟลเดอร์ดิบ มา Concat เรียงซ้อนทับไฟล์เสียงเสียงพากย์ บังคับ Scale/Crop และรักษาระยะเวลาตามความยาวเสียงเป๊ะ'}
+              {activeTab === 'relaxing-clip' && 'ปั่นบทละครรักแนวจีนแบบสุ่มสลับไม่ซ้ำ สังเคราะห์เสียงพากย์ฟรีในเครื่อง ทำซับไตเติ้ลอัตโนมัติ แล้วสุ่มฟุตเทจต่อกันให้ครบนาที (ไม่มีพาดหัว)'}
               {activeTab === 'dropbox-csv' && 'เชื่อมต่อ Dropbox → AI Prompt → Google Sheets / CSV อัตโนมัติ ปรับระดับการประมวลผลวิดีโอและรูปภาพ'}
               {activeTab === 'tracking' && 'เชื่อมต่อ Google Sheets ดึงข้อมูล Stock ของนักตัดต่อและคลังบทความโดยตรง สรุปเปรียบเทียบในรูปแบบแผนภูมิกราฟิก'}
               {activeTab === 'clip-editor' && 'ตัดทุกคลิปในโฟลเดอร์ด้วยสูตร Scene 1 + Jump Cuts + เอฟเฟกต์ + Transition + BGM หรือสุ่มหยิบคลิปไม่ซ้ำมาต่อกันให้ได้ความยาวที่กำหนด สั่ง FFmpeg เรนเดอร์พร้อมสตรีม Log สด'}
@@ -4898,6 +4911,11 @@ Please rewrite this following the copywriting style tone and output rules above.
           {/* TAB 10: PODCAST VIDEO PORTAL */}
           {keepAlive('podcast-clip',
             <PodcastVideoPortal />
+          )}
+
+          {/* TAB 10.5: RELAXING CLIP (ทำคลิปดูเพลินๆ) */}
+          {keepAlive('relaxing-clip',
+            <RelaxingClipPortal />
           )}
 
           {/* TAB 11: SINGLE CLIP EDITOR (ตัด/สุ่มต่อคลิป) */}

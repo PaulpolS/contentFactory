@@ -154,36 +154,76 @@ function wrapWord(word: string, maxChars: number): string[] {
   return chunks;
 }
 
+// ตัดคำไทย/อังกฤษด้วยพจนานุกรม ICU (Intl.Segmenter) เพื่อไม่ให้ตัดบรรทัดกลางคำ
+// ต้องมิเรอร์ logic เดียวกับ backend (segmentIntoWords) เป๊ะ ๆ เพื่อให้พรีวิว = วิดีโอจริง
+function segmentIntoWords(line: string): string[] {
+  try {
+    const Segmenter = (Intl as any).Segmenter;
+    if (Segmenter) {
+      const seg = new Segmenter('th', { granularity: 'word' });
+      const parts = Array.from(seg.segment(line), (s: any) => s.segment as string).filter(Boolean);
+      if (parts.length) return parts;
+    }
+  } catch { /* ตกไป fallback ด้านล่าง */ }
+  return line.split(/(\s+)/).filter(Boolean);
+}
+
+function isSpaceToken(token: string): boolean {
+  return /^\s+$/.test(token);
+}
+
 function wrapTitleLineForPreview(line: string, maxChars = 26): string[] {
-  const words = line.split(' ').filter(Boolean);
-  if (words.length === 0) return [];
-  const out: string[] = [];
-  let current = '';
-  for (const word of words) {
-    const wordGraphemes = segmentGraphemes(word);
-    if (wordGraphemes.length > maxChars) {
+  const tokens = segmentIntoWords(line).filter(Boolean);
+  if (tokens.length === 0) return [];
+
+  const greedy = (width: number): string[] => {
+    const out: string[] = [];
+    let current = '';
+    for (const token of tokens) {
+      if (!current && isSpaceToken(token)) continue;
+      const candidate = current + token;
+      if (segmentGraphemes(candidate).length <= width) {
+        current = candidate;
+        continue;
+      }
       if (current) {
-        out.push(current);
+        out.push(current.replace(/\s+$/, ''));
         current = '';
       }
-      const subWords = wrapWord(word, maxChars);
-      for (let i = 0; i < subWords.length - 1; i++) {
-        out.push(subWords[i]);
-      }
-      current = subWords[subWords.length - 1];
-    } else {
-      const next = current ? `${current} ${word}` : word;
-      const nextGraphemes = segmentGraphemes(next);
-      if (nextGraphemes.length > maxChars && current) {
-        out.push(current);
-        current = word;
+      if (isSpaceToken(token)) continue;
+      if (segmentGraphemes(token).length > width) {
+        const chunks = wrapWord(token, width);
+        for (let i = 0; i < chunks.length - 1; i++) out.push(chunks[i]);
+        current = chunks[chunks.length - 1];
       } else {
-        current = next;
+        current = token;
       }
     }
+    if (current.trim()) out.push(current.replace(/\s+$/, ''));
+    return out;
+  };
+
+  const baseLineCount = greedy(maxChars).length;
+  if (baseLineCount <= 1) return greedy(maxChars);
+
+  const longestWord = Math.max(
+    1,
+    ...tokens.filter(t => !isSpaceToken(t)).map(t => segmentGraphemes(t).length)
+  );
+
+  let lo = longestWord;
+  let hi = maxChars;
+  let best = maxChars;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (greedy(mid).length <= baseLineCount) {
+      best = mid;
+      hi = mid - 1;
+    } else {
+      lo = mid + 1;
+    }
   }
-  if (current) out.push(current);
-  return out;
+  return greedy(best);
 }
 
 function wrapHeadlineForPreview(text: string): string {
@@ -950,6 +990,14 @@ export function AvatarVerticalClipPortal() {
     const openRouterKey = subtitleAiPolish ? getActiveOpenRouterKey() : '';
     const cachedSubtitles = readCachedSubtitles();
     const fileSubs = cachedSubtitles[item.name];
+    // แก้บั๊กพาดหัวเรนเดอร์ผิด (โชว์ชื่อไฟล์แทนพาดหัว AI):
+    // ต้องอ่านพาดหัวล่าสุดจาก localStorage เป็นหลัก (fresh) แทนการอ่านจาก state titleTexts ใน closure
+    // เพราะตอนถูกเรียกต่อจากปุ่ม "ทำครบทุกขั้นตอน" ค่า titleTexts ใน closure ยังค้างเป็นชื่อไฟล์
+    // (placeholder ที่ refreshAvatarFiles เติมไว้ก่อนเจน) ซึ่งเป็นสตริง truthy เลย short-circuit ทับพาดหัวจริง
+    const savedTitleTexts = readSavedTitleTexts();
+    const aiHeadlineForItem = (readCachedHeadlines()[item.name] || [])[0];
+    const resolvedTitleText =
+      savedTitleTexts[item.name] || aiHeadlineForItem || titleTexts[item.name] || autoTitleFromFileName(item.name);
 
     addLog(`🎬 [${item.name}] เริ่มเรนเดอร์วิดีโอ (${index + 1}/${queue.length})...`);
     
@@ -964,7 +1012,7 @@ export function AvatarVerticalClipPortal() {
           outputFolder,
           bgmFile,
           bgmVolume: Math.max(0, Math.min(100, bgmVolume)) / 100,
-          titleText: titleTexts[item.name] || autoTitleFromFileName(item.name),
+          titleText: resolvedTitleText,
           avatarLayout,
           isVerticalAvatar: avatarLayout !== 'split',
           useGreenScreenKeying,
@@ -1090,8 +1138,18 @@ export function AvatarVerticalClipPortal() {
       return alert('กรุณาเลือกไฟล์ที่จะเรนเดอร์ในตารางอย่างน้อย 1 ไฟล์ครับ');
     }
 
-    // ตรวจสอบว่าทุกไฟล์ที่เลือกทำซับไตเติลเสร็จสิ้นแล้วหรือยัง
-    const pendingSubs = selectedItems.filter(item => item.subtitleStatus !== 'done');
+    // อ่านซับ/พาดหัวล่าสุดจากแคช (localStorage) ซึ่งเป็นแหล่งข้อมูลจริงที่ใช้เรนเดอร์
+    // ป้องกันปัญหา state ค้าง (stale closure) เมื่อถูกเรียกต่อทันทีจากปุ่ม "🚀 ทำครบทุกขั้นตอน"
+    // ที่เพิ่งเจนซับเสร็จในรอบเดียวกัน โดยที่ค่า items ใน closure ยังไม่ทันอัปเดต
+    const cachedSubs = readCachedSubtitles();
+    const cachedHeadlines = readCachedHeadlines();
+    const hasReadySubs = (name: string) => {
+      const subs = cachedSubs[name];
+      return Array.isArray(subs) && subs.length > 0;
+    };
+
+    // ตรวจสอบจากแคชว่าทุกไฟล์ที่เลือกมีซับพร้อมเรนเดอร์แล้วหรือยัง
+    const pendingSubs = selectedItems.filter(item => !hasReadySubs(item.name));
     if (pendingSubs.length > 0) {
       const pendingNames = pendingSubs.map(item => item.name).join('\n• ');
       return alert(`⚠️ ไม่สามารถเรนเดอร์ได้เนื่องจากมีไฟล์ที่ยังไม่ได้ทำซับไตเติล/พาดหัวให้เสร็จ:\n\n• ${pendingNames}\n\nกรุณากดปุ่ม "💡 เจนซับ & พาดหัว" ด้านบน หรือ "🚀 ทำครบทุกขั้นตอน" เพื่อทำให้เสร็จสิ้นทั้งหมดก่อนเรนเดอร์ครับ`);
@@ -1099,15 +1157,22 @@ export function AvatarVerticalClipPortal() {
 
     const controller = new AbortController();
     abortRef.current = controller;
-    
+
     const queue = items.map(item => {
       const isSel = selectedFiles.includes(item.name);
-      return { 
-        ...item, 
+      // ซิงก์สถานะซับ/พาดหัวจากแคชล่าสุด เผื่อ state ใน closure ค้างจากปุ่มทำครบทุกขั้นตอน
+      const ready = hasReadySubs(item.name);
+      const heads = cachedHeadlines[item.name];
+      return {
+        ...item,
+        subtitleStatus: ready ? ('done' as const) : item.subtitleStatus,
+        headlineStatus: ready ? ('done' as const) : item.headlineStatus,
+        subtitles: ready ? cachedSubs[item.name] : item.subtitles,
+        headlines: heads && heads.length > 0 ? heads : item.headlines,
         status: isSel
           ? (forceReRender ? ('pending' as const) : (item.status === 'done' ? 'done' : ('pending' as const)))
           : item.status,
-        errorMessage: isSel ? undefined : item.errorMessage 
+        errorMessage: isSel ? undefined : item.errorMessage
       };
     });
     
