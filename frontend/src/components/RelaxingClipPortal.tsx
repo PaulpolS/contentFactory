@@ -22,7 +22,8 @@ import {
   type ScriptLength,
   type SpiceLevel,
 } from '../lib/relaxingScript';
-import { chatCompletions, getLlmKey } from '../lib/llm';
+import { chatCompletions, getLlmKey, getKieKey } from '../lib/llm';
+import { KIEAI_VOICES, DEFAULT_KIE_VOICE_ID } from '../lib/kieVoices';
 
 const BACKEND_BASE = window.location.port !== '5005' ? 'http://localhost:5005' : '';
 
@@ -55,6 +56,9 @@ export default function RelaxingClipPortal() {
   const [aiBusy, setAiBusy] = useState(false);
 
   // เสียง & ซับ
+  // เครื่องมือเสียงพากย์: 'kie' = เสียงพรีเมียม Kie.ai (ElevenLabs), 'free' = เสียงฟรี macOS
+  const [voiceEngine, setVoiceEngine] = useState<'kie' | 'free'>(() => (localStorage.getItem('relax_voice_engine') as 'kie' | 'free') || 'kie');
+  const [kieVoiceId, setKieVoiceId] = useState(() => localStorage.getItem('relax_kie_voice') || DEFAULT_KIE_VOICE_ID);
   const [voice, setVoice] = useState('Kanya');
   const [rate, setRate] = useState(190);
   const [fontName, setFontName] = useState('Kanit');
@@ -70,7 +74,8 @@ export default function RelaxingClipPortal() {
   const [bgMusicVolume, setBgMusicVolume] = useState(12);
 
   // batch + สถานะ
-  const [clipCount, setClipCount] = useState(1);
+  // '' = ช่องว่างชั่วคราวระหว่างพิมพ์ (ลบให้ว่างได้) — ตอนกดสร้างจะ coerce เป็นเลขให้เอง
+  const [clipCount, setClipCount] = useState<number | ''>(1);
   const [isRendering, setIsRendering] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [results, setResults] = useState<ClipResult[]>([]);
@@ -79,6 +84,8 @@ export default function RelaxingClipPortal() {
 
   useEffect(() => { localStorage.setItem('relax_source', sourceFolder); }, [sourceFolder]);
   useEffect(() => { localStorage.setItem('relax_output', outputFolder); }, [outputFolder]);
+  useEffect(() => { localStorage.setItem('relax_voice_engine', voiceEngine); }, [voiceEngine]);
+  useEffect(() => { localStorage.setItem('relax_kie_voice', kieVoiceId); }, [kieVoiceId]);
   useEffect(() => { if (!scriptText) regenerate(); /* บทตั้งต้น */ // eslint-disable-next-line
   }, []);
   useEffect(() => {
@@ -175,6 +182,11 @@ export default function RelaxingClipPortal() {
         sourceFolder,
         outputFolder,
         scriptText: textForClip,
+        voiceEngine,
+        kieApiKey: voiceEngine === 'kie' ? getKieKey() : '',
+        kieVoiceId,
+        // เสียงสำรอง Edge Neural ตรงเพศกับเสียง kie ที่เลือก (ชาย Niwat / หญิง Premwadee)
+        edgeVoice: /ชาย/.test(KIEAI_VOICES.find(v => v.id === kieVoiceId)?.name || '') ? 'th-TH-NiwatNeural' : 'th-TH-PremwadeeNeural',
         voice,
         rate,
         burnSubtitles,
@@ -219,7 +231,12 @@ export default function RelaxingClipPortal() {
     if (!outputFolder) return alert('กรุณาเลือกโฟลเดอร์ปลายทาง');
     if (!scriptText.trim()) return alert('ยังไม่มีบทพากย์ กด "สุ่มบทใหม่" ก่อน');
 
-    const count = Math.max(1, Math.min(50, clipCount));
+    if (voiceEngine === 'kie' && !getKieKey()) {
+      addLog('⚠️ เลือกเสียงพรีเมียม Kie.ai แต่ยังไม่ได้ตั้งค่า Kie.ai API Key (ไปที่หน้า Settings) — ระบบจะใช้เสียงฟรีในเครื่องแทนอัตโนมัติ');
+    }
+
+    // ไม่จำกัดเพดานจำนวนคลิป — ตั้งเท่าไรก็ได้ (กันแค่ค่าต่ำกว่า 1, ทศนิยม และ NaN)
+    const count = Math.max(1, Math.floor(Number(clipCount)) || 1);
     const controller = new AbortController();
     abortRef.current = controller;
     setIsRendering(true);
@@ -272,7 +289,7 @@ export default function RelaxingClipPortal() {
               ทำคลิปดูเพลินๆ <span className="text-[10px] font-bold text-rose-300 bg-rose-500/10 px-2 py-0.5 rounded-full">ละครสั้นแนวตั้ง</span>
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              ปั่นบทละครรักแนวจีนแบบสุ่มไม่ซ้ำ · เสียงพากย์ฟรีในเครื่อง · ซับไตเติ้ลอัตโนมัติ · สุ่มฟุตเทจต่อกันครบนาที (ไม่มีพาดหัว)
+              ปั่นบทละครรักแนวจีนแบบสุ่มไม่ซ้ำ · เสียงพากย์พรีเมียม Kie.ai (หรือเสียงฟรีในเครื่อง) · ซับไตเติ้ลอัตโนมัติ · สุ่มฟุตเทจต่อกันครบนาที (ไม่มีพาดหัว)
             </p>
           </div>
         </div>
@@ -362,16 +379,52 @@ export default function RelaxingClipPortal() {
       {/* 3. เสียง & ซับ */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-5 space-y-4">
         <h3 className="text-sm font-black text-white flex items-center gap-2"><Volume2 className="w-4 h-4 text-rose-400" /> 3 · เสียงพากย์ & ซับไตเติ้ล</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <div>
-            <label className={labelCls}>เสียงพากย์ (ฟรีในเครื่อง)</label>
-            <input value={voice} onChange={(e) => setVoice(e.target.value)} className={inputCls + ' w-full'} />
-            <p className="text-[10px] text-slate-500 mt-1">ค่าเริ่มต้น Kanya (เสียงไทย macOS)</p>
+
+        {/* เลือกเครื่องมือเสียงพากย์ */}
+        <div>
+          <label className={labelCls}>เครื่องมือเสียงพากย์</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setVoiceEngine('kie')}
+              className={`px-4 py-2.5 rounded-lg text-xs font-bold border transition-all cursor-pointer text-left ${voiceEngine === 'kie' ? 'bg-rose-600/20 border-rose-500 text-rose-200' : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700'}`}
+            >
+              ✨ เสียงพรีเมียม Kie.ai
+              <span className="block text-[10px] font-normal opacity-70 mt-0.5">ElevenLabs · เสียงสมจริง (แนะนำ)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setVoiceEngine('free')}
+              className={`px-4 py-2.5 rounded-lg text-xs font-bold border transition-all cursor-pointer text-left ${voiceEngine === 'free' ? 'bg-rose-600/20 border-rose-500 text-rose-200' : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700'}`}
+            >
+              🖥️ เสียงฟรีในเครื่อง
+              <span className="block text-[10px] font-normal opacity-70 mt-0.5">macOS say · ไม่ใช้เครดิต</span>
+            </button>
           </div>
-          <div>
-            <label className={labelCls}>ความเร็วเสียง: {rate}</label>
-            <input type="range" min={140} max={260} value={rate} onChange={(e) => setRate(Number(e.target.value))} className="w-full accent-rose-500 mt-3" />
-          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {voiceEngine === 'kie' ? (
+            <div className="md:col-span-2">
+              <label className={labelCls}>เสียงพากย์ Kie.ai (ElevenLabs)</label>
+              <select value={kieVoiceId} onChange={(e) => setKieVoiceId(e.target.value)} className={inputCls + ' w-full'}>
+                {KIEAI_VOICES.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+              <p className="text-[10px] text-slate-500 mt-1">ใช้ Kie.ai API Key จากหน้า Settings · ถ้าไม่มีคีย์จะสลับไปเสียงฟรีอัตโนมัติ</p>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className={labelCls}>เสียงพากย์ (ฟรีในเครื่อง)</label>
+                <input value={voice} onChange={(e) => setVoice(e.target.value)} className={inputCls + ' w-full'} />
+                <p className="text-[10px] text-slate-500 mt-1">ค่าเริ่มต้น Kanya (เสียงไทย macOS)</p>
+              </div>
+              <div>
+                <label className={labelCls}>ความเร็วเสียง: {rate}</label>
+                <input type="range" min={140} max={260} value={rate} onChange={(e) => setRate(Number(e.target.value))} className="w-full accent-rose-500 mt-3" />
+              </div>
+            </>
+          )}
           <div className="flex items-end">
             <label className="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer">
               <input type="checkbox" checked={burnSubtitles} onChange={(e) => setBurnSubtitles(e.target.checked)} className="w-4 h-4 accent-rose-500 rounded" />
@@ -433,7 +486,7 @@ export default function RelaxingClipPortal() {
         <div className="flex flex-wrap items-end gap-4">
           <div>
             <label className={labelCls}>จำนวนคลิป (แต่ละคลิปสุ่มบทใหม่)</label>
-            <input type="number" min={1} max={50} value={clipCount} onChange={(e) => setClipCount(Number(e.target.value))} className={inputCls + ' w-28'} />
+            <input type="number" min={1} step={1} value={clipCount} onChange={(e) => setClipCount(e.target.value === '' ? '' : Number(e.target.value))} onBlur={(e) => { if (e.target.value === '') setClipCount(1); }} className={inputCls + ' w-28'} />
           </div>
           {!isRendering ? (
             <button onClick={startRender} className="px-6 py-2.5 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white rounded-xl font-black text-sm flex items-center gap-2 cursor-pointer transition-all shadow-lg shadow-rose-900/30">

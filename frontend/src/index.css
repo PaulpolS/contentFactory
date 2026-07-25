@@ -451,12 +451,20 @@ body {
 .flex-wrap { flex-wrap: wrap; }
 .flex-1 { flex: 1 1 0%; }
 .flex-shrink-0 { flex-shrink: 0; }
+.shrink-0 { flex-shrink: 0; }
+.flex-grow { flex-grow: 1; }
+.min-h-0 { min-height: 0; }
 
 .grid { display: grid; }
 .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
 .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.col-span-1 { grid-column: span 1 / span 1; }
+.col-span-2 { grid-column: span 2 / span 2; }
+.col-span-3 { grid-column: span 3 / span 3; }
+.col-span-4 { grid-column: span 4 / span 4; }
+.col-span-full { grid-column: 1 / -1; }
 .aspect-video { aspect-ratio: 16 / 9; }
 .min-w-0 { min-width: 0; }
 .overflow-hidden { overflow: hidden; }
@@ -464,13 +472,22 @@ body {
 
 @media (min-width: 640px) {
   .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sm\:col-span-2 { grid-column: span 2 / span 2; }
+  .sm\:col-span-3 { grid-column: span 3 / span 3; }
 }
 @media (min-width: 768px) {
   .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .md\:col-span-2 { grid-column: span 2 / span 2; }
+  .md\:col-span-3 { grid-column: span 3 / span 3; }
+  .md\:col-span-4 { grid-column: span 4 / span 4; }
+  .md\:col-span-5 { grid-column: span 5 / span 5; }
+  .md\:col-span-6 { grid-column: span 6 / span 6; }
+  .md\:col-span-7 { grid-column: span 7 / span 7; }
 }
 @media (min-width: 1024px) {
+  .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .lg\:grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
@@ -479,9 +496,20 @@ body {
   .lg\:col-span-3 { grid-column: span 3 / span 3; }
   .lg\:col-span-4 { grid-column: span 4 / span 4; }
   .lg\:col-span-5 { grid-column: span 5 / span 5; }
+  .lg\:col-span-6 { grid-column: span 6 / span 6; }
+  .lg\:col-span-7 { grid-column: span 7 / span 7; }
+  .lg\:col-span-8 { grid-column: span 8 / span 8; }
+  .lg\:col-span-9 { grid-column: span 9 / span 9; }
+  .lg\:col-span-10 { grid-column: span 10 / span 10; }
+  .lg\:col-span-11 { grid-column: span 11 / span 11; }
+  .lg\:col-span-12 { grid-column: span 12 / span 12; }
 }
 @media (min-width: 1280px) {
   .xl\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .xl\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .xl\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .xl\:grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .xl\:col-span-1 { grid-column: span 1 / span 1; }
   .xl\:col-span-2 { grid-column: span 2 / span 2; }
 }
 
@@ -728,8 +756,15 @@ body {
 .border-rose-500\/30 { border-color: rgba(244, 63, 94, 0.3) !important; }
 .hover\:bg-rose-500\/20:hover { background-color: rgba(244, 63, 94, 0.2) !important; }
 
-/* Global dark-glassmorphic default overrides for inputs, select, and textarea to NEVER default to solid white */
+/* Global dark-glassmorphic default overrides for inputs, select, and textarea to NEVER default to solid white.
+   NOTE: also target <input> WITHOUT an explicit type attribute (defaults to text). Otherwise those inputs
+   fall back to the browser's white background; combined with a `text-white` class that makes the typed text
+   invisible (white-on-white) so the field looks like it "can't be typed into". */
+input:not([type]),
 input[type="text"],
+input[type="search"],
+input[type="email"],
+input[type="tel"],
 input[type="number"],
 input[type="password"],
 input[type="url"],
@@ -743,7 +778,11 @@ textarea {
   outline: none !important;
   transition: all 0.2s ease-in-out;
 }
+input:not([type]):focus,
 input[type="text"]:focus,
+input[type="search"]:focus,
+input[type="email"]:focus,
+input[type="tel"]:focus,
 input[type="number"]:focus,
 input[type="password"]:focus,
 input[type="url"]:focus,

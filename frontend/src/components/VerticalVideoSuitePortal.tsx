@@ -41,6 +41,16 @@ const safeCleanAndParseJSON = (jsonStr: string): any => {
 const getActiveOpenRouterKey = () => localStorage.getItem('openrouter_key')?.trim() || '';
 const getActiveKieKey = () => localStorage.getItem('kie_api_key')?.trim() || '';
 
+const fetchWithTimeout = async (url: string, init: RequestInit = {}, timeoutMs = 20000): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
+
 const callAICompletions = async (apiKey: string, systemPrompt: string, userPrompt: string, forceJson: boolean = false): Promise<string> => {
   if (apiKey.startsWith('AIzaSy')) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -125,8 +135,10 @@ export function useKieTTS() {
     setIsGenerating(true);
     setError(null);
 
-    const MAX_RETRIES = 3;
-    const RETRY_DELAYS = [5000, 15000, 30000]; // 5s, 15s, 30s
+    // createTask สำเร็จไม่ได้แปลว่า provider ปลายทางทำงานปกติ จึง retry แค่ครั้งเดียว
+    // เพื่อไม่ให้ Batch/Smart Run ค้างหลายนาทีก่อนเข้าสู่ Gemini/Edge fallback
+    const MAX_RETRIES = 1;
+    const RETRY_DELAYS = [3000];
 
     try {
       if (!apiKey) {
@@ -140,27 +152,26 @@ export function useKieTTS() {
       
       for (let retry = 0; retry <= MAX_RETRIES; retry++) {
         try {
-          const createRes = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+          const createRes = await fetchWithTimeout('https://api.kie.ai/api/v1/jobs/createTask', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-              model: 'elevenlabs/text-to-dialogue-v3',
+              // เดิมใช้ 'elevenlabs/text-to-dialogue-v3' (Eleven v3 alpha) ซึ่งไม่เสถียร
+              // มัก fail กลางทางด้วย "internal error" แล้วระบบต้อง fallback ไปเสียงฟรี Mac (Kanya)
+              // จึงเปลี่ยนมาใช้ Turbo v2.5 — TTS เสียงเดี่ยวมาตรฐานที่เสถียร/เร็วกว่ามาก
+              // และใช้ voice ID ชุดเดียวกัน (เสียงที่เลือก เช่น Brian จึงตรงตามที่เลือก)
+              model: 'elevenlabs/text-to-speech-turbo-2-5',
               input: {
-                dialogue: [
-                  {
-                    text: text,
-                    // สเปคทางการของ kie.ai ใช้ฟิลด์ชื่อ "voice" (ส่ง voice_id ควบคู่เผื่อ backend เวอร์ชันเก่า)
-                    voice: voiceId,
-                    voice_id: voiceId
-                  }
-                ],
-                stability: stability
+                text: text,
+                voice: voiceId,
+                stability: stability,
+                language_code: 'th'
               }
             })
-          });
+          }, 20000);
 
           if (!createRes.ok) {
             const errBody = await createRes.text();
@@ -204,15 +215,15 @@ export function useKieTTS() {
       onLog?.(`รอประมวลผล (Task ID: ${taskId.substring(0,6)}...)`, 'info');
 
       let attempt = 0;
-      while (attempt < 100) {
+      while (attempt < 48) {
         await new Promise(res => setTimeout(res, 2500));
         
         onLog?.(`กำลังประมวลผลเสียง... (รอ ${attempt * 2.5} วินาที)`, 'info');
 
-        const pollRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`, {
+        const pollRes = await fetchWithTimeout(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${apiKey}` }
-        });
+        }, 20000);
         
         const pollData = await pollRes.json();
         const state = pollData?.data?.state?.toLowerCase() || pollData?.state?.toLowerCase();
@@ -249,7 +260,7 @@ export function useKieTTS() {
         attempt++;
       }
 
-      throw new Error('หมดเวลารอ (Timeout 250s) การตอบกลับช้าเกินไป');
+      throw new Error('หมดเวลารอ ElevenLabs (Timeout 120s) — จะสลับไปใช้เสียงสำรอง');
 
     } catch (err: any) {
       onLog?.(`❌ เกิดข้อผิดพลาด: ${err.message}`, 'error');
@@ -825,9 +836,51 @@ const KIEAI_VOICES = [
   { id: '6F5Zhi321D3Oq7v1oNT4', name: 'Hank (ชาย - ทุ้มลึก นักเล่าเรื่อง เหมาะกับเรื่องยาว/พอดแคสต์)', lang: 'th-TH' },
 ];
 
+// Google Gemini TTS บน Kie.ai — รายชื่อ voice_name ทางการครบทั้ง 30 เสียง
+// https://ai.google.dev/gemini-api/docs/speech-generation#voice-options
+const GEMINI_TTS_VOICES = [
+  { id: 'gemini_Zephyr', voiceName: 'Zephyr', name: 'Zephyr (หญิง - สดใส ชัดเจน)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Puck', voiceName: 'Puck', name: 'Puck (ชาย - ร่าเริง มีพลัง)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Charon', voiceName: 'Charon', name: 'Charon (ชาย - ให้ข้อมูล สุขุม เหมาะกับข่าว/สารคดี)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Kore', voiceName: 'Kore', name: 'Kore (หญิง - หนักแน่น มั่นใจ)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Fenrir', voiceName: 'Fenrir', name: 'Fenrir (ชาย - ตื่นเต้น มีชีวิตชีวา)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Leda', voiceName: 'Leda', name: 'Leda (หญิง - อ่อนเยาว์ สดใส)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Orus', voiceName: 'Orus', name: 'Orus (ชาย - หนักแน่น จริงจัง)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Aoede', voiceName: 'Aoede', name: 'Aoede (หญิง - โปร่งสบาย เป็นธรรมชาติ)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Callirrhoe', voiceName: 'Callirrhoe', name: 'Callirrhoe (หญิง - สบายๆ เป็นกันเอง)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Autonoe', voiceName: 'Autonoe', name: 'Autonoe (หญิง - สดใส ชัดเจน)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Enceladus', voiceName: 'Enceladus', name: 'Enceladus (ชาย - นุ่ม มีลมหายใจ)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Iapetus', voiceName: 'Iapetus', name: 'Iapetus (ชาย - ชัดเจน ตรงประเด็น)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Umbriel', voiceName: 'Umbriel', name: 'Umbriel (ชาย - ผ่อนคลาย ฟังสบาย)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Algieba', voiceName: 'Algieba', name: 'Algieba (ชาย - เรียบลื่น นุ่มนวล)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Despina', voiceName: 'Despina', name: 'Despina (หญิง - เรียบลื่น นุ่มนวล)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Erinome', voiceName: 'Erinome', name: 'Erinome (หญิง - ใส ชัดเจน)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Algenib', voiceName: 'Algenib', name: 'Algenib (ชาย - เสียงแหบมีเนื้อ)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Rasalgethi', voiceName: 'Rasalgethi', name: 'Rasalgethi (ชาย - ให้ข้อมูล น่าเชื่อถือ)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Laomedeia', voiceName: 'Laomedeia', name: 'Laomedeia (หญิง - ร่าเริง มีพลัง)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Achernar', voiceName: 'Achernar', name: 'Achernar (หญิง - อ่อนโยน นุ่มเบา)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Alnilam', voiceName: 'Alnilam', name: 'Alnilam (ชาย - หนักแน่น มั่นคง)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Schedar', voiceName: 'Schedar', name: 'Schedar (ชาย - สมดุล สม่ำเสมอ)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Gacrux', voiceName: 'Gacrux', name: 'Gacrux (หญิง - เป็นผู้ใหญ่ สุขุม)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Pulcherrima', voiceName: 'Pulcherrima', name: 'Pulcherrima (หญิง - ตรงไปตรงมา มั่นใจ)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Achird', voiceName: 'Achird', name: 'Achird (ชาย - เป็นมิตร เข้าถึงง่าย)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Zubenelgenubi', voiceName: 'Zubenelgenubi', name: 'Zubenelgenubi (ชาย - สบายๆ เป็นกันเอง)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Vindemiatrix', voiceName: 'Vindemiatrix', name: 'Vindemiatrix (หญิง - อ่อนโยน ละมุน)', lang: 'th-TH', gender: 'female' },
+  { id: 'gemini_Sadachbia', voiceName: 'Sadachbia', name: 'Sadachbia (ชาย - มีชีวิตชีวา สนุก)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Sadaltager', voiceName: 'Sadaltager', name: 'Sadaltager (ชาย - รอบรู้ น่าเชื่อถือ)', lang: 'th-TH', gender: 'male' },
+  { id: 'gemini_Sulafat', voiceName: 'Sulafat', name: 'Sulafat (หญิง - อบอุ่น นุ่มนวล เหมาะกับเล่าเรื่อง)', lang: 'th-TH', gender: 'female' },
+] as const;
+
 // Set of valid Kie.ai voice IDs for validation
 const VALID_KIEAI_VOICE_IDS = new Set(KIEAI_VOICES.map(v => v.id));
+const VALID_GEMINI_TTS_VOICE_IDS = new Set<string>(GEMINI_TTS_VOICES.map(v => v.id));
 const DEFAULT_VOICE_ID = KIEAI_VOICES[0].id; // Bella
+
+const isMaleVoiceId = (id: string): boolean => {
+  const geminiVoice = GEMINI_TTS_VOICES.find(v => v.id === id);
+  if (geminiVoice) return geminiVoice.gender === 'male';
+  return /ชาย/.test(KIEAI_VOICES.find(v => v.id === id)?.name || '');
+};
 
 /** Returns a valid voice ID — falls back to DEFAULT_VOICE_ID if invalid */
 const resolveValidVoiceId = (id: string | undefined | null): string => {
@@ -838,6 +891,8 @@ const resolveValidVoiceId = (id: string | undefined | null): string => {
   }
   // mac_ voices are always valid
   if (id.startsWith('mac_')) return id;
+  // Gemini TTS voices are selectable premium voices
+  if (VALID_GEMINI_TTS_VOICE_IDS.has(id)) return id;
   // Check against known premium voices
   if (VALID_KIEAI_VOICE_IDS.has(id)) return id;
   return DEFAULT_VOICE_ID;
@@ -847,6 +902,8 @@ const resolveValidVoiceId = (id: string | undefined | null): string => {
 const getVoiceDisplayName = (id: string | undefined | null): string => {
   if (!id) return 'Bella';
   if (id.startsWith('mac_')) return `Mac: ${id.split('_')[1] || 'System'}`;
+  const geminiVoice = GEMINI_TTS_VOICES.find(v => v.id === id);
+  if (geminiVoice) return `Gemini: ${geminiVoice.voiceName}`;
   const resolvedId = VOICE_NAME_TO_ID[id] || id;
   const found = KIEAI_VOICES.find(v => v.id === resolvedId);
   if (found) return found.name.split('(')[0].trim();
@@ -2075,11 +2132,215 @@ ${brain.content}
     }
   };
 
+  // เสียงสำรองชั้นที่ 2: Microsoft Edge Neural TTS (ฟรี ไม่ใช้คีย์ — ไทยชาย Niwat / หญิง Premwadee)
+  // ใช้เมื่อ Kie.ai ล่ม เพื่อให้ได้เสียง Neural ที่ตรงเพศกับนักพากย์ที่เลือกไว้ ก่อนจะตกไปเสียง Mac (Kanya)
+  const generateEdgeFallbackVoice = async (speechText: string, kieVoiceId: string): Promise<{ audioUrl: string; duration: number } | null> => {
+    const isMale = isMaleVoiceId(kieVoiceId);
+    const edgeVoice = isMale ? 'th-TH-NiwatNeural' : 'th-TH-PremwadeeNeural';
+    addLog(`🎙️ สลับไปใช้เสียงสำรอง Edge Neural (${isMale ? 'ชาย - Niwat' : 'หญิง - Premwadee'}) ให้ตรงเพศเสียงที่เลือก...`, 'warning');
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/edge-tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: speechText, voice: edgeVoice }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error || !data.audioUrl) throw new Error(data.error || 'Edge TTS Service Failed');
+      addLog(`✅ เสียงสำรอง Edge Neural สำเร็จ! ยาว ${Number(data.duration || 0).toFixed(1)}s`, 'success');
+      return { audioUrl: data.audioUrl, duration: data.duration };
+    } catch (e: any) {
+      addLog(`⚠️ Edge Neural ล้มเหลว (${e.message}) — จะลองใช้เสียง Mac แทน`, 'warning');
+      return null;
+    }
+  };
+
+  // เสียงสำรองบน Kie.ai ที่ใช้ provider คนละค่ายกับ ElevenLabs
+  // Gemini ตรวจภาษาไทยอัตโนมัติ และใช้ voice ชาย/หญิงให้ตรงกับเสียงพรีเมียมที่ผู้ใช้เลือก
+  const generateGeminiFallbackVoice = async (speechText: string, kieVoiceId: string): Promise<{ audioUrl: string; duration: number } | null> => {
+    const apiKey = getActiveKieKey();
+    if (!apiKey) return null;
+
+    const selectedGeminiVoice = GEMINI_TTS_VOICES.find(v => v.id === kieVoiceId);
+    const isDirectGeminiSelection = Boolean(selectedGeminiVoice);
+    const isMale = isMaleVoiceId(kieVoiceId);
+    const geminiVoice = selectedGeminiVoice?.voiceName || (isMale ? 'Charon' : 'Sulafat');
+    const voiceProfile = isMale
+      ? 'Native Thai male documentary narrator, warm, confident, clear and natural'
+      : 'Native Thai female narrator, warm, gentle, clear and natural';
+    const models = [
+      { id: 'google/gemini-3-1-flash-tts', label: 'Gemini 3.1 Flash TTS', timeoutAttempts: 45 },
+      { id: 'google/gemini-2-5-pro-tts', label: 'Gemini 2.5 Pro TTS', timeoutAttempts: 45 },
+    ];
+
+    const parseAudioUrl = (resultJson: unknown): string => {
+      let parsed: any = resultJson;
+      if (typeof resultJson === 'string') {
+        try { parsed = JSON.parse(resultJson); } catch { return ''; }
+      }
+      return parsed?.audio_url || parsed?.audioUrl || parsed?.url || parsed?.resultUrls?.[0] || '';
+    };
+
+    const saveRemoteVoice = async (remoteUrl: string, modelLabel: string): Promise<{ audioUrl: string; duration: number }> => {
+      let extension = '.mp3';
+      try {
+        const match = new URL(remoteUrl).pathname.match(/\.(wav|mp3|m4a|ogg|opus)$/i);
+        if (match) extension = `.${match[1].toLowerCase()}`;
+      } catch { /* ใช้ mp3 เป็นค่าเริ่มต้น */ }
+
+      const saveRes = await fetch(`${BACKEND_BASE}/api/save-audio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: remoteUrl,
+          fileName: `kie-gemini-voice-${Date.now()}${extension}`,
+          prompt: speechText.substring(0, 50),
+          tags: ['online', 'kie-ai', 'gemini-tts', modelLabel, geminiVoice, isMale ? 'male' : 'female'],
+          folder: 'Voice_stock',
+        }),
+      });
+      const saveData = await saveRes.json();
+      if (!saveRes.ok || !saveData.url) {
+        throw new Error(saveData.error || 'บันทึกไฟล์ Gemini TTS ลง Voice_stock ไม่สำเร็จ');
+      }
+      return {
+        audioUrl: saveData.url,
+        duration: Number(saveData.duration || Math.max(1, speechText.length / 4)),
+      };
+    };
+
+    for (const model of models) {
+      addLog(
+        isDirectGeminiSelection
+          ? `🎙️ กำลังสร้างเสียงด้วย ${model.label} (${isMale ? 'ชาย' : 'หญิง'} ${geminiVoice}) ผ่าน Kie.ai...`
+          : `🎙️ ElevenLabs ไม่พร้อม — กำลังลอง ${model.label} (${isMale ? 'ชาย' : 'หญิง'} ${geminiVoice}) ผ่าน Kie.ai...`,
+        isDirectGeminiSelection ? 'info' : 'warning'
+      );
+      try {
+        const createRes = await fetchWithTimeout('https://api.kie.ai/api/v1/jobs/createTask', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: model.id,
+            input: {
+              temperature: 0.8,
+              scene: 'Professional Thai social media voice-over recorded in a clean studio',
+              sample_context: 'Speak only the supplied Thai transcript with native Thai pronunciation. Do not read the directions aloud.',
+              speakers: [{
+                speaker_id: 'Speaker 1',
+                voice_name: geminiVoice,
+                audio_profile: voiceProfile,
+                accent: 'Neutral',
+                style: 'Informative',
+                pace: 'Natural',
+              }],
+              dialogue_turns: [{
+                speaker_id: 'Speaker 1',
+                text: speechText,
+              }],
+            },
+          }),
+        }, 20000);
+
+        const createData = await createRes.json().catch(() => ({}));
+        if (!createRes.ok) {
+          throw new Error(`[KIE_PLATFORM_HTTP_${createRes.status}] ${createData?.msg || createRes.statusText}`);
+        }
+        if (createData?.code != null && ![0, 200].includes(Number(createData.code))) {
+          throw new Error(`[KIE_PLATFORM_CODE_${createData.code}] ${createData?.msg || 'createTask failed'}`);
+        }
+
+        const taskId = createData?.data?.taskId || createData?.taskId;
+        if (!taskId) throw new Error('[KIE_PLATFORM_NO_TASK] Kie.ai ไม่ส่ง Task ID กลับมา');
+
+        for (let attempt = 0; attempt < model.timeoutAttempts; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const pollRes = await fetchWithTimeout(
+            `https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(String(taskId))}`,
+            { headers: { 'Authorization': `Bearer ${apiKey}` } },
+            20000,
+          );
+          if (!pollRes.ok) throw new Error(`[KIE_PLATFORM_POLL_${pollRes.status}] อ่านสถานะงานไม่ได้`);
+
+          const pollData = await pollRes.json();
+          const state = String(pollData?.data?.state || pollData?.state || '').toLowerCase();
+          if (state === 'success' || state === 'completed') {
+            const remoteUrl = parseAudioUrl(pollData?.data?.resultJson || pollData?.resultJson);
+            if (!remoteUrl) throw new Error(`${model.label} สำเร็จแต่ไม่พบ URL ไฟล์เสียง`);
+            try {
+              const saved = await saveRemoteVoice(remoteUrl, model.label);
+              addLog(`✅ ${model.label} สร้างเสียงไทยและบันทึกลง Voice_stock สำเร็จ (${saved.duration.toFixed(1)}s)`, 'success');
+              return saved;
+            } catch (saveError: any) {
+              const estimatedDuration = Number(Math.max(1, speechText.length / 4).toFixed(1));
+              addLog(`⚠️ ${model.label} สร้างเสียงสำเร็จ แต่บันทึกลงเครื่องไม่ได้ (${saveError.message}) — ใช้ URL ออนไลน์ชั่วคราว`, 'warning');
+              return { audioUrl: remoteUrl, duration: estimatedDuration };
+            }
+          }
+          if (state === 'fail' || state === 'failed') {
+            const failCode = pollData?.data?.failCode || pollData?.failCode || 'unknown';
+            const failMsg = pollData?.data?.failMsg || pollData?.failMsg || 'Task failed';
+            throw new Error(`[GEMINI_TASK_${failCode}] ${failMsg}`);
+          }
+        }
+        throw new Error(`${model.label} timeout หลังรอ 90 วินาที`);
+      } catch (e: any) {
+        const reason = e?.name === 'AbortError' ? 'เชื่อมต่อ Kie.ai timeout' : (e?.message || String(e));
+        addLog(`⚠️ ${model.label} ล้มเหลว: ${reason}`, 'warning');
+
+        // คีย์/เครดิต/rate limit หรือระบบกลางของ Kie มีปัญหา: รุ่นถัดไปก็ใช้ไม่ได้ จึงข้ามไป Edge ทันที
+        if (/KIE_PLATFORM_(HTTP_(401|402|403|429|5\d\d)|CODE_(401|402|403|429|5\d\d)|POLL_|NO_TASK)|เชื่อมต่อ Kie\.ai timeout/i.test(reason)) {
+          addLog('⚡ ตรวจพบปัญหาระดับบัญชีหรือระบบกลาง Kie.ai — ข้าม Gemini รุ่นที่เหลือและไป Edge Neural ทันที', 'warning');
+          break;
+        }
+      }
+    }
+    return null;
+  };
+
+  // จุดรวมการสร้างเสียงทุกโหมด เพื่อให้ Manual, Batch, News และ Smart Run ใช้ fallback เหมือนกัน
+  const generateVoiceWithFallbacks = async (
+    speechText: string,
+    selectedVoice: string,
+    logPrefix = ''
+  ): Promise<{ audioUrl: string; duration: number } | null> => {
+    const activeVoice = resolveValidVoiceId(selectedVoice);
+    if (activeVoice.startsWith('mac_')) return handleGenerateVoice(speechText, activeVoice);
+
+    setIsGeneratingVoice(true);
+    try {
+      let result: { audioUrl: string; duration: number } | null = null;
+      const isGeminiPrimary = VALID_GEMINI_TTS_VOICE_IDS.has(activeVoice);
+
+      if (!isGeminiPrimary) {
+        result = await handleGenerateVoice(speechText, activeVoice);
+        if (result) return result;
+        if (logPrefix) addLog(`${logPrefix} 🔄 สลับจาก ElevenLabs ไป Gemini TTS...`, 'warning');
+        setIsGeneratingVoice(true);
+      }
+
+      result = await generateGeminiFallbackVoice(speechText, activeVoice);
+      if (result) return result;
+
+      if (logPrefix) addLog(`${logPrefix} 🔄 Gemini TTS ไม่สำเร็จ — ใช้ Edge Neural เพศเดียวกันแทน...`, 'warning');
+      setIsGeneratingVoice(true);
+      result = await generateEdgeFallbackVoice(speechText, activeVoice);
+      if (result) return result;
+
+      if (logPrefix) addLog(`${logPrefix} 🔄 Edge Neural ไม่สำเร็จ — ใช้ Mac TTS (Kanya) เป็นทางเลือกสุดท้าย...`, 'warning');
+      return await handleGenerateVoice(speechText, 'mac_Kanya');
+    } finally {
+      setIsGeneratingVoice(false);
+    }
+  };
+
   // Wrapper for manual audio button
   const triggerManualVoiceGen = async () => {
     if (!script) return alert('กรุณาสร้างหรือเขียนบทพูดก่อนเจนเสียง');
     const validVoice = resolveValidVoiceId(voiceId);
-    const result = await handleGenerateVoice(script, validVoice);
+    const result = await generateVoiceWithFallbacks(script, validVoice, '[Manual]');
     if (result) {
       setAudioUrl(result.audioUrl);
       setAudioDuration(result.duration);
@@ -3158,23 +3419,10 @@ Instructions for you:
       let currentItemSrtContent = '';
 
       // --- 🎙️ Regular Voiceover Mode ---
-      // Step 2: Speech Synthesis (with retry and fallback)
+      // Step 2: Speech Synthesis (ElevenLabs → Gemini → Edge → Mac)
       updateItemStatus(i, 'voicing');
       const batchVoice = resolveValidVoiceId(voiceId);
-      let voiceResult = await handleGenerateVoice(scriptResult.script, batchVoice);
-      
-      // Retry once with delay if Kie.ai failed (rate limiting protection)
-      if (!voiceResult && !batchVoice.startsWith('mac_')) {
-        addLog(`[BATCH] ⏳ Kie.ai ล้มเหลว — รอ 10 วินาทีแล้วลองใหม่อีกครั้ง...`, 'warning');
-        await new Promise(res => setTimeout(res, 10000));
-        voiceResult = await handleGenerateVoice(scriptResult.script, batchVoice);
-      }
-
-      // Final fallback: use Mac TTS if Kie.ai still fails
-      if (!voiceResult && !batchVoice.startsWith('mac_')) {
-        addLog(`[BATCH] 🔄 Kie.ai ยังล้มเหลว — สลับไปใช้ Mac TTS (Kanya) แทนอัตโนมัติ...`, 'warning');
-        voiceResult = await handleGenerateVoice(scriptResult.script, 'mac_Kanya');
-      }
+      const voiceResult = await generateVoiceWithFallbacks(scriptResult.script, batchVoice, '[BATCH]');
 
       if (!voiceResult) {
         updateItemStatus(i, 'failed', 'สังเคราะห์เสียงพูดผิดพลาด');
@@ -3460,7 +3708,7 @@ Instructions for you:
       setNewsStatus('voicing');
       addNewsLog('🎤 กำลังสร้างเสียงพากย์...');
 
-      const voiceResult = await handleGenerateVoice(parsed.script, voiceId);
+      const voiceResult = await generateVoiceWithFallbacks(parsed.script, voiceId, '[News]');
       if (!voiceResult) {
         throw new Error('สร้างเสียงพากย์ล้มเหลว');
       }
@@ -3746,24 +3994,11 @@ Instructions for you:
         saveToHistory(currentItem);
       }
 
-      // Step 2: Speech Synthesis / Voiceover Mode (with retry + fallback)
+      // Step 2: Speech Synthesis / Voiceover Mode (ElevenLabs → Gemini → Edge → Mac)
       if (!updatedAudioUrl) {
         const activeVoice = resolveValidVoiceId(currentItem.voiceId || voiceId);
         addLog(`[Smart Run] 🎙️ กำลังสร้างเสียงพากย์ด้วยนักพากย์: "${getVoiceDisplayName(activeVoice)}"`, 'info');
-        let voiceResult = await handleGenerateVoice(updatedScript, activeVoice);
-        
-        // Retry once with delay if Kie.ai failed
-        if (!voiceResult && !activeVoice.startsWith('mac_')) {
-          addLog(`[Smart Run] ⏳ Kie.ai ล้มเหลว — รอ 10 วินาทีแล้วลองใหม่อีกครั้ง...`, 'warning');
-          await new Promise(res => setTimeout(res, 10000));
-          voiceResult = await handleGenerateVoice(updatedScript, activeVoice);
-        }
-
-        // Final fallback: use Mac TTS if Kie.ai still fails
-        if (!voiceResult && !activeVoice.startsWith('mac_')) {
-          addLog(`[Smart Run] 🔄 Kie.ai ยังล้มเหลว — สลับไปใช้ Mac TTS (Kanya) แทนอัตโนมัติ...`, 'warning');
-          voiceResult = await handleGenerateVoice(updatedScript, 'mac_Kanya');
-        }
+        const voiceResult = await generateVoiceWithFallbacks(updatedScript, activeVoice, '[Smart Run]');
 
         if (!voiceResult) {
           addLog(`[Smart Run] ❌ การสังเคราะห์เสียงพูดผิดพลาดสำหรับหัวข้อ: "${item.topic}"`, 'error');
@@ -4135,7 +4370,7 @@ Instructions for you:
           <div className="flex justify-between items-center border-b border-white/10 pb-3">
             <h3 className="text-md font-bold text-teal-400 flex items-center gap-2">
               <span className="px-2 py-0.5 rounded bg-teal-500/10 text-teal-400 text-sm">3</span>
-              เลือกนักพากย์เสียงไทยพรีเมียม (Kie.ai Voices)
+              เลือกนักพากย์เสียงไทยพรีเมียม (Kie.ai + Smart Fallback)
             </h3>
             <span className="text-xs text-amber-300 font-bold">พรีเมียมออนไลน์</span>
           </div>
@@ -4147,13 +4382,20 @@ Instructions for you:
               onChange={(e) => setVoiceId(e.target.value)}
               className="w-full p-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs outline-none focus:border-teal-500 transition-colors font-semibold"
             >
-              {KIEAI_VOICES.map(v => (
-                <option key={v.id} value={v.id} className="bg-slate-900 text-white font-semibold font-mono">✨ {v.name}</option>
-              ))}
+              <optgroup label="🔵 Google Gemini TTS — เลือกใช้โดยตรง" className="bg-slate-950 text-cyan-300">
+                {GEMINI_TTS_VOICES.map(v => (
+                  <option key={v.id} value={v.id} className="bg-slate-900 text-white font-semibold font-mono">🔵 {v.name}</option>
+                ))}
+              </optgroup>
+              <optgroup label="✨ ElevenLabs Premium" className="bg-slate-950 text-amber-300">
+                {KIEAI_VOICES.map(v => (
+                  <option key={v.id} value={v.id} className="bg-slate-900 text-white font-semibold font-mono">✨ {v.name}</option>
+                ))}
+              </optgroup>
             </select>
             
             <p className="text-[10px] text-amber-300">
-              🔥 เสียงพรีเมียมสมจริงระดับมืออาชีพจาก Kie.ai พูดไทยเป็นธรรมชาติ ลื่นไหลไร้รอยต่อ
+              🔥 Gemini เลือกใช้โดยตรงได้ครบ 30 เสียงผ่าน Kie.ai หรือเลือก ElevenLabs พร้อมระบบสำรอง Gemini → Edge → Mac
             </p>
           </div>
 
@@ -4177,7 +4419,7 @@ Instructions for you:
           disabled={isGeneratingVoice || !script}
           className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-40"
         >
-          {isGeneratingVoice ? '🎙️ กำลังบันทึกเสียงพากย์...' : '👑 เจนเสียงพากย์พรีเมียม (Kie.ai / ElevenLabs)'}
+          {isGeneratingVoice ? '🎙️ กำลังบันทึกเสียงพากย์...' : '👑 เจนเสียงพากย์ (Kie.ai + Auto Fallback)'}
         </button>
       </div>
     );
@@ -5631,12 +5873,21 @@ Instructions for you:
                   maxWidth: 280, cursor: 'pointer',
                 }}
               >
-                {KIEAI_VOICES.map(v => (
-                  <option key={v.id} value={v.id}>{v.name.split('(')[0].trim()}</option>
-                ))}
-                {MACOS_VOICES.map(v => (
-                  <option key={v.id} value={v.id}>🖥️ {v.name}</option>
-                ))}
+                <optgroup label="Google Gemini TTS">
+                  {GEMINI_TTS_VOICES.map(v => (
+                    <option key={v.id} value={v.id}>🔵 {v.voiceName} ({v.gender === 'male' ? 'ชาย' : 'หญิง'})</option>
+                  ))}
+                </optgroup>
+                <optgroup label="ElevenLabs Premium">
+                  {KIEAI_VOICES.map(v => (
+                    <option key={v.id} value={v.id}>{v.name.split('(')[0].trim()}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="macOS Offline">
+                  {MACOS_VOICES.map(v => (
+                    <option key={v.id} value={v.id}>🖥️ {v.name}</option>
+                  ))}
+                </optgroup>
               </select>
             </div>
           </div>
