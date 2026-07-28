@@ -35,8 +35,10 @@ import SettingsPortal from './components/SettingsPortal';
 import PromptGeneratorPortal from './components/PromptGeneratorPortal';
 import VerticalVideoSuitePortal from './components/VerticalVideoSuitePortal';
 import QuoteVideoPortal from './components/QuoteVideoPortal';
+import QuoteImagePortal from './components/QuoteImagePortal';
 import { AvatarVerticalClipPortal } from './components/AvatarVerticalClipPortal';
-import FlowAutomatorPortal from './components/FlowAutomatorPortal';
+import FlowAutomatorPortal, { STRICT_COPYWRITING_RULES } from './components/FlowAutomatorPortal';
+import { seedPresetBrains } from './data/brainPresets';
 import PodcastVideoPortal from './components/PodcastVideoPortal';
 import RelaxingClipPortal from './components/RelaxingClipPortal';
 import SingleClipEditorPortal from './components/SingleClipEditorPortal';
@@ -354,8 +356,8 @@ export const PALETTE_IMAGE_PROMPT_STYLES: ImagePromptStyle[] = [
 ];
 
 export default function App() {
-  type TabType = 'discovery' | 'vault' | 'canvas' | 'settings' | 'prompt-generator' | 'vertical-video' | 'quote-video' | 'avatar-video' | 'dropbox-csv' | 'podcast-clip' | 'relaxing-clip' | 'clip-editor' | 'tracking' | 'fb-insights';
-  const validTabs: TabType[] = ['discovery', 'vault', 'canvas', 'settings', 'prompt-generator', 'vertical-video', 'quote-video', 'avatar-video', 'dropbox-csv', 'podcast-clip', 'relaxing-clip', 'tracking'];
+  type TabType = 'discovery' | 'vault' | 'canvas' | 'settings' | 'prompt-generator' | 'vertical-video' | 'quote-video' | 'quote-image' | 'avatar-video' | 'dropbox-csv' | 'podcast-clip' | 'relaxing-clip' | 'clip-editor' | 'tracking' | 'fb-insights';
+  const validTabs: TabType[] = ['discovery', 'vault', 'canvas', 'settings', 'prompt-generator', 'vertical-video', 'quote-video', 'quote-image', 'avatar-video', 'dropbox-csv', 'podcast-clip', 'relaxing-clip', 'tracking'];
   const [activeTab, _setActiveTab] = useState<TabType>(() => {
     const saved = localStorage.getItem('active_tab') as TabType | null;
     return saved && validTabs.includes(saved) ? saved : 'discovery';
@@ -389,6 +391,12 @@ export default function App() {
     const rootSize = (appScale / 100) * 16; // 16px is base font size
     document.documentElement.style.fontSize = `${rootSize}px`;
   }, [appScale]);
+
+  // เติมสมองสำเร็จรูป (เช่น สมองดูดวงหมอต้น) เข้าคลังสมองครั้งแรกที่เปิดแอป
+  useEffect(() => {
+    seedPresetBrains(content => `${content.trim()}\n\n${STRICT_COPYWRITING_RULES.trim()}`)
+      .catch(err => console.error('seedPresetBrains failed:', err));
+  }, []);
 
   // Synchronize Google API Key for tracking dashboard iframe compatibility
   useEffect(() => {
@@ -2387,6 +2395,15 @@ Please rewrite this following the copywriting style tone and output rules above.
             <span>ทำคลิปคำคม (Quote Video)</span>
           </button>
 
+          <button
+            className={`sidebar-btn sidebar-btn-hot ${activeTab === 'quote-image' ? 'active' : ''}`}
+            onClick={() => setActiveTab('quote-image')}
+          >
+            <ImageIcon className="w-5 h-5" />
+            <span>🖼️ ตัดต่อรูปคำคม</span>
+            <span className="sidebar-btn-badge">ใหม่</span>
+          </button>
+
           <button 
             className={`sidebar-btn ${activeTab === 'avatar-video' ? 'active' : ''}`}
             onClick={() => setActiveTab('avatar-video')}
@@ -2473,6 +2490,7 @@ Please rewrite this following the copywriting style tone and output rules above.
               {activeTab === 'prompt-generator' && '✨ Prompt Generation | ระบบคลังคำสั่งสร้างรูปและโพส'}
               {activeTab === 'vertical-video' && '🎬 Automated Vertical Video Suite | ระบบสร้างวิดีโอแนวตั้งอัจฉริยะ'}
               {activeTab === 'quote-video' && '🎨 ทำคลิปคำคม | ระบบสร้างวิดีโอคำคมแนวตั้ง 9:16'}
+              {activeTab === 'quote-image' && '🖼️ ตัดต่อรูปคำคม | วางคำคมทับรูป footage แบบ Batch Canvas'}
               {activeTab === 'avatar-video' && '🧑‍💼 Avatar Vertical Clip Maker | ห้องตัดต่อวิดีโออวาตาร์แนวตั้ง'}
               {activeTab === 'podcast-clip' && '🎙️ สร้างคลิปpodcast | ระบบตัดต่อ B-Roll ซ้อนเสียงพากย์อัตโนมัติ'}
               {activeTab === 'relaxing-clip' && '🍿 ทำคลิปดูเพลินๆ | ละครสั้นแนวตั้ง สุ่มบท+พากย์+ซับ อัตโนมัติ'}
@@ -2489,6 +2507,7 @@ Please rewrite this following the copywriting style tone and output rules above.
               {activeTab === 'prompt-generator' && 'สร้างรูปด้วย API, แคปชั่น Clickbait, CSV Post Generator และคลัง Prompt สำเร็จรูป 1:1 จากต้นฉบับ'}
               {activeTab === 'vertical-video' && 'ระบบสร้างวิดีโอสั้นแนวตั้งอัตโนมัติ เขียนบทด้วย AI สังเคราะห์เสียงพากย์พรีเมียม วางซับไตเติ้ลคำเด่นอัจฉริยะ และสั่ง FFmpeg เรนเดอร์วิดีโอ'}
               {activeTab === 'quote-video' && 'สร้างคลิปสั้นคำคมและซีรีส์ความลับเทรดเดอร์ด้วยระบบ Drag-and-Drop ผสาน FFmpeg.wasm เรนเดอร์ออฟไลน์ระดับความเร็วสูง'}
+              {activeTab === 'quote-image' && 'ใส่คำคมเองหรือให้ AI (Kie.ai) เขียนสูงสุด 100 ข้อ พร้อมสมองบันทึกสไตล์ จัดเลย์เอาต์ลากวางในพรีวิว เลือกฟอนต์และเอฟเฟคตัวอักษร แล้วเรนเดอร์รูปทับข้อความทั้งโฟลเดอร์อัตโนมัติ'}
               {activeTab === 'avatar-video' && 'สุ่มฟุตเทจ B-Roll ปิดเสียงซ้อนทับกรีนสกรีนหรือแบ่งหน้าจอ เจนพาดหัว Hook AI และเบิร์นซับไตเติ้ลภาษาไทยเว้นวรรคคำ'}
               {activeTab === 'podcast-clip' && 'สุ่มหยิบฟุตเทจ B-Roll จากโฟลเดอร์ดิบ มา Concat เรียงซ้อนทับไฟล์เสียงเสียงพากย์ บังคับ Scale/Crop และรักษาระยะเวลาตามความยาวเสียงเป๊ะ'}
               {activeTab === 'relaxing-clip' && 'ปั่นบทละครรักแนวจีนแบบสุ่มสลับไม่ซ้ำ สังเคราะห์เสียงพากย์ฟรีในเครื่อง ทำซับไตเติ้ลอัตโนมัติ แล้วสุ่มฟุตเทจต่อกันให้ครบนาที (ไม่มีพาดหัว)'}
@@ -4896,6 +4915,11 @@ Please rewrite this following the copywriting style tone and output rules above.
           {/* TAB 7: QUOTE VIDEO PORTAL */}
           {keepAlive('quote-video',
             <QuoteVideoPortal />
+          )}
+
+          {/* TAB 7.5: QUOTE IMAGE EDITOR (ตัดต่อรูปคำคม) */}
+          {keepAlive('quote-image',
+            <QuoteImagePortal />
           )}
 
           {/* TAB 8: AVATAR VERTICAL CLIP PORTAL */}

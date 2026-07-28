@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { chatCompletions, getLlmKey, getLlmProvider, LLM_PROVIDER_LABELS, useLlmProvider } from '../lib/llm';
 
-const STRICT_COPYWRITING_RULES = `
+export const STRICT_COPYWRITING_RULES = `
 [กฎเหล็กและรูปแบบการตอบกลับขั้นเด็ดขาด (Strict Output Rules จาก ai_prompt_instructions.md)]
 กรุณาปฏิบัติตามกฎด้านรูปแบบการตอบกลับอย่างเคร่งครัดที่สุด หากไม่ปฏิบัติตามจะถือว่าการทำงานล้มเหลว:
 
@@ -813,6 +813,49 @@ ${STRICT_COPYWRITING_RULES}
     URL.revokeObjectURL(url);
   };
 
+  // ดึงรายชื่อไฟล์ทั้งหมดในโฟลเดอร์ Dropbox (วนตาม cursor จนกว่า has_more = false)
+  // Dropbox คืนผลเป็นหน้าๆ ถ้าไม่วน continue จะได้แค่ชุดแรก (ประมาณ 500 รายการ)
+  const listAllDropboxFiles = async (accessToken: string, path: string): Promise<any[]> => {
+    const entries: any[] = [];
+    let cursor = '';
+    let hasMore = true;
+    let page = 0;
+
+    while (hasMore) {
+      const isFirst = !cursor;
+      const url = isFirst
+        ? "https://api.dropboxapi.com/2/files/list_folder"
+        : "https://api.dropboxapi.com/2/files/list_folder/continue";
+      const body = isFirst
+        ? {
+            path: path.trim(),
+            recursive: false,
+            include_media_info: false,
+            include_deleted: false,
+            include_has_explicit_shared_members: false,
+            limit: 2000
+          }
+        : { cursor };
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error(`Dropbox List Error: ${await res.text()}`);
+
+      const data = await res.json();
+      entries.push(...(data.entries || []));
+      cursor = data.cursor || '';
+      hasMore = Boolean(data.has_more) && Boolean(cursor);
+      page++;
+      if (hasMore) addLog(`📄 ดึงรายชื่อไฟล์หน้า ${page} แล้ว (สะสม ${entries.length} รายการ) — ยังมีต่อ...`);
+      if (page > 200) { addLog('⚠️ ดึงรายชื่อไฟล์เกิน 200 หน้า หยุดไว้ก่อนกันวนไม่จบ'); break; }
+    }
+
+    return entries;
+  };
+
   const runShopeeCaptionWorkflow = async () => {
     setIsRunning(true);
     setLogs([]);
@@ -841,14 +884,8 @@ ${STRICT_COPYWRITING_RULES}
       addLog(`🛒 โหมด Shopee เริ่มทำงาน — ฐานข้อมูลสินค้า ${products.length} รายการ (Output: ${outputMode === 'csv' ? 'ไฟล์ CSV' : 'Google Sheets'})`);
 
       addLog(`📂 กำลังดึงรายชื่อไฟล์จาก Dropbox: ${folderPath}`);
-      const dbxRes = await fetch("https://api.dropboxapi.com/2/files/list_folder", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${currentDropboxKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ path: folderPath.trim(), recursive: false, include_media_info: false, include_deleted: false, include_has_explicit_shared_members: false })
-      });
-      if (!dbxRes.ok) throw new Error(`Dropbox List Error: ${await dbxRes.text()}`);
-      const listData = await dbxRes.json();
-      const files = listData.entries.filter((e: any) => e['.tag'] === 'file');
+      const allEntries = await listAllDropboxFiles(currentDropboxKey, folderPath);
+      const files = allEntries.filter((e: any) => e['.tag'] === 'file');
       addLog(`✅ พบไฟล์ทั้งหมด ${files.length} รายการ`);
 
       const getDl1Link = (urlStr: string): string => {
@@ -974,27 +1011,8 @@ ${STRICT_COPYWRITING_RULES}
 
     try {
       addLog(`📂 กำลังดึงรายชื่อไฟล์จาก Dropbox: ${folderPath}`);
-      const dbxRes = await fetch("https://api.dropboxapi.com/2/files/list_folder", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${currentDropboxKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          path: folderPath.trim(),
-          recursive: false,
-          include_media_info: false,
-          include_deleted: false,
-          include_has_explicit_shared_members: false
-        })
-      });
-
-      if (!dbxRes.ok) {
-        throw new Error(`Dropbox List Error: ${await dbxRes.text()}`);
-      }
-
-      const listData = await dbxRes.json();
-      const files = listData.entries.filter((e: any) => e['.tag'] === 'file');
+      const allEntries = await listAllDropboxFiles(currentDropboxKey, folderPath);
+      const files = allEntries.filter((e: any) => e['.tag'] === 'file');
       
       const completedIds = new Set(completedRecords.map(item => item.id));
       const filesToProcess = files.filter((f: any) => !completedIds.has(f.id));
