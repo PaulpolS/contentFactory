@@ -397,6 +397,54 @@ app.post('/api/kie-chat', async (req, res) => {
   }
 });
 
+// === Quote Image Editor (ตัดต่อรูปคำคม) API Endpoints ===
+
+// รายชื่อไฟล์รูปทั้งหมดในโฟลเดอร์ footage (ใช้ในหน้าตัดต่อรูปคำคม)
+app.post('/api/quote-image/list-images', (req, res) => {
+  const folder = String(req.body?.folder || '').trim();
+  if (!folder) return res.status(400).json({ success: false, error: 'Missing folder' });
+  try {
+    if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) {
+      return res.status(404).json({ success: false, error: 'ไม่พบโฟลเดอร์นี้บนเครื่อง' });
+    }
+    const exts = new Set(['.jpg', '.jpeg', '.png', '.webp', '.bmp']);
+    const files = fs.readdirSync(folder)
+      .filter(f => !f.startsWith('.') && exts.has(path.extname(f).toLowerCase()))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    res.json({ success: true, files });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// บันทึกรูปที่เรนเดอร์เสร็จแล้ว (dataURL จาก canvas) ลงโฟลเดอร์ปลายทาง
+app.post('/api/quote-image/save', (req, res) => {
+  const outputFolder = String(req.body?.outputFolder || '').trim();
+  const rawName = String(req.body?.fileName || '').trim();
+  const dataUrl = String(req.body?.dataUrl || '');
+  if (!outputFolder || !rawName || !dataUrl.startsWith('data:image/')) {
+    return res.status(400).json({ success: false, error: 'ข้อมูลไม่ครบ (outputFolder / fileName / dataUrl)' });
+  }
+  try {
+    if (!fs.existsSync(outputFolder)) fs.mkdirSync(outputFolder, { recursive: true });
+    // กันชื่อไฟล์หลุดออกนอกโฟลเดอร์ + กันไฟล์ชื่อซ้ำโดยเติมเลขต่อท้าย
+    const safeName = path.basename(rawName).replace(/[\\/:*?"<>|]/g, '_');
+    const ext = path.extname(safeName) || '.jpg';
+    const stem = safeName.slice(0, safeName.length - ext.length);
+    let target = path.join(outputFolder, safeName);
+    let counter = 1;
+    while (fs.existsSync(target)) {
+      target = path.join(outputFolder, `${stem}_${counter}${ext}`);
+      counter++;
+    }
+    const base64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
+    fs.writeFileSync(target, Buffer.from(base64, 'base64'));
+    res.json({ success: true, path: target, fileName: path.basename(target) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // === Serve public folder statically under root path ===
 app.use(express.static(path.resolve(__dirname, '../../public')));
 
